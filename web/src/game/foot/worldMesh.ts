@@ -47,12 +47,6 @@ export function centroid(ring: Pt[]): Pt {
   return [x / ring.length, z / ring.length];
 }
 
-export function radiusOf(ring: Pt[], c: Pt): number {
-  let r = 0;
-  for (const p of ring) r = Math.max(r, Math.hypot(p[0] - c[0], p[1] - c[1]));
-  return r;
-}
-
 /** Offset a (cleaned, area2 > 0) ring outward by d metres with clamped miters. */
 export function offsetRing(ring: Pt[], d: number): Pt[] {
   const n = ring.length;

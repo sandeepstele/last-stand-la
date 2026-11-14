@@ -8,7 +8,7 @@ import { MATERIAL_COLOR } from "../District3D";
 import type { Building, Material } from "../types";
 import { buildingHeight, outlineOf, type FootCtx, type Pt, type System } from "./engine";
 import { closestOnPoly, pointInPoly } from "./collide";
-import { addBand, addCap, addOutline, addPlainWalls, addWalls, areaOf, centroid, cleanRing, facadeMaterial, gridAngle, newBuf, offsetRing, radiusOf, rectRing, toGeometry } from "./worldMesh";
+import { addBand, addCap, addOutline, addPlainWalls, addWalls, areaOf, centroid, cleanRing, facadeMaterial, gridAngle, newBuf, offsetRing, rectRing, toGeometry } from "./worldMesh";
 import { buildGrid, createRoute, walkableAt } from "./worldRoute";
 import { dustTexture, facadeTextures, glowTexture, labelSprite, questionSprite, rng, streetTexture, TILE } from "./worldTex";
 
@@ -19,7 +19,7 @@ const BLOCK_TONES = [0x8d8a84, 0x7d8188, 0x9a948a, 0x6f747b, 0x8a8278, 0xa19d96,
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 const C = (hex: number) => new THREE.Color(hex);
 
-type Kit = { b: Building; ring: Pt[]; c: Pt; h: number; r: number };
+type Kit = { b: Building; ring: Pt[]; c: Pt; h: number };
 type Split = { lower: THREE.MeshLambertMaterial; upper: THREE.MeshLambertMaterial; seam: THREE.MeshBasicMaterial; costar: THREE.Color; city: THREE.Color; from: [THREE.Color, THREE.Color]; to: [THREE.Color, THREE.Color]; t0: number; leaned: boolean };
 
 export function createWorld(ctx: FootCtx): System {
@@ -91,7 +91,7 @@ export function createWorld(ctx: FootCtx): System {
     const ring = cleanRing(outlineOf(b));
     if (!ring.length) continue;
     const c = centroid(ring);
-    kits.push({ b, ring, c, h: buildingHeight(b), r: radiusOf(ring, c) });
+    kits.push({ b, ring, c, h: buildingHeight(b) });
   }
   const kitOf = new Map(kits.map((k) => [k.b.pid, k]));
   const blocks = (district.blocks ?? []).map((k) => ({ ring: cleanRing(k.ring ?? []), h: Math.max(3, Number(k.height_m) || 12) })).filter((k) => k.ring.length);
