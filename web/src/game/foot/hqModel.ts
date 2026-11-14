@@ -85,18 +85,46 @@ function scrubber(labels: Map<string, string>, tenants: Set<string>) {
   const names = [...tenants].filter((t) => t.length >= 3).sort((a, b) => b.length - a.length);
   const nameRe = names.length ? new RegExp(names.map(esc).join("|"), "gi") : null;
   const keyRe = new RegExp(`\\b(${Object.keys(HYP_WORDS).join("|")})\\b`, "g");
-  return (s: string, max = 150): string => {
+  const safe = (s: string): string => {
     let t = s;
     if (nameRe) t = t.replace(nameRe, "a tenant");
     if (pidRe) t = t.replace(pidRe, (m) => labels.get(m.replace(/^property\s+(?:id\s+)?/i, "")) ?? "the building");
-    t = t
+    return t
       .replace(/\bCoStar records (?!a tenant\b)(.{1,80}?) here since\b/g, "CoStar records a tenant here since")
+      .replace(/\boccupied by (?!a tenant\b)(.{1,80}?) since\b/g, "occupied by a tenant since")
       .replace(/\bproperty\s+(?:id\s+)?#?\d{5,}\b/gi, "the building")
       .replace(keyRe, (k) => `"${HYP_SHORT[k]}"`)
       .replace(/\bVexcel\b/g, "aerial imagery")
       .replace(/\bMatterport\b/g, "the 3D tour");
-    return firstSentence(t, max);
   };
+  const line = (s: string, max = 150): string => firstSentence(safe(s), max);
+  /** Several sentences kept (a draft correction), markdown stripped, capped. */
+  line.full = (s: string, max = 480): string => {
+    const t = safe(s).replace(/[#*`>]+/g, "").replace(/\s+/g, " ").trim();
+    return t.length > max ? `${t.slice(0, max - 1).trimEnd()}…` : t;
+  };
+  return line;
+}
+
+/** Labels (pid -> address) and tenant names (to hide) from anywhere in the thread. */
+function namesIn(ms: readonly Msg[]): { labels: Map<string, string>; tenants: Set<string> } {
+  const labels = new Map<string, string>();
+  const tenants = new Set<string>();
+  for (const m of ms) {
+    if (kind(m) !== "tool") continue;
+    if (m.name === "night_cases") {
+      const r = parse<NightCases>(m);
+      for (const c of r?.cases ?? []) if (c?.property_id != null && c.label) labels.set(String(c.property_id), c.label);
+    } else if (m.name === "fortress_dossier" || m.name === "draft_correction") {
+      const d = parse<{ pid?: unknown; property_id?: unknown; label?: string }>(m);
+      const pid = d?.pid ?? d?.property_id;
+      if (pid != null && d?.label) labels.set(String(pid), d.label);
+    } else if (m.name === "open_case") {
+      const o = parse<OpenCase>(m);
+      if (typeof o?.tenant === "string" && !/^\d+ tenants on record/.test(o.tenant)) tenants.add(o.tenant);
+    }
+  }
+  return { labels, tenants };
 }
 
 const norm = (v: unknown) => (v == null ? "" : String(v).trim());
@@ -129,7 +157,7 @@ export type EvidenceView = {
 };
 export type BriefCase = {
   id: string; n: number | null; type: string; short: string; where: string; stakes: string | null; question: string | null;
-  state: "open" | "checking" | "report" | "weighed"; verdict: VerdictView | null; active: boolean;
+  state: "open" | "checking" | "report" | "weighed" | "drafting" | "drafted"; verdict: VerdictView | null; active: boolean;
 };
 export type BriefView = { total: number | null; cases: BriefCase[]; loading: boolean };
 export type HqView = {
@@ -144,6 +172,7 @@ export type HqView = {
   caseView: CaseView | null;
   evidence: EvidenceView[];
   waiting: { proposal: string } | null; // commit_plan is waiting for the player's HOLD or RUN
+  drafts: DraftsView; // the dawn debrief: draft corrections, one per case worked
 };
 
 type Spec = { case: string; question: string; hypotheses: { key: string; claim: string; prior: number }[]; checks?: unknown[] };
@@ -160,9 +189,10 @@ type NightCase = { n?: number; case?: string; property_id?: unknown; suite?: unk
 type NightCases = { total?: number; cases?: NightCase[] };
 
 const VISION = new Set(["look_from_above", "compare_captures", "suite_tour"]);
-const PRIORITY = ["commit_plan", "task", "check_evidence", "weigh_case", "record_note", "open_case", "night_cases",
+const PRIORITY = ["commit_plan", "draft_correction", "task", "check_evidence", "weigh_case", "record_note", "open_case", "night_cases",
   "find_fallback", "horde_status", "fortress_dossier", "write_todos"];
 const STATUS_BY_CALL: Record<string, string> = {
+  draft_correction: "drafting tonight's corrections",
   night_cases: "reading tonight's case queue",
   write_todos: "writing its plan",
   task: "sending out the squads",
@@ -213,6 +243,7 @@ export function hqModel(messages: readonly unknown[], heroPid: string | null, bu
   const checkCalls: { call: Call; at: number }[] = [];
   const openCalls: { call: Call; at: number }[] = [];
   const noteCalls: { call: Call; at: number }[] = [];
+  const draftCalls: { call: Call; at: number }[] = [];
   const tips: { at: number; text: string; suite: string }[] = [];
   const opens: { o: OpenCase; at: number }[] = [];
   const checks: { c: Check; at: number }[] = [];
@@ -250,6 +281,7 @@ export function hqModel(messages: readonly unknown[], heroPid: string | null, bu
         else if (c.name === "check_evidence") checkCalls.push({ call: c, at: i });
         else if (c.name === "open_case") openCalls.push({ call: c, at: i });
         else if (c.name === "record_note") noteCalls.push({ call: c, at: i });
+        else if (c.name === "draft_correction") draftCalls.push({ call: c, at: i });
       }
       return;
     }
@@ -296,6 +328,7 @@ export function hqModel(messages: readonly unknown[], heroPid: string | null, bu
   });
   if (heroPid && !labels.has(heroPid)) labels.set(heroPid, "the building");
   const clean = scrubber(labels, tenants);
+  const drafts = draftsModel(ms, busy);
   const where = (pid: unknown, suite: unknown) => {
     const l = labels.get(norm(pid));
     const s = norm(suite);
@@ -445,12 +478,15 @@ export function hqModel(messages: readonly unknown[], heroPid: string | null, bu
       for (const x of noteCalls) if (keyOf(x.call.args?.property_id, x.call.args?.suite) === k) bump("report", x.at);
       const ws = weighs.filter((x) => keyOf(x.w.property_id, x.w.suite) === k);
       for (const x of ws) bump("weighed", x.at);
+      for (const x of draftCalls) if (keyOf(x.call.args?.property_id, x.call.args?.suite) === k && !(x.call.id && resultById.has(x.call.id))) bump("drafting", x.at);
+      const myDraft = drafts.drafts.filter((d) => d.key === k).pop();
+      if (myDraft) bump("drafted", myDraft.at);
       const lastW = ws[ws.length - 1]?.w;
       return {
         id: `${k}|${i}`, n: typeof nc.n === "number" ? nc.n : null, type: caseWords(nc.case ?? lastW?.case),
         short: CASE_SHORT[nc.case ?? lastW?.case ?? ""] ?? "case", where: where(nc.property_id, nc.suite),
         stakes: nc.stakes ? clean(nc.stakes, 60) : null, question: nc.question ? clean(nc.question, 200) : null,
-        state, verdict: lastW ? verdictOf(lastW, () => undefined, clean) : null, active: k === activeKey,
+        state, verdict: lastW ? verdictOf(lastW, () => undefined, clean) : myDraft?.verdict ?? null, active: k === activeKey,
       } as BriefCase;
     });
     brief = { total: typeof nightTotal === "number" ? nightTotal : null, cases: caseRows, loading: false };
@@ -485,5 +521,63 @@ export function hqModel(messages: readonly unknown[], heroPid: string | null, bu
     else if (out) status = `${out} squad${out === 1 ? "" : "s"} out`;
     else status = pick ? STATUS_BY_CALL[pick] : "thinking it over";
   }
-  return { started, status, brief, squadsSent: tasks.length > 0, squads, todos, current, noCase, caseView, evidence, waiting };
+  return { started, status, brief, squadsSent: tasks.length > 0, squads, todos, current, noCase, caseView, evidence, waiting, drafts };
+}
+
+// ---------------------------------------------------------------- the dawn debrief: draft corrections
+
+export type DraftView = {
+  id: string; key: string; at: number; n: number | null; type: string; where: string;
+  verdict: VerdictView | null; text: string; evidence: string[]; yourReport: string | null;
+};
+export type DraftsView = {
+  requested: boolean; // "Debrief the night shift" is on the thread
+  drafting: boolean; // the debrief run is in progress
+  done: number;
+  expected: number | null; // draft_correction calls made so far (one per case worked)
+  drafts: DraftView[]; // in the order HQ drafted them
+};
+type Draft = {
+  n?: number; case?: string; property_id?: unknown; suite?: unknown; label?: string; hypothesis?: string;
+  label_verdict?: string; confidence?: number; text?: string; evidence?: { check?: string; finding?: string }[];
+  your_report?: string | null; status?: string;
+};
+
+/** The debrief, from the stream: draft_correction calls and results since the newest "Debrief the night shift". */
+export function draftsModel(messages: readonly unknown[], busy: boolean): DraftsView {
+  const ms = messages as readonly Msg[];
+  let from = -1;
+  ms.forEach((m, i) => {
+    if (kind(m) === "human" && /^Debrief the night shift/i.test(text(m.content).trim())) from = i;
+  });
+  const { labels, tenants } = namesIn(ms);
+  const clean = scrubber(labels, tenants);
+  let calls = 0;
+  const byKey = new Map<string, DraftView>();
+  ms.forEach((m, i) => {
+    if (i <= from) return;
+    const k = kind(m);
+    if (k === "ai") calls += ((m.tool_calls ?? []) as Call[]).filter((c) => c?.name === "draft_correction").length;
+    if (k !== "tool" || m.name !== "draft_correction") return;
+    const d = parse<Draft>(m);
+    if (!d || d.status || d.property_id == null || !d.text) return;
+    const key = keyOf(d.property_id, d.suite);
+    const lead = d.hypothesis ?? "";
+    const label = d.label_verdict === "likely" || d.label_verdict === "leaning" ? d.label_verdict : "unresolved";
+    const human = !!d.your_report;
+    const names = [...new Set((d.evidence ?? []).map((e) => e?.check).filter((c): c is string => !!c && !(human && c === "human_report")))];
+    const suite = norm(d.suite);
+    const place = d.label ?? labels.get(norm(d.property_id));
+    byKey.set(key, {
+      id: `d-${key}`, key, at: i, n: typeof d.n === "number" ? d.n : null, type: caseWords(d.case),
+      where: `${place && place !== "the building" ? place : "a building"}${suite ? `, suite ${suite}` : ""}`,
+      verdict: lead ? { label, words: hypWords(lead), pct: Math.round((d.confidence ?? 0) * 100), text: null } : null,
+      text: clean.full(d.text.replace(/^\s*DRAFT\b[:\s]*/i, "")), // the card carries its own DRAFT badge
+      evidence: names.slice(0, 3).map(checkName),
+      yourReport: d.your_report ? clean.full(d.your_report, 220) : null,
+    });
+  });
+  const drafts = [...byKey.values()].sort((a, b) => a.at - b.at);
+  const requested = from >= 0;
+  return { requested, drafting: requested && busy, done: drafts.length, expected: calls || null, drafts };
 }

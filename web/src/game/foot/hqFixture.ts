@@ -282,5 +282,39 @@ export function nightFixture(): { name: string; busy: boolean; messages: Msg[] }
   }));
   ms.push(ai("Your report moved Case #7 to likely gone, 55%. A person's report is strong but capped, never final."));
   snap("office after your report", false);
+
+  // Dawn: the debrief. One draft_correction per case worked, then at most 3 lines.
+  ms.push(human("Debrief the night shift"));
+  ms.push(ai("", [
+    { id: "n-d1", name: "draft_correction", args: { property_id: PID } },
+    { id: "n-d2", name: "draft_correction", args: { property_id: GHOST_PID, suite: SUITE } },
+  ]));
+  snap("drafting", true);
+  ms.push(tool("draft_correction", "n-d1", {
+    n: 6, case: "material_conflict", property_id: PID, suite: null, label: "Building A",
+    hypothesis: "city_list_current", label_verdict: "likely", confidence: 0.64,
+    text: "DRAFT for a researcher: Building A is recorded as masonry; the city's non-ductile concrete program lists it, a screening checklist is filed, and a vision read of the aerial shows a concrete frame. A field report agrees. Please review the construction type.",
+    evidence: [
+      { check: "compliance_filings", finding: "filed: screening checklist (2019-06-12)" },
+      { check: "look_from_above", finding: "concrete frame: regular column grid" },
+      { check: "human_report", finding: "the player reported: walls and columns look like concrete" },
+    ],
+    your_report: "I'm inside the building. The walls and columns look like concrete.",
+  }));
+  snap("one drafted", true);
+  ms.push(tool("draft_correction", "n-d2", {
+    n: 7, case: "ghost_tenant", property_id: GHOST_PID, suite: SUITE, label: "Building K",
+    hypothesis: "gone_dark", label_verdict: "likely", confidence: 0.55,
+    text: `DRAFT for a researcher: suite ${SUITE} at Building K is recorded as occupied by ${TENANT} since 2015-04-01, and it has been listed for lease since 2025-03-01. The lease expired 2025-06-30 and the leasing tour shows an empty suite. Please re-verify occupancy; the tenant record may be out of date.`,
+    evidence: [
+      { check: "listing_timeline", finding: `listed since 2025-03-01; CoStar records ${TENANT} here since 2015-04-01` },
+      { check: "lease_terms", finding: "lease expired 2025-06-30" },
+      { check: "suite_tour", finding: "empty: bare floor" },
+      { check: "human_report", finding: "the player reported: suite is empty" },
+    ],
+    your_report: "I'm inside suite 1100. It's empty: no desks, no people, the phones are unplugged.",
+  }));
+  ms.push(ai("Two drafts for a researcher. Both cite your reports. Nothing is sent until a person approves."));
+  snap("debrief done", false);
   return out;
 }
