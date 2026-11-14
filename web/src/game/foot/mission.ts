@@ -878,10 +878,8 @@ export function createMission(ctx: FootCtx): System {
   const offs = [
     bus.on("mission:setup", (e) => setup(e.supplies ?? [], e.survivors ?? [])),
     bus.on("mission:reset", () => clearAll()),
-    // Night Shift: the office on record steps out of the building with the player. (Untyped until engine.ts carries it.)
-    (bus as unknown as { on(k: string, f: (e: { survivors?: SurvivorSpot[] }) => void): () => void }).on("mission:survivors", (e) =>
-      spawnSurvivors(e?.survivors ?? [], "following"),
-    ),
+    // Night Shift: the office on record steps out of the building with the player, already following.
+    bus.on("mission:survivors", (e) => spawnSurvivors(e.survivors ?? [], "following")),
     bus.on("mission:shelter", (e) => shelter(e.x, e.z)),
     bus.on("mission:evacuate", (e) => evacuate(e.x, e.z)),
     bus.on("mission:defend", (e) => defend(e.x, e.z, e.facing)),
