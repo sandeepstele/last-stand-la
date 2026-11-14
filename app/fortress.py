@@ -296,8 +296,10 @@ def _dossier(pid: str) -> str:
 
 
 def dossier(pid: str) -> dict[str, Any]:
-    """The fortress card. Raises costar.CoStarError for an unknown id."""
-    return json.loads(_dossier(str(pid).strip()))
+    """The fortress card. Raises costar.CoStarError for an unknown id. Images are listed fresh (cheap), so a
+    newly cached picture shows up without a restart."""
+    pid = str(pid).strip()
+    return json.loads(_dossier(pid)) | {"images": _images(pid)}
 
 
 # ------------------------------------------------------------------ the night
