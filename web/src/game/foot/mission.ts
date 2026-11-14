@@ -277,7 +277,14 @@ export function createMission(ctx: FootCtx): System {
       root.add(mesh.group);
       crates.push({ spot, mesh, popT: -1, spin: (spot.x * 13.37 + spot.z * 7.1) % (Math.PI * 2) });
     }
-    spots.forEach((spot, idx) => {
+    spawnSurvivors(spots, "trapped");
+  };
+
+  /** Trapped (mission:setup) or already with the player (found inside a building: they step out and follow). */
+  const spawnSurvivors = (spots: SurvivorSpot[], state: "trapped" | "following") => {
+    for (const spot of spots) {
+      if (!spot || !Number.isFinite(spot.x) || !Number.isFinite(spot.z) || survs.some((o) => o.spot.id === spot.id)) continue;
+      const idx = survs.length;
       const rig = makeSurvivor(art, idx);
       const name = makeLabel(0.6);
       const help = makeLabel(0.85);
@@ -288,7 +295,8 @@ export function createMission(ctx: FootCtx): System {
       beam.renderOrder = 2;
       rig.root.add(beam);
       root.add(rig.root, name.sprite, help.sprite);
-      const npc: Npc = { id: spot.id, x: spot.x, z: spot.z, alive: true, hidden: false };
+      const [x, z] = ctx.collide(spot.x, spot.z, SURVIVOR_R);
+      const npc: Npc = { id: spot.id, x, z, alive: true, hidden: false };
       const rec = { id: spot.id, name: spot.name, state: "trapped" as SurvivorState };
       ctx.npcs.push(npc);
       ctx.mission.survivors.push(rec);
@@ -297,9 +305,20 @@ export function createMission(ctx: FootCtx): System {
         health: SURVIVOR_HP, yaw: (idx * 2.3 + spot.x) % (Math.PI * 2), vx: 0, vz: 0, speed: 0, phase: 0, order: 0,
         sheltering: false, tx: 0, tz: 0, shelterT: 0, flashT: 0, fadeT: 0, hurtT: 0, barShown: -1,
       };
-      drawName(s);
       survs.push(s);
-    });
+      if (state === "following") {
+        if (s.order === 0 && joined === 0) trailReset();
+        s.order = joined++;
+        help.sprite.visible = false;
+        beam.visible = false;
+        // face the player, then fall in behind them
+        s.yaw = Math.atan2(ctx.player.x - x, -(ctx.player.z - z));
+        poseRig(rig, 2, ctx.time, 0, 0);
+        rig.root.position.set(x, 0, z);
+        rig.root.rotation.y = -s.yaw;
+        setState(s, "following");
+      } else drawName(s);
+    }
   };
 
   const updateSurvivors = (dt: number) => {
@@ -859,6 +878,10 @@ export function createMission(ctx: FootCtx): System {
   const offs = [
     bus.on("mission:setup", (e) => setup(e.supplies ?? [], e.survivors ?? [])),
     bus.on("mission:reset", () => clearAll()),
+    // Night Shift: the office on record steps out of the building with the player. (Untyped until engine.ts carries it.)
+    (bus as unknown as { on(k: string, f: (e: { survivors?: SurvivorSpot[] }) => void): () => void }).on("mission:survivors", (e) =>
+      spawnSurvivors(e?.survivors ?? [], "following"),
+    ),
     bus.on("mission:shelter", (e) => shelter(e.x, e.z)),
     bus.on("mission:evacuate", (e) => evacuate(e.x, e.z)),
     bus.on("mission:defend", (e) => defend(e.x, e.z, e.facing)),
