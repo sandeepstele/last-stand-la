@@ -505,7 +505,7 @@ export function FootGame({ game, replay, agentOff = false }: { game: Game; repla
         if (since > 8) fireDebris();
         // Arrived = next to the fallback's outline anywhere (the route may end on a different side than `to`).
         const fc = fallbackPid ? ctx.colliderOf.get(fallbackPid) : undefined;
-        const atFallback = !!fc && closestOnPoly(p.x, p.z, fc.pts).d < 3.5;
+        const atFallback = !!fc && closestOnPoly(p.x, p.z, fc.pts).d < 4.2; // C's multi-goal route ends within 3.5 m of the outline
         if ((to && (dist(here, to) < DOOR_R + 1 || atFallback)) || (!to && since > 25)) {
           if (to) ctx.bus.emit("mission:shelter", { pid: fallbackPid ?? "", x: to[0], z: to[1] });
           p.frozen = true;
