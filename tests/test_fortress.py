@@ -257,3 +257,7 @@ def test_mesh_route_serves_only_a_cached_mesh(monkeypatch, tmp_path):
 def test_solar_stamps_come_from_the_screen_readiness():
     assert fortress._SOLAR_STAMP["ready"] == "go_solar" and fortress._SOLAR_STAMP["reroof_first"] == "reroof_first"
     assert fortress._SOLAR_STAMP["inspect"] == fortress._SOLAR_STAMP["unknown"] == "inspect_first"
+
+
+def test_stale_stamp_mapping():
+    assert fortress._STALE_STAMP == {"year_is_renovation": "same_building", "replaced": "replaced"}

@@ -714,3 +714,53 @@ def solar() -> dict[str, Any]:
     """Solar-roof side mission: the play area's screened roofs, biggest first, each with a code answer stamp."""
     return json.loads(_solar())
 
+
+STALE_CHECKS = ["replacement_permits", "compliance_filings", "era_and_height"]  # records only: no vision, no model
+_STALE_STAMP = {"year_is_renovation": "same_building", "replaced": "replaced"}
+
+
+@lru_cache(maxsize=1)
+def _stale(radius_m: float = 900.0) -> str:
+    """'Same building?' side mission: the stale_entry cases near tonight's hero, in queue order, with the facts the
+    evidence engine weighs (city list vs CoStar record, permits, filings, the aerial on file) and a code answer stamp."""
+    from app import cases
+
+    hero = building("6375735")  # tonight's hero: the mission covers its neighbourhood
+    g = GROUND
+    city_rows = {b["pid"]: b for b in city()["buildings"]}
+    out = []
+    for n, c in enumerate(cases.ordered(), 1):
+        pid = str(c["property_id"])
+        b = city_rows.get(pid)
+        if c["case"] != "stale_entry" or not b or math.hypot(b["x"] - hero["x"], b["z"] - hero["z"]) > radius_m:
+            continue
+        rec, aer = costar.get(pid), _aerial(pid)
+        w = evidence.weigh_case(pid, "stale_entry", STALE_CHECKS, None, [])
+        v = w["verdict"]
+        listed = (retrofit_lists.assess(rec).get("lists") or [{}])[0]
+        stamp = _STALE_STAMP.get(v["hypothesis"], "cant_tell") if v["label"] in ("likely", "leaning") else "cant_tell"
+        out.append({
+            "n": n, "pid": pid, "label": _label(rec), "x": b["x"], "z": b["z"],
+            "distance_m": round(math.hypot(b["x"] - hero["x"], b["z"] - hero["z"])),
+            "city_list": {"list": LIST.get(listed.get("list"), listed.get("list")), "order_date": listed.get("order_date")},
+            "costar": {"year_built": rec.get("year_built"), "stories": rec.get("stories"), "material": _material(rec)},
+            "aerial": {"height_m": aer.get("height_m"), "footprint_sqft": aer.get("footprint_sqft"), "roof_shape": aer.get("roof_shape"),
+                       "capture": (aer.get("capture_date") or "")[:7]} if aer else None,
+            "clues": [{"check": t["check"], "finding": t["finding"].split(" (")[0], "why": t.get("why")} for t in w["trail"]][:3],
+            "images": _feeds(pid)["drone"],
+            "question": "The city's list names a building here, and CoStar records one built after the list's cutoff. "
+                        "Is it the same building?",
+            "in_bounds": g["x0"] - PLAY_PAD_M <= b["x"] <= g["x1"] + PLAY_PAD_M and g["z0"] - PLAY_PAD_M <= b["z"] <= g["z1"] + PLAY_PAD_M,
+            "city_says": f"on the {LIST.get(listed.get('list'), listed.get('list'))} retrofit list since {listed.get('order_date')}",
+            "costar_says": f"built {rec.get('year_built')}, {rec.get('stories')} stories, {_material(rec)}",
+            "image": (_feeds(pid)["drone"] or [None])[0],
+            "headline": v["text"],
+            "answer": stamp,
+            "verdict": {"label": v["label"], "hypothesis": v["hypothesis"], "confidence": v["confidence"], "text": v["text"]}})
+    return json.dumps({"cases": out, "stamps": ["same_building", "replaced", "cant_tell"],
+                       "source": "LA retrofit lists + permits, CoStar record, Vexcel on file; weighed in code (no model)"})
+
+
+def stale() -> dict[str, Any]:
+    return json.loads(_stale())
+

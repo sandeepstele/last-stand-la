@@ -204,6 +204,12 @@ async def game_mesh(request: Request) -> Response:
     return Response(data, media_type="text/plain", headers={"cache-control": "private, max-age=3600"})
 
 
+async def game_stale(request: Request) -> JSONResponse:
+    from app import fortress
+
+    return JSONResponse(await asyncio.to_thread(fortress.stale))
+
+
 async def game_solar(request: Request) -> JSONResponse:
     from app import fortress
 
@@ -298,6 +304,7 @@ app = Starlette(
         Route("/game/city", game_city, methods=["GET"]),
         Route("/game/suites/{pid}", game_suites, methods=["GET"]),
         Route("/game/solar", game_solar, methods=["GET"]),
+        Route("/game/stale", game_stale, methods=["GET"]),
         Route("/game/mesh/{pid}", game_mesh, methods=["GET"]),
         Route("/game/dossier/{pid}", game_dossier, methods=["GET"]),
         Route("/game/resolve", game_resolve, methods=["POST"]),
