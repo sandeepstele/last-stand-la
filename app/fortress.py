@@ -687,7 +687,7 @@ def _solar() -> str:
     from app import layers
 
     g, out = GROUND, []
-    with layers.cached_only():  # cached data only: the game never fetches while someone plays
+    if True:  # only buildings whose Vexcel aerial is cached (checked below), so nothing is fetched while someone plays
         for b in district()["buildings"]:
             if not (g["x0"] - PLAY_PAD_M <= b["x"] <= g["x1"] + PLAY_PAD_M and g["z0"] - PLAY_PAD_M <= b["z"] <= g["z1"] + PLAY_PAD_M):
                 continue
