@@ -124,6 +124,7 @@ Optional:
 - [docs/FRONTEND.md](docs/FRONTEND.md): the web app.
 - [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md): iMessage, Vexcel, Matterport, the CoStar kit and LA open data.
 - [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md): setup, tests, branch, commit and data rules, troubleshooting.
+- [docs/AGENT_IMPROVEMENT_PLAN.md](docs/AGENT_IMPROVEMENT_PLAN.md): known limitations of the deep agent (reasoning, vision, models, data) and the plan to improve them.
 
 ## Team
 
