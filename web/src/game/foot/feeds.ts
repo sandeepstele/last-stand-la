@@ -92,15 +92,15 @@ export function createFeeds(ctx: FootCtx): Feeds {
 
   // the player's own marker on the drone layer: an amber arrow pointing where they face
   const arrowGeo = new THREE.BufferGeometry();
-  arrowGeo.setAttribute("position", new THREE.Float32BufferAttribute([0, 0, -3.8, -2, 0, 2, 0, 0, 0.8, 0, 0, -3.8, 0, 0, 0.8, 2, 0, 2], 3));
-  const ringGeo = new THREE.RingGeometry(2.6, 3.4, 24);
+  arrowGeo.setAttribute("position", new THREE.Float32BufferAttribute([0, 0, -4.2, -1.8, 0, 1.4, 0, 0, 0.4, 0, 0, -4.2, 0, 0, 0.4, 1.8, 0, 1.4], 3));
+  const ringGeo = new THREE.RingGeometry(3.0, 3.7, 28);
   ringGeo.rotateX(-Math.PI / 2);
   const youMat = new THREE.MeshBasicMaterial({ color: 0xffb020, depthTest: false, depthWrite: false, fog: false, side: THREE.DoubleSide });
   const you = new THREE.Group();
   you.add(new THREE.Mesh(arrowGeo, youMat), new THREE.Mesh(ringGeo, youMat));
   you.traverse((o) => {
     o.layers.set(DRONE_LAYER);
-    o.renderOrder = 60;
+    o.renderOrder = 50;
   });
   scene.add(you);
 

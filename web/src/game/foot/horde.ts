@@ -10,6 +10,8 @@ import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { blocked } from "./collide";
 import { dirOf, NOTICE_R, PLAYER_R, SECTOR_DEG, ZOMBIE_CHASE, ZOMBIE_R, ZOMBIE_WALK, type FootCtx, type System } from "./engine";
+import { createHordeCollide } from "./hordeCollide";
+import { createFlowGrid, PLAYER_RADIUS_CELLS } from "./hordeFlow";
 import { DRONE_LAYER } from "./hordeLayers";
 
 const MAX = 260; // hard cap on live zombies
@@ -38,6 +40,13 @@ const HIP_Y = 0.86, HIP_X = 0.12, TORSO_H = 0.62, SHOULDER_X = 0.31;
 const SHIRTS = [0x5b4a3a, 0x3f4a5a, 0x6a5f4a, 0x5a3b3b, 0x55604a, 0x6e6e6e, 0x3a3f36, 0x7a6a55, 0x4a5568, 0x6b4f3f, 0x5f5a6e, 0x4f5f5a];
 const PANTS = [0x2f3440, 0x3b3226, 0x2a2a2a, 0x40463a, 0x4a3f35, 0x30384a, 0x3c3c44];
 
+/** How far from p you can travel along direction f before leaving [lo, hi] (3 m margin). */
+function reach(p: number, f: number, lo: number, hi: number): number {
+  if (f > 1e-6) return (hi - 3 - p) / f;
+  if (f < -1e-6) return (lo + 3 - p) / f;
+  return Infinity;
+}
+
 function box(w: number, h: number, d: number, ox: number, oy: number, oz: number) {
   const g = new THREE.BoxGeometry(w, h, d);
   g.translate(ox, oy, oz);
@@ -56,7 +65,7 @@ export function createHorde(ctx: FootCtx): System {
   const geoEyes = mergeGeometries([eyeL, eyeR]) ?? eyeL;
   const geoArm = box(0.12, 0.64, 0.13, 0, -0.3, 0);
   const geoLeg = box(0.17, 0.84, 0.19, 0, -0.42, 0);
-  const geoDisc = new THREE.CircleGeometry(1.5, 12);
+  const geoDisc = new THREE.CircleGeometry(1.25, 10);
   geoDisc.rotateX(-Math.PI / 2);
 
   const matCloth = new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: 0x151515 });
@@ -86,7 +95,7 @@ export function createHorde(ctx: FootCtx): System {
   const eyes = mk(geoEyes, matEyes, MAX);
   const discs = mk(geoDisc, matDisc, MAX);
   discs.layers.set(DRONE_LAYER);
-  discs.renderOrder = 50;
+  discs.renderOrder = 60; // over the player's amber marker, so a crowd on you shows
   const meshes = [torso, legs, head, arms, eyes, discs];
 
   // ------------------------------------------------------------------ state (typed arrays, one slot per zombie)
@@ -103,6 +112,7 @@ export function createHorde(ctx: FootCtx): System {
   const slideT = new Float32Array(MAX), slideSign = new Int8Array(MAX);
   const wx = new Float32Array(MAX), wz = new Float32Array(MAX);
   const mob = new Uint8Array(MAX);
+  const los = new Uint8Array(MAX); // chasers: can they see the player (refreshed a few times a second)
   // looks (fixed per zombie)
   const scale = new Float32Array(MAX), seed = new Float32Array(MAX), hunch = new Float32Array(MAX);
   const armL0 = new Float32Array(MAX), armR0 = new Float32Array(MAX), headRoll = new Float32Array(MAX), speedMul = new Float32Array(MAX);
@@ -115,6 +125,13 @@ export function createHorde(ctx: FootCtx): System {
   for (let i = MAX - 1; i >= 0; i--) freeStack[freeTop++] = i;
 
   let ambWant = 0, ambT = 0;
+  // navigation: grid push-out (no garbage) + flow fields around the blocks
+  const hc = createHordeCollide(ctx.colliders, ctx.bounds);
+  const grid = createFlowGrid(ctx.colliders, ctx.bounds);
+  const toTarget = grid.makeField(Infinity);
+  const toPlayer = grid.makeField(PLAYER_RADIUS_CELLS);
+  let playerFieldT = 0, needPlayerField = false;
+  const cbuf = new Float64Array(2), fbuf = new Float64Array(2);
   let hasTarget = false, tx = 0, tz = 0;
 
   const col = new THREE.Color();
@@ -172,6 +189,7 @@ export function createHorde(ctx: FootCtx): System {
     wx[i] = px;
     wz[i] = pz;
     mob[i] = 0;
+    los[i] = 1;
     scale[i] = 0.9 + Math.random() * 0.2;
     seed[i] = Math.random();
     hunch[i] = 0.12 + Math.random() * 0.3;
@@ -219,15 +237,22 @@ export function createHorde(ctx: FootCtx): System {
       tx = e.targetX;
       tz = e.targetZ;
       hasTarget = true;
+      toTarget.build(tx, tz);
       const [fx, fz] = dirOf(SECTOR_DEG[e.sector] ?? 0);
       const lx = -fz, lz = fx;
       // Over-sample, then put the nearest (to the player) first, and of those the ones the player can see.
       const cand: { x: number; z: number; d: number; los: boolean }[] = [];
-      for (let k = 0; k < n * 2; k++) {
-        const along = 70 + Math.random() * 45;
+      for (let k = 0, tries = 0; k < n * 2 && tries < n * 8; tries++) {
         const lat = (Math.random() * 2 - 1) * 45;
-        const [px, pz] = ctx.collide(tx + fx * along + lx * lat, tz + fz * along + lz * lat, ZOMBIE_R);
+        let along = 70 + Math.random() * 45;
+        // a sector that points off the map would pile everyone on the boundary: shorten the reach to fit
+        const bx = tx + lx * lat, bz = tz + lz * lat;
+        const room = Math.min(reach(bx, fx, ctx.bounds.x0, ctx.bounds.x1), reach(bz, fz, ctx.bounds.z0, ctx.bounds.z1));
+        if (along > room) along = Math.max(30, room * (0.55 + Math.random() * 0.45));
+        const [px, pz] = ctx.collide(bx + fx * along, bz + fz * along, ZOMBIE_R);
+        if (tries < n * 6 && !toTarget.reachable(px, pz)) continue; // a courtyard with no way out
         cand.push({ x: px, z: pz, d: Math.hypot(px - P.x, pz - P.z), los: false });
+        k++;
       }
       cand.sort((a, b) => a.d - b.d);
       const near = cand.slice(0, Math.min(cand.length, 60));
@@ -247,9 +272,11 @@ export function createHorde(ctx: FootCtx): System {
 
   offs.push(
     bus.on("horde:target", (e) => {
+      const moved = !hasTarget || Math.hypot(e.x - tx, e.z - tz) > 1;
       tx = e.x;
       tz = e.z;
       hasTarget = true;
+      if (moved || !toTarget.ready) toTarget.build(tx, tz);
     }),
   );
 
@@ -421,6 +448,14 @@ export function createHorde(ctx: FootCtx): System {
       }
     }
 
+    // chasers that lost sight of the player follow a local flow field toward them (rebuilt ~4x a second)
+    playerFieldT -= dt;
+    if (needPlayerField && seen && playerFieldT <= 0) {
+      playerFieldT = 0.25;
+      toPlayer.build(P.x, P.z);
+    }
+    needPlayerField = false;
+
     const kbDecay = Math.exp(-dt / KB_TAU);
     const noticeR = NOTICE_R * (P.sprinting ? SPRINT_NOTICE : 1);
     let alive = 0, chasing = 0, nearest = Infinity;
@@ -453,12 +488,26 @@ export function createHorde(ctx: FootCtx): System {
       // noticing / losing the player
       if (s === WANDER || s === MARCH) {
         noticeT[i] -= dt;
-        if (seen && noticeT[i] <= 0) {
+        if (noticeT[i] <= 0) {
           noticeT[i] = 0.2 + Math.random() * 0.15;
-          if (d < CLOSE_NOTICE || (d < noticeR && !blocked(zx, zz, P.x, P.z, cols))) s = CHASE;
+          if (s === MARCH && hasTarget) {
+            // marchers near the target: can they walk straight at it? (end the ray just short of the wall)
+            const tdx = tx - zx, tdz = tz - zz, td = Math.hypot(tdx, tdz) || 1;
+            los[i] = td < 35 && !blocked(zx, zz, tx - (tdx / td) * 1.2, tz - (tdz / td) * 1.2, cols) ? 1 : 0;
+          }
+          if (seen && (d < CLOSE_NOTICE || (d < noticeR && !blocked(zx, zz, P.x, P.z, cols)))) {
+            s = CHASE;
+            los[i] = 1;
+          }
         }
       } else if ((s === CHASE || s === ATTACK) && (!seen || d > LOSE_R)) {
         s = fallbackState(i);
+      } else if (s === CHASE) {
+        noticeT[i] -= dt;
+        if (noticeT[i] <= 0) {
+          noticeT[i] = 0.25 + Math.random() * 0.15;
+          los[i] = d < 4 || !blocked(zx, zz, P.x, P.z, cols) ? 1 : 0;
+        }
       }
 
       // desired direction (gx, gz) and speed sp
@@ -473,9 +522,12 @@ export function createHorde(ctx: FootCtx): System {
             wz[i] = zz;
             timer[i] = 1.5 + Math.random() * 2.5; // stand and sway
           } else {
-            const a = Math.random() * Math.PI * 2, r = 5 + Math.random() * 12;
-            wx[i] = zx + Math.sin(a) * r;
-            wz[i] = zz - Math.cos(a) * r;
+            for (let t = 0; t < 4; t++) {
+              const a = Math.random() * Math.PI * 2, r = 5 + Math.random() * 12;
+              wx[i] = zx + Math.sin(a) * r;
+              wz[i] = zz - Math.cos(a) * r;
+              if (grid.walkable(wx[i], wz[i])) break;
+            }
             timer[i] = 6 + Math.random() * 6;
           }
         } else if (wd > 0.8) {
@@ -490,6 +542,18 @@ export function createHorde(ctx: FootCtx): System {
           const td = Math.hypot(tdx, tdz) || 1e-3;
           gx = tdx / td;
           gz = tdz / td;
+          const lane = (seed[i] - 0.5) * 2; // -1..1: each zombie keeps its own lane, so they arrive as a crowd, not a queue
+          if (td > MOB_R && los[i]) {
+            const ox = tx - tdz / td * lane * 4 - zx, oz = tz + tdx / td * lane * 4 - zz; // aim a few metres either side
+            const ol = Math.hypot(ox, oz) || 1;
+            gx = ox / ol;
+            gz = oz / ol;
+          } else if (td > MOB_R + 2 && toTarget.dir(zx, zz, fbuf)) {
+            // around the blocks, down the streets (fanned out a little)
+            const a = lane * 0.3, ca = Math.cos(a), sa = Math.sin(a);
+            gx = fbuf[0] * ca - fbuf[1] * sa;
+            gz = fbuf[0] * sa + fbuf[1] * ca;
+          }
           if (td < MOB_R) {
             mob[i] = 1;
             sp = 0.75; // press into the crowd at the door
@@ -500,6 +564,13 @@ export function createHorde(ctx: FootCtx): System {
         else if (s === ATTACK && d > HIT_R + 0.5) s = CHASE;
         gx = dx / d;
         gz = dz / d;
+        if (s === CHASE && !los[i] && d > 3) {
+          needPlayerField = true;
+          if (toPlayer.dir(zx, zz, fbuf)) {
+            gx = fbuf[0];
+            gz = fbuf[1];
+          }
+        }
         sp = s === ATTACK ? (d > 0.95 ? 0.9 : 0) : ZOMBIE_CHASE * (0.9 + (speedMul[i] - 0.85) * 0.6);
         if (seen && d < HIT_R && hitCd[i] <= 0) {
           hitCd[i] = HIT_CD;
@@ -571,9 +642,9 @@ export function createHorde(ctx: FootCtx): System {
         x[i] = nx; // sinking: no need to fight the walls
         z[i] = nz;
       } else {
-        const c = ctx.collide(nx, nz, ZOMBIE_R);
-        x[i] = c[0];
-        z[i] = c[1];
+        hc.push(nx, nz, ZOMBIE_R, cbuf);
+        x[i] = cbuf[0];
+        z[i] = cbuf[1];
       }
       spd[i] = Math.hypot(vx[i], vz[i]);
 
