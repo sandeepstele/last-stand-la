@@ -55,7 +55,14 @@ export function parse<T>(m: Msg): T | null {
     }
   };
   // After an edited HOLD/RUN, the server prefixes the tool result with "Note: a human reviewer replaced this tool call…".
-  return tryParse(raw) ?? (raw.indexOf("{") > 0 ? tryParse(raw.slice(raw.indexOf("{"))) : null);
+  const whole = tryParse(raw);
+  if (whole) return whole;
+  // Try each "{" (the note itself may contain braces, e.g. a repr of the replaced call) until one parses to the end.
+  for (let i = raw.indexOf("{", 1), n = 0; i > 0 && n < 20; i = raw.indexOf("{", i + 1), n++) {
+    const v = tryParse(raw.slice(i));
+    if (v) return v;
+  }
+  return null;
 }
 
 /** Index of the newest human message, or -1. */
