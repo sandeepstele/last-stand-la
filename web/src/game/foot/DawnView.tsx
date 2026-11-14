@@ -35,11 +35,12 @@ export function DawnView({ title, lines, messages, loading, onPlayAgain, score, 
   const records = lines.filter((l) => toneOf(l) === "records");
   const rest = lines.filter((l) => toneOf(l) !== "records");
   const stats: { label: string; value: string }[] = [
-    { label: "Survivors saved", value: `${score.saved}/${score.total}` },
+    ...(score.total > 0 ? [{ label: "Survivors saved", value: `${score.saved}/${score.total}` }] : []),
     { label: "Crates found", value: String(score.found) },
     { label: "Health", value: String(Math.round(score.health)) },
     { label: "Time", value: clock(score.secs) },
   ];
+  // Debrief order: the records result, the drafted correction, filing it, then the game score.
   return (
     <div className={`${styles.root} ${styles.dawn}`} role="dialog" aria-label={title}>
       <div className={styles.sun} />
@@ -55,6 +56,28 @@ export function DawnView({ title, lines, messages, loading, onPlayAgain, score, 
             <p>{l}</p>
           </section>
         ))}
+
+        {loading && (
+          <p className={styles.drafting}>
+            HQ is drafting tonight&apos;s corrections
+            <span className={styles.thinking}>
+              <i />
+              <i />
+              <i />
+            </span>
+          </p>
+        )}
+        <HqDrafts messages={messages} busy={loading} />
+
+        <section className={styles.fileCard} data-filed={reportFiled}>
+          <span className={styles.dawnKicker} style={{ textAlign: "left" }}>
+            FINAL OBJECTIVE
+          </span>
+          <button type="button" className={styles.fileBtn} disabled={reportFiled} onClick={onFileReport}>
+            {reportFiled ? "Reports filed for human review" : "File tonight's reports → open the auditor"}
+          </button>
+          <p>Draft corrections go to a human researcher for review. Nothing is sent automatically.</p>
+        </section>
 
         <section className={styles.results}>
           <div className={styles.rank}>
@@ -87,32 +110,11 @@ export function DawnView({ title, lines, messages, loading, onPlayAgain, score, 
           </ul>
         )}
 
-        <section className={styles.fileCard} data-filed={reportFiled}>
-          <span className={styles.dawnKicker} style={{ textAlign: "left" }}>
-            FINAL OBJECTIVE
-          </span>
-          <button type="button" className={styles.fileBtn} disabled={reportFiled} onClick={onFileReport}>
-            {reportFiled ? "Reports filed for human review" : "File tonight's reports → open the auditor"}
-          </button>
-          <p>Draft corrections go to a human researcher for review. Nothing is sent automatically.</p>
-        </section>
-
         <section className={styles.found}>
           <span className={styles.dawnKicker} style={{ textAlign: "left" }}>
-            THE NIGHT&apos;S REAL WORK
+            THE EVIDENCE
           </span>
           <h2>What the agent found</h2>
-          {loading && (
-            <p className={styles.drafting}>
-              HQ is drafting tonight&apos;s corrections
-              <span className={styles.thinking}>
-                <i />
-                <i />
-                <i />
-              </span>
-            </p>
-          )}
-          <HqDrafts messages={messages} busy={loading} />
           {hasCase ? (
             <>
               <p>
@@ -124,7 +126,7 @@ export function DawnView({ title, lines, messages, loading, onPlayAgain, score, 
               </div>
             </>
           ) : (
-            !loading && <p className={styles.outcomeEmpty}>No case file was opened tonight.</p>
+            <p className={styles.outcomeEmpty}>{loading ? "HQ is still writing up the case file." : "No case file was opened tonight."}</p>
           )}
         </section>
 

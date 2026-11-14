@@ -45,9 +45,9 @@ export type HudProps = {
   supplies: { boards: number; medkits: number; flares?: number }; // carried; [Q] uses a medkit; [G] throws a flare
   survivors: { name: string; state: SurvivorState }[];
   barricade: { hp: number; max: number } | null; // shown big, bottom-centre, during HOLD
-  hq: ReactNode;
+  hq: ReactNode; // the HQ panel (the agent at work), rendered by the director; placed in the right column under the radio
   /** Where the nearest chaser is, relative to the view: degrees, 0 = ahead, 90 = right, ±180 = behind. null = nobody close. */
-  threatDir?: number | null; // the HQ panel (the agent at work), rendered by the director; place it in the right column under the radio
+  threatDir?: number | null;
 };
 
 // ------------------------------------------------------------------ top-left: missions, clock, survivors, fortress card
@@ -143,22 +143,20 @@ function BarricadeBar({ b, nail }: { b: { hp: number; max: number }; nail: Hint 
   const f = b.max > 0 ? Math.max(0, Math.min(1, b.hp / b.max)) : 0;
   const low = f < 0.3;
   return (
-    <div className={styles.barricadeWrap}>
-      <div className={styles.barricade} data-low={low} key={hits} data-hit={hits > 0}>
-        <div className={styles.barricadeHead}>
-          <strong>Barricade</strong>
-          <b>{Math.round(b.hp)} / {Math.round(b.max)}</b>
-        </div>
-        <span className={styles.barricadeTrack}>
-          <span style={{ width: `${f * 100}%` }} />
-        </span>
+    <div className={styles.barBox} data-low={low} key={hits} data-hit={hits > 0}>
+      <div className={styles.barricadeHead}>
+        <strong>Barricade</strong>
+        {nail && (
+          <span className={styles.hint} data-disabled={!!nail.disabled}>
+            <Keycap k={nail.key} size="sm" />
+            {nail.label}
+          </span>
+        )}
+        <b>{Math.round(b.hp)} / {Math.round(b.max)}</b>
       </div>
-      {nail && (
-        <span className={styles.hint} data-disabled={!!nail.disabled}>
-          <Keycap k={nail.key} />
-          {nail.label}
-        </span>
-      )}
+      <span className={styles.barricadeTrack}>
+        <span style={{ width: `${f * 100}%` }} />
+      </span>
     </div>
   );
 }
@@ -242,16 +240,18 @@ function Compass({ compass, threat }: { compass: HudProps["compass"]; threat: nu
       </span>,
     );
   }
-  let wave = null;
+  // The horde: a red band on the strip when it's in view, else a marker under the ticks on the side to turn to.
+  let waveBand = null;
+  let waveEdge = null;
   if (waveSector) {
     const delta = wrap180(SECTOR_DEG[waveSector] - yawDeg);
     if (Math.abs(delta) <= FOV / 2 + 22.5) {
       const l = Math.max(0, pct(delta - 22.5));
       const r = Math.min(100, pct(delta + 22.5));
-      wave = <span className={styles.waveBand} style={{ left: `${l}%`, width: `${r - l}%` }} />;
+      waveBand = <span className={styles.waveBand} style={{ left: `${l}%`, width: `${r - l}%` }} />;
     } else {
-      wave = (
-        <span className={`${styles.edge} ${styles.waveInfo}`} style={delta < 0 ? { left: 6 } : { right: 6 }}>
+      waveEdge = (
+        <span className={styles.hordeEdge} style={delta < 0 ? { left: 0 } : { right: 0 }}>
           {delta < 0 ? "« HORDE" : "HORDE »"}
         </span>
       );
@@ -268,10 +268,13 @@ function Compass({ compass, threat }: { compass: HudProps["compass"]; threat: nu
   }
   return (
     <div className={styles.compassWrap}>
-      <div className={styles.compass} aria-label={`heading ${Math.round(yawDeg)} degrees`}>
-        {wave}
-        {ticks}
-        {mark}
+      <div className={styles.compassBox}>
+        <div className={styles.compass} aria-label={`heading ${Math.round(yawDeg)} degrees`}>
+          {waveBand}
+          {ticks}
+          {mark}
+        </div>
+        {waveEdge}
       </div>
       {target && (
         <div className={styles.targetInfo}>
@@ -348,7 +351,7 @@ function BannerView({ banner }: { banner: Banner | null }) {
 }
 
 // ------------------------------------------------------------------ bottom-centre: HOLD / RUN orders
-function Decision({ d, busy }: { d: DecisionView; busy: boolean }) {
+function Decision({ d, busy, extra }: { d: DecisionView; busy: boolean; extra: Hint[] }) {
   const sentAction = d.sent ? (/\bRUN\b/.test(d.sent) ? "run" : "hold") : null;
   const order = (which: "hold" | "run", key: string, text: string, disabled = false) => (
     <div
@@ -360,27 +363,39 @@ function Decision({ d, busy }: { d: DecisionView; busy: boolean }) {
     >
       {d.proposed === which && <span className={styles.hqCall}>HQ&apos;S CALL</span>}
       <Keycap k={key} size="lg" tone={d.proposed === which ? "amber" : undefined} />
-      <span>{text}</span>
+      <span className={styles.orderText}>{text}</span>
     </div>
   );
+  // A slim strip at the bottom: the horde stays visible while you decide.
   return (
     <section className={`${styles.panel} ${styles.decision}`}>
-      <span className={styles.tag}>Orders · HQ proposes, you decide</span>
-      <h3>
-        {d.prompt}
-        {busy && !d.proposed && !d.sent && (
-          <span className={styles.thinking}>
-            <i />
-            <i />
-            <i />
+      <div className={styles.decTop}>
+        <span className={styles.tag}>{d.sent ? "Orders" : "Orders · HQ proposes, you decide"}</span>
+        <h3>
+          {d.sent ?? d.prompt}
+          {busy && !d.proposed && !d.sent && (
+            <span className={styles.thinking}>
+              <i />
+              <i />
+              <i />
+            </span>
+          )}
+        </h3>
+        {extra.length > 0 && (
+          <span className={styles.decHints}>
+            {extra.map((h) => (
+              <span key={`${h.key}-${h.label}`} className={styles.hint} data-disabled={!!h.disabled}>
+                <Keycap k={h.key} size="sm" />
+                {h.label}
+              </span>
+            ))}
           </span>
         )}
-      </h3>
+      </div>
       <div className={styles.choices}>
         {order("hold", "H", "Hold")}
         {order("run", "R", d.runLabel ? `Run to ${d.runLabel}` : "Run (no fallback yet)", !d.runLabel)}
       </div>
-      {d.sent ? <p className={styles.sent}>{d.sent}</p> : <p className={styles.decNote}>HQ&apos;s call is a proposal. Yours is final.</p>}
       {d.error && <p className={styles.error}>{d.error}</p>}
     </section>
   );
@@ -395,7 +410,7 @@ function FeedFrame({ slot, feed }: { slot: "drone" | "cctv"; feed: FeedView }) {
   const caption = cap.toUpperCase().startsWith(prefix) ? cap.slice(prefix.length).replace(/^[\s·:-]+/, "") : cap;
   const real = !!feed.photo;
   return (
-    <div className={styles.feed} data-photo={real} style={{ right: r.right, bottom: r.bottom, width: r.w, height: r.h }}>
+    <div className={styles.feed} data-photo={real} data-slot={slot} style={{ right: r.right, bottom: r.bottom, width: r.w, height: r.h }}>
       <div className={styles.feedHead}>
         <span className={styles.feedLabel} data-real={real}>
           {real ? "HQ EVIDENCE · real image" : slot === "drone" ? "DRONE VIEW" : "CAMERA VIEW"}
@@ -429,6 +444,34 @@ function Hurt({ health }: { health: number }) {
   );
 }
 
+// ------------------------------------------------------------------ the nearest chaser: a soft red glow on that screen edge
+function ThreatGlow({ dir }: { dir: number | null }) {
+  if (dir === null || !Number.isFinite(dir)) return null;
+  const r = (dir * Math.PI) / 180;
+  const dx = Math.sin(r);
+  const dy = -Math.cos(r); // 0 = ahead = top edge; 180 = behind = bottom edge
+  const k = 1 / Math.max(Math.abs(dx), Math.abs(dy), 1e-6);
+  const x = 50 + dx * k * 50;
+  const y = 50 + dy * k * 50;
+  return (
+    <div
+      className={styles.threatGlow}
+      style={{ background: `radial-gradient(ellipse 30% 42% at ${x}% ${y}%, rgba(229, 72, 77, 0.8) 0%, rgba(229, 72, 77, 0.35) 40%, rgba(229, 72, 77, 0) 72%)` }}
+    />
+  );
+}
+
+/** Night, HOLD and escape: one objective line instead of the mission list and the fortress card. */
+function NowLine({ text, badges }: { text: string; badges: HudProps["badges"] }) {
+  return (
+    <section className={`${styles.panel} ${styles.nowLine}`} key={text}>
+      <Icon name="target" size={18} />
+      <p>{text}</p>
+      <Badges stub={badges.stub} replay={badges.replay} />
+    </section>
+  );
+}
+
 // ------------------------------------------------------------------ the HUD
 export function FootHud(p: HudProps) {
   const low = p.health < 30;
@@ -437,12 +480,22 @@ export function FootHud(p: HudProps) {
   // to do right now: show it big, in the middle of the screen.
   const nail = p.barricade ? hints.find((h) => h.key === "E") ?? null : null;
   const interact = p.barricade ? null : hints.find((h) => h.key === "E" && !h.disabled) ?? null;
+  // Night, HOLD and escape: less UI, more horde.
+  const compact = !!p.decision || !!p.barricade || !!p.compass.waveSector || /^Run to /.test(p.objective);
+  const rest = hints.filter((h) => h !== interact && h !== nail);
   return (
-    <div className={`${styles.root} ${styles.hud}`}>
+    <div className={`${styles.root} ${styles.hud}`} data-compact={compact} data-deciding={!!p.decision}>
       <Hurt health={p.health} />
+      <ThreatGlow dir={p.threatDir ?? null} />
       <div className={styles.leftCol}>
-        <Missions objectives={p.objectives} now={p.objective} timer={p.timer} survivors={p.survivors} badges={p.badges} />
-        <FortressMini dossier={p.dossier} heroLabel={p.heroLabel} wallsNote={p.wallsNote} />
+        {compact ? (
+          <NowLine text={p.objective} badges={p.badges} />
+        ) : (
+          <>
+            <Missions objectives={p.objectives} now={p.objective} timer={p.timer} survivors={p.survivors} badges={p.badges} />
+            <FortressMini dossier={p.dossier} heroLabel={p.heroLabel} wallsNote={p.wallsNote} />
+          </>
+        )}
       </div>
 
       <Compass compass={p.compass} threat={p.threat} />
@@ -450,10 +503,21 @@ export function FootHud(p: HudProps) {
         <Radio lines={p.radio} busy={p.busy} />
         {p.hq && <div className={styles.hqSlot}>{p.hq}</div>}
       </div>
-      {p.barricade && <BarricadeBar b={p.barricade} nail={nail} />}
       <BannerView banner={p.banner} />
 
-      {p.decision && <Decision d={p.decision} busy={p.busy} />}
+      {/* One action slot, bottom centre between the vitals and the feeds; the lower-third band above it stays free. */}
+      <div className={styles.actionSlot}>
+        {p.decision ? (
+          <Decision d={p.decision} busy={p.busy} extra={rest.filter((h) => h.key !== "WASD" && h.key !== "Shift")} />
+        ) : p.barricade ? (
+          <BarricadeBar b={p.barricade} nail={nail} />
+        ) : interact ? (
+          <div className={styles.interact} key={interact.label}>
+            <Keycap k={interact.key} size="lg" tone="amber" />
+            <span>{interact.label}</span>
+          </div>
+        ) : null}
+      </div>
 
       <section className={`${styles.panel} ${styles.vitals}`}>
         <div className={styles.vitalRow}>
@@ -488,16 +552,9 @@ export function FootHud(p: HudProps) {
         </div>
       </section>
 
-      {interact && (
-        <div className={styles.interact} key={interact.label}>
-          <Keycap k={interact.key} size="lg" tone="amber" />
-          <span>{interact.label}</span>
-        </div>
-      )}
-
-      {hints.length > 0 && (
+      {rest.length > 0 && !p.decision && !interact && (
         <div className={styles.hints}>
-          {hints.filter((h) => h !== interact && h !== nail).map((h) => (
+          {rest.map((h) => (
             <span key={`${h.key}-${h.label}`} className={styles.hint} data-disabled={!!h.disabled} data-key={h.key}>
               <Keycap k={h.key} />
               {h.label}

@@ -26,41 +26,48 @@ export type InsideProps = {
 
 const swatchOf = (label: string) => (/concrete/i.test(label) ? "concrete" : /brick|masonry/i.test(label) ? "brick" : "unknown");
 
-function Question({ q, onChoose }: { q: InsideQuestion; onChoose(i: number): void }) {
+// A bar along the bottom: the walls the question is about stay in view above it.
+function Question({ q, onChoose, exit }: { q: InsideQuestion; onChoose(i: number): void; exit: string | null }) {
   return (
     <div className={styles.question}>
-      <h3>
-        <small>HQ asks · your report is testimony</small>
-        {q.prompt}
-      </h3>
+      <div className={styles.qText}>
+        <h3>
+          <small>HQ asks · your report is testimony</small>
+          {q.prompt}
+        </h3>
+        <div className={styles.qFoot}>
+          <p className={styles.status}>{q.status}</p>
+          {exit && <ExitHint hint={exit} inline />}
+        </div>
+      </div>
       <div className={styles.answerRow}>
         {q.choices.map((c, i) => {
           const state = q.chosen === null ? "open" : q.chosen === i ? "chosen" : "dim";
           const m = swatchOf(c);
           return (
             <button key={c} type="button" className={styles.answer} data-state={state} disabled={q.chosen !== null} onClick={() => onChoose(i)}>
+              {state === "chosen" && <span className={styles.chosenTag}>YOUR REPORT</span>}
               <span className={styles.swatch} data-m={m}>
                 {m === "unknown" ? "?" : null}
               </span>
               <span className={styles.answerTop}>
-                <Keycap k={String(i + 1)} size="lg" tone={state === "chosen" ? "amber" : undefined} />
+                <Keycap k={String(i + 1)} tone={state === "chosen" ? "amber" : undefined} />
                 <strong>{c}</strong>
               </span>
-              {state === "chosen" && <span className={styles.chosenTag}>YOUR REPORT</span>}
             </button>
           );
         })}
       </div>
-      <p className={styles.status}>{q.status}</p>
     </div>
   );
 }
 
-function ExitHint({ hint }: { hint: string }) {
+function ExitHint({ hint, inline = false }: { hint: string; inline?: boolean }) {
+  const cls = inline ? `${styles.exit} ${styles.exitInline}` : styles.exit;
   const k = splitKeyHint(hint);
   if (k) {
     return (
-      <div className={styles.exit} data-kind="go">
+      <div className={cls} data-kind="go">
         <Keycap k={k.key} size="lg" />
         <span>{k.rest}</span>
       </div>
@@ -68,7 +75,7 @@ function ExitHint({ hint }: { hint: string }) {
   }
   const locked = /^answer/i.test(hint);
   return (
-    <div className={styles.exit} data-kind={locked ? "locked" : "wait"}>
+    <div className={cls} data-kind={locked ? "locked" : "wait"}>
       <span>{locked ? hint : hint.replace(/(\.\.\.|…)\s*$/, "")}</span>
       {!locked && (
         <span className={styles.thinking}>
@@ -132,8 +139,9 @@ export function InsideView({ faces, title, mode, question, note, exitHint, onCho
         </div>
       )}
 
-      {question && <Question q={question} onChoose={onChoose} />}
-      {exitHint && <ExitHint hint={exitHint} />}
+      {/* The exit prompt rides in the question bar: the lower-third band above it is HQ's (moments cards). */}
+      {question && <Question q={question} onChoose={onChoose} exit={exitHint} />}
+      {exitHint && !question && <ExitHint hint={exitHint} />}
     </div>
   );
 }
