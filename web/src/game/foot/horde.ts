@@ -12,6 +12,7 @@ import { blocked } from "./collide";
 import { dirOf, NOTICE_R, PLAYER_R, SECTOR_DEG, ZOMBIE_CHASE, ZOMBIE_R, ZOMBIE_WALK, type FootCtx, type System } from "./engine";
 import { createHordeCollide } from "./hordeCollide";
 import { createFlowGrid, PLAYER_RADIUS_CELLS } from "./hordeFlow";
+import { createHordeFx } from "./hordeFx";
 import { DRONE_LAYER } from "./hordeLayers";
 
 const MAX = 260; // hard cap on live zombies
@@ -40,6 +41,7 @@ const RISE_S = 1.2, SINK_S = 4, SINK_DEPTH = 2.1;
 const WANDER_SPEED = ZOMBIE_WALK * 0.6;
 const MARCH_SPEED = ZOMBIE_WALK * 1.65; // ~2.5 m/s: the wave reaches the door in ~30-45 s
 const MOB_R = 7; // marchers this close to the target crowd and pound on it
+const LANE_HALF = 6.5; // each marcher keeps its own lateral lane within +-this of the flow: the wave arrives as a 13 m band
 const AMBIENT_MIN = 45, AMBIENT_MAX = 100, AMBIENT_RECYCLE = 170;
 const TRICKLE_S = 8;
 const BREACH_RESERVE = 30; // slots a wave leaves free so a breach always has bodies
@@ -120,6 +122,7 @@ export function createHorde(ctx: FootCtx): System {
   discs.layers.set(DRONE_LAYER);
   discs.renderOrder = 60; // over the player's amber marker, so a crowd on you shows
   const meshes = [torso, legs, head, arms, eyes, discs];
+  const fx = createHordeFx(scene, MAX);
 
   // ------------------------------------------------------------------ state (typed arrays, one slot per zombie)
   const st = new Uint8Array(MAX);
@@ -142,6 +145,7 @@ export function createHorde(ctx: FootCtx): System {
   const hx = new Float32Array(MAX), hz = new Float32Array(MAX); // a pack's home (the survivor it guards) // chasers: can they see the player (refreshed a few times a second)
   // looks (fixed per zombie)
   const scale = new Float32Array(MAX), seed = new Float32Array(MAX), hunch = new Float32Array(MAX);
+  const laneOff = new Float32Array(MAX); // persistent lateral offset (m) for marching
   const armL0 = new Float32Array(MAX), armR0 = new Float32Array(MAX), headRoll = new Float32Array(MAX), speedMul = new Float32Array(MAX);
   // separation
   const cx = new Float32Array(MAX), cz = new Float32Array(MAX);
@@ -161,7 +165,7 @@ export function createHorde(ctx: FootCtx): System {
   const flX = new Float64Array(FLARE_SLOTS), flZ = new Float64Array(FLARE_SLOTS), flEnd = new Float64Array(FLARE_SLOTS).fill(-1);
   const flField = Array.from({ length: FLARE_SLOTS }, () => grid.makeField(LURE_FIELD_CELLS));
   let playerFieldT = 0, needPlayerField = false;
-  const cbuf = new Float64Array(2), fbuf = new Float64Array(2);
+  const cbuf = new Float64Array(2), fbuf = new Float64Array(2), fbuf2 = new Float64Array(2);
   let hasTarget = false, tx = 0, tz = 0;
   // who the horde can go after this frame: the player (when not hidden) + live, visible npcs
   const qX = new Float64Array(QMAX), qZ = new Float64Array(QMAX), qNpc = new Int16Array(QMAX);
@@ -235,6 +239,7 @@ export function createHorde(ctx: FootCtx): System {
     armR0[i] = Math.random() < 0.2 ? 0.35 + Math.random() * 0.4 : 1.05 + Math.random() * 0.45; // a few dangle one arm
     headRoll[i] = (Math.random() * 2 - 1) * 0.35;
     speedMul[i] = 0.85 + Math.random() * 0.3;
+    laneOff[i] = (Math.random() * 2 - 1) * LANE_HALF;
     paint(i);
     return i;
   }
@@ -434,7 +439,7 @@ export function createHorde(ctx: FootCtx): System {
 
   offs.push(
     bus.on("player:shove", (e) => {
-      const fx = Math.sin(e.yaw), fz = -Math.cos(e.yaw);
+      const ax = Math.sin(e.yaw), az = -Math.cos(e.yaw);
       const v0 = SHOVE_DIST / KB_TAU; // exponential decay travels v0 * tau
       for (let i = 0; i < MAX; i++) {
         const s = st[i];
@@ -442,9 +447,10 @@ export function createHorde(ctx: FootCtx): System {
         const dx = x[i] - e.x, dz = z[i] - e.z;
         const d = Math.hypot(dx, dz);
         if (d > SHOVE_R || d < 1e-3) continue;
-        if ((dx * fx + dz * fz) / d < SHOVE_COS) continue;
+        if ((dx * ax + dz * az) / d < SHOVE_COS) continue;
         kvx[i] = (dx / d) * v0;
         kvz[i] = (dz / d) * v0;
+        fx.dust(x[i], z[i]);
         vx[i] = vz[i] = 0;
         st[i] = STAGGER;
         timer[i] = STAGGER_S;
@@ -567,6 +573,7 @@ export function createHorde(ctx: FootCtx): System {
     const kbDecay = Math.exp(-dt / KB_TAU);
     const noticeR = NOTICE_R * (P.sprinting ? SPRINT_NOTICE : 1);
     let alive = 0, chasing = 0, nearest = Infinity, pressing = 0;
+    let chaseD = Infinity, chaseX = NaN, chaseZ = NaN; // the nearest zombie chasing the player (HUD edge glow)
     // the player's flashlight (on at night, not inside): aim = yaw (+ pitch, leniently)
     const beamOn = ctx.dawn < 0.5 && !P.hidden;
     const afx = Math.sin(P.yaw), afz = -Math.cos(P.yaw), beamPitch = P.pitch - 0.1;
@@ -642,6 +649,8 @@ export function createHorde(ctx: FootCtx): System {
         stunCd[i] = STUN_S + STUN_CD;
         vx[i] = vz[i] = 0;
         bus.emit("zombie:stunned", { x: zx, z: zz });
+        fx.burst(zx, 1.45 * scale[i], zz);
+        fx.label(zx, 2.25 * scale[i], zz);
       }
 
       // noticing / losing the player
@@ -710,17 +719,25 @@ export function createHorde(ctx: FootCtx): System {
           const td = Math.hypot(tdx, tdz) || 1e-3;
           gx = tdx / td;
           gz = tdz / td;
-          const lane = (seed[i] - 0.5) * 2; // -1..1: each zombie keeps its own lane, so they arrive as a crowd, not a queue
+          // Each zombie keeps its own lane (laneOff, perpendicular to the way it's heading), so the wave arrives as a
+          // band 13 m wide, not a single file.
+          const off = laneOff[i];
           if (td > MOB_R && los[i]) {
-            const ox = tx - tdz / td * lane * 4 - zx, oz = tz + tdx / td * lane * 4 - zz; // aim a few metres either side
+            // in the open: aim beside the door by its lane offset, narrowing as it closes in
+            const k = Math.min(1, (td - MOB_R) / 18) * off;
+            const ox = tx - (tdz / td) * k - zx, oz = tz + (tdx / td) * k - zz;
             const ol = Math.hypot(ox, oz) || 1;
             gx = ox / ol;
             gz = oz / ol;
           } else if (td > MOB_R + 2 && toTarget.dir(zx, zz, fbuf)) {
-            // around the blocks, down the streets (fanned out a little)
-            const a = lane * 0.3, ca = Math.cos(a), sa = Math.sin(a);
-            gx = fbuf[0] * ca - fbuf[1] * sa;
-            gz = fbuf[0] * sa + fbuf[1] * ca;
+            // around the blocks: walk parallel to the flow at its "lane twin" (one offset to the side), which keeps the
+            // offset instead of funnelling everyone onto the same line
+            gx = fbuf[0];
+            gz = fbuf[1];
+            if (toTarget.dir(zx + fbuf[1] * off, zz - fbuf[0] * off, fbuf2)) {
+              gx = fbuf2[0];
+              gz = fbuf2[1];
+            }
           }
           if (td < MOB_R) {
             mob[i] = 1;
@@ -858,7 +875,14 @@ export function createHorde(ctx: FootCtx): System {
 
       if (s !== LEAVING) {
         alive++;
-        if (s === CHASE || s === ATTACK) chasing++;
+        if (s === CHASE || s === ATTACK) {
+          chasing++;
+          if (onPlayer && pd < chaseD) {
+            chaseD = pd;
+            chaseX = x[i];
+            chaseZ = z[i];
+          }
+        }
         if (pd < nearest) nearest = pd;
         if (hasTarget && Math.abs(x[i] - tx) < PRESS_R && Math.abs(z[i] - tz) < PRESS_R && Math.hypot(x[i] - tx, z[i] - tz) < PRESS_R) pressing++;
       }
@@ -867,13 +891,17 @@ export function createHorde(ctx: FootCtx): System {
     ctx.horde.chasing = chasing;
     ctx.horde.nearest = nearest;
     ctx.horde.pressing = pressing;
+    ctx.horde.nearestX = chaseX;
+    ctx.horde.nearestZ = chaseZ;
 
     draw(now);
+    fx.update(dt, ctx.camera);
   }
 
   function draw(now: number) {
     for (let i = 0; i < MAX; i++) {
       const s = st[i];
+      if (s === FREE || s === PENDING || lit[i] <= 0 || s === STUN) fx.setHalo(i, 0, 0, 0, 0);
       if (s === FREE || s === PENDING) {
         torso.setMatrixAt(i, ZERO);
         head.setMatrixAt(i, ZERO);
@@ -966,6 +994,10 @@ export function createHorde(ctx: FootCtx): System {
         const flick = Math.sin(now * (14 + 26 * k) + sd * 9) > 0.15 - 0.6 * k ? 1 : 0.35;
         eyes.setColorAt(i, eyeTmp.copy(eyeBase).lerp(eyeHot, k).multiplyScalar(flick * (1 + k)));
       } else eyes.setColorAt(i, eyeBase);
+      if (lit[i] > 0 && s !== STUN) {
+        const e = mH.elements; // the head's origin: put the halo round the face
+        fx.setHalo(i, e[12], e[13] + 0.16 * scale[i], e[14], Math.min(1, lit[i] / STUN_HOLD));
+      }
       mO.multiplyMatrices(mT, local(mL, -SHOULDER_X, TORSO_H - 0.07, 0, aL, zL));
       arms.setMatrixAt(i * 2, mO);
       mO.multiplyMatrices(mT, local(mL, SHOULDER_X, TORSO_H - 0.07, 0, aR, zR));
@@ -991,6 +1023,8 @@ export function createHorde(ctx: FootCtx): System {
   ctx.horde.chasing = 0;
   ctx.horde.nearest = Infinity;
   ctx.horde.pressing = 0;
+  ctx.horde.nearestX = NaN;
+  ctx.horde.nearestZ = NaN;
   // dev only: test scripts read the horde's state (window.__horde)
   if (process.env.NODE_ENV !== "production") (window as unknown as { __horde?: unknown }).__horde = { st, kind, x, z, lit, target: () => (hasTarget ? [tx, tz] : null) };
 
@@ -1002,6 +1036,7 @@ export function createHorde(ctx: FootCtx): System {
         scene.remove(m);
         m.dispose();
       }
+      fx.dispose();
       for (const g of [geoTorso, geoHead, eyeL, eyeR, geoEyes, geoArm, geoLeg, geoDisc]) g.dispose();
       for (const m of [matCloth, matSkin, matEyes, matDisc]) m.dispose();
     },
