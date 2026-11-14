@@ -26,7 +26,7 @@ from typing import Any
 
 from langchain.tools import ToolRuntime, tool
 
-from app import field, layers, photon, quake, retrofit_lists, search
+from app import evidence, field, layers, photon, quake, retrofit_lists, search
 from app.verify import investigate
 
 FIELD_REQUEST = (
@@ -115,7 +115,32 @@ def quake_replay(event_id: str = "ci3144585", limit: int = 8) -> dict:
     return quake.replay(event_id, limit)
 
 
+@tool
+def open_case(property_id: str) -> dict:
+    """Open an investigation when the records contradict each other (material_conflict: the city's concrete list
+    vs CoStar's material; stale_entry: listed but newer than the ordinance). Returns each case's question, the
+    competing hypotheses with prior confidence, and the checks you can run. Empty when there is nothing to investigate."""
+    return evidence.open_case(property_id)
+
+
+@tool
+def check_evidence(property_id: str, case: str, check: str) -> dict:
+    """Run one check for an open case and get what it found and how it shifts each hypothesis (+ supports,
+    - weakens). Checks: compliance_filings, permit_text, replacement_permits, era_and_height, site_structures
+    (open_case lists which apply to each case). Run the ones most likely to separate the hypotheses, in parallel."""
+    return evidence.run_check(property_id, check, case)
+
+
+@tool
+def weigh_case(property_id: str, case: str, checks: list[str]) -> dict:
+    """Combine the checks you ran into updated confidence for each hypothesis, a verdict (likely / leaning /
+    unresolved), the next most useful check, and a DRAFT correction note when warranted (never sent; a person
+    must approve it). The arithmetic is done here; report its numbers, don't compute your own."""
+    return evidence.weigh_case(property_id, case, checks)
+
+
 SEISMIC_TOOLS = [seismic_status, find_retrofit_targets, quake_replay]
+CASE_TOOLS = [open_case, check_evidence, weigh_case]
 
 
 # ------------------------------------------------------------------ data layers (specialists)

@@ -7,6 +7,7 @@ Sources (all public, no key):
   LA soft-story retrofit list        data.lacity.org dqq4-799r
   LA non-ductile concrete list       data.lacity.org ke3z-xgni
   LA permits 2020+ (retrofit work)   data.lacity.org pi9x-tg5x, filtered to soft-story / non-ductile work
+  LA permits 2020+ (demolition, new) data.lacity.org pi9x-tg5x, Bldg-Demolition and Bldg-New
   1994 Northridge earthquake         USGS event ci3144585 and its ShakeMap grid (shaking intensity by location)
 
 Nothing from the CoStar kit is sent anywhere: matching happens locally (app/retrofit_lists.py).
@@ -54,6 +55,10 @@ def fetch(refetch: bool = False) -> dict[str, str]:
         socrata("softstory", "dqq4-799r")
         socrata("ndc", "ke3z-xgni")
         socrata("retrofit_permits", "pi9x-tg5x", **{"$where": PERMIT_WHERE})
+        # demolition and new-building permits (2020+): evidence for "the listed building was replaced"
+        socrata("demo_new_permits", "pi9x-tg5x", **{
+            "$select": "primary_address, zip_code, permit_type, issue_date, status_desc, work_desc",
+            "$where": "permit_type in ('Bldg-Demolition', 'Bldg-New')"})
 
         event_path = OUT / f"usgs_{EVENT}.json"
         if not event_path.exists() or refetch:

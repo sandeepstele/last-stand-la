@@ -26,6 +26,7 @@ from pydantic import BaseModel
 from app import prompts
 from app.scene import SCENE_TOOLS
 from app.tools import (
+    CASE_TOOLS,
     QUEUE_TOOLS,
     SEISMIC_TOOLS,
     SIDE_EFFECT_TOOLS,
@@ -259,11 +260,11 @@ def build(mode: str, store=None, checkpointer=None, m: Models | None = None):
     solar = LENS == "solar"
     if live and not solar:
         # Seismic lens (the pitch): solar tools stay in the code but are not offered live.
-        tools = [*SEISMIC_TOOLS, verify_building, field_check, *SIDE_EFFECT_TOOLS, *(t for t in SCENE_TOOLS if t.name != "place_solar")]
+        tools = [*SEISMIC_TOOLS, *CASE_TOOLS, verify_building, field_check, *SIDE_EFFECT_TOOLS, *(t for t in SCENE_TOOLS if t.name != "place_solar")]
     elif live:
         tools = [find_buildings, verify_building, retrofit, field_check, *SIDE_EFFECT_TOOLS, *SCENE_TOOLS]
     else:
-        tools = [find_buildings, *SEISMIC_TOOLS, verify_building, retrofit, field_check, *SIDE_EFFECT_TOOLS, *QUEUE_TOOLS]
+        tools = [find_buildings, *SEISMIC_TOOLS, *CASE_TOOLS, verify_building, retrofit, field_check, *SIDE_EFFECT_TOOLS, *QUEUE_TOOLS]
     return create_deep_agent(
         model=m.orch if live else m.worker,
         tools=tools,

@@ -69,15 +69,20 @@ turn together in one message, each with the property id:
 1. write_todos with four items, the first in_progress: "Gather records, aerial, interior and city records",
    "Check the retrofit order", "Verify the listed building", "Compare listed and measured". show_building. The
    records, aerial, interior and civic specialists in parallel (task, with the description "property id <id>").
-2. write_todos with all four items completed. seismic_status, verify_building, ghost_compare, reveal_levels.
-   (reveal_levels draws only the below-grade levels the verifier counted.)
-3. Answer in at most four sentences: (a) the retrofit order: which list, the order date, and which step is
+2. write_todos with all four items completed. seismic_status, open_case, verify_building, ghost_compare,
+   reveal_levels. (reveal_levels draws only the below-grade levels the verifier counted.)
+3. Only if open_case returned a case: investigate it. In one message, call check_evidence for the two or three
+   checks you judge most likely to separate that case's hypotheses (not all of them by habit), plus write_todos
+   adding "Investigate: <case>" as completed. Then, in the next message, weigh_case with exactly the checks you
+   ran. Skip this step when there is no case.
+4. Answer in at most five sentences: (a) the retrofit order: which list, the order date, and which step is
    overdue with its deadline (say "(extended)" when the deadline was extended), or that it is on schedule;
-   (b) any material_conflict: the city lists it as concrete while CoStar records another material, so a
-   researcher should check which is current; (c) recent permits if any; (d) one sentence on the measured
-   building (verify_building verdict).
+   (b) if there was a case: which checks you chose and why, what moved which hypothesis, and weigh_case's
+   verdict with its confidence and label, plus its next check; mention a correction draft only as a draft
+   awaiting approval; (c) recent permits if any; (d) one sentence on the measured building (verify_building).
 
 Rules:
+- Report weigh_case's numbers as given; never compute or adjust confidence yourself.
 - Say "past a deadline" only for a step whose state is overdue. Unfinished but on schedule is not a violation.
 - Never say a record or an owner is wrong. Say what each source says and that it is worth a look.
 - not_proven_safe means "not on the list, which does not mean safe"; never call a building unsafe or safe.
