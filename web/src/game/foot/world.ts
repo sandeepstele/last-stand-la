@@ -7,10 +7,10 @@ import * as THREE from "three";
 import { MATERIAL_COLOR } from "../District3D";
 import type { Building, Material } from "../types";
 import { buildingHeight, outlineOf, type FootCtx, type Pt, type System } from "./engine";
-import { closestOnPoly } from "./collide";
-import { addBand, addCap, addOutline, addWalls, centroid, cleanRing, facadeMaterial, newBuf, offsetRing, radiusOf, toGeometry } from "./worldMesh";
+import { closestOnPoly, pointInPoly } from "./collide";
+import { addBand, addCap, addOutline, addPlainWalls, addWalls, areaOf, centroid, cleanRing, facadeMaterial, gridAngle, newBuf, offsetRing, radiusOf, rectRing, toGeometry } from "./worldMesh";
 import { buildGrid, createRoute, walkableAt } from "./worldRoute";
-import { dustTexture, facadeTextures, glowTexture, labelSprite, questionSprite, rng, stubGroundTexture, TILE } from "./worldTex";
+import { dustTexture, facadeTextures, glowTexture, labelSprite, questionSprite, rng, streetTexture, TILE } from "./worldTex";
 
 const AMBER = 0xf5a524;
 const RED = 0xe5484d;
@@ -42,7 +42,7 @@ export function createWorld(ctx: FootCtx): System {
 
   // ================================================================== sky, fog, lights
   const NIGHT = { top: C(0x03060f), mid: C(0x16203a), low: C(0x0c1222), fog: C(0x111a2e), hemiSky: C(0x6878b0), hemiGround: C(0x1c1a1a), moon: C(0xa8bcff) };
-  const DAWN = { top: C(0x5b7cc4), mid: C(0xf3a27e), low: C(0xe9b892), fog: C(0xd8a78f), hemiSky: C(0xffe2c8), hemiGround: C(0x6a5d55), moon: C(0xffc08a) };
+  const DAWN = { top: C(0x5b7cc4), mid: C(0xf3a27e), low: C(0xe9b892), fog: C(0xd8b0a0), hemiSky: C(0xd4dcef), hemiGround: C(0x7a6c62), moon: C(0xffd0a6) };
   const skyU = { uTop: { value: NIGHT.top.clone() }, uMid: { value: NIGHT.mid.clone() }, uLow: { value: NIGHT.low.clone() }, uMoon: { value: new THREE.Vector3(-0.45, 0.55, -0.7).normalize() }, uStars: { value: 1 } };
   const sky = add(
     new THREE.Mesh(
@@ -86,48 +86,6 @@ export function createWorld(ctx: FootCtx): System {
   const moonTarget = add(new THREE.Object3D());
   moon.target = moonTarget;
 
-  // ================================================================== ground
-  const g = district.ground;
-  const gw = bounds.x1 - bounds.x0, gh = bounds.z1 - bounds.z0;
-  const groundMat = keep(new THREE.MeshLambertMaterial({ color: 0x8a92a4, emissive: 0x5a6070 }));
-  const groundTint = { night: C(0x5a6070), dawn: C(0xffffff) };
-  const ground = add(new THREE.Mesh(keep(new THREE.PlaneGeometry(gw, gh)), groundMat));
-  ground.rotation.x = -Math.PI / 2; // local +y (image top, v = 1) -> world -z (north) = z0
-  ground.position.set((bounds.x0 + bounds.x1) / 2, 0, (bounds.z0 + bounds.z1) / 2);
-  const setGroundTex = (t: THREE.Texture) => {
-    t.colorSpace = THREE.SRGBColorSpace;
-    t.anisotropy = aniso;
-    groundMat.map = t;
-    groundMat.emissiveMap = t;
-    groundMat.needsUpdate = true;
-    keep(t);
-  };
-  let alive = true;
-  if (g?.image) {
-    new THREE.TextureLoader().load(
-      ctx.imageUrl(g.image),
-      (t) => {
-        if (!alive) return void t.dispose();
-        setGroundTex(t);
-      },
-      undefined,
-      () => setGroundTex(stubGroundTexture(bounds, allOutlines())),
-    );
-  } else {
-    queueMicrotask(() => alive && setGroundTex(stubGroundTexture(bounds, allOutlines())));
-  }
-  // asphalt beyond the play rectangle, out to ~1.5 km, with a hole so it never z-fights the mosaic
-  {
-    const S = 1600;
-    const sh = new THREE.Shape([new THREE.Vector2(-S, -S), new THREE.Vector2(S, -S), new THREE.Vector2(S, S), new THREE.Vector2(-S, S)]);
-    // Shape is in (x, -z) so that rotateX(-90deg) lands it on the ground
-    sh.holes.push(new THREE.Path([new THREE.Vector2(bounds.x0, -bounds.z0), new THREE.Vector2(bounds.x0, -bounds.z1), new THREE.Vector2(bounds.x1, -bounds.z1), new THREE.Vector2(bounds.x1, -bounds.z0)]));
-    const geo = keep(new THREE.ShapeGeometry(sh));
-    geo.rotateX(-Math.PI / 2);
-    const outer = add(new THREE.Mesh(geo, keep(new THREE.MeshLambertMaterial({ color: 0x23262c, emissive: 0x0c0d10 }))));
-    outer.position.y = -0.02;
-  }
-
   // ================================================================== buildings
   const kits: Kit[] = [];
   for (const b of district.buildings) {
@@ -142,6 +100,74 @@ export function createWorld(ctx: FootCtx): System {
     return [...kits.map((k) => k.ring), ...blocks.map((k) => k.ring)];
   }
 
+  // ================================================================== ground
+  // The whole city's extent (all outlines + the play rectangle): a street texture (asphalt + sidewalks around every
+  // outline) covers it, so the city beyond the aerial still reads as streets. The aerial covers exactly `bounds`.
+  const g = district.ground;
+  const ext = { x0: Math.min(bounds.x0, g?.x0 ?? Infinity), z0: Math.min(bounds.z0, g?.z0 ?? Infinity), x1: Math.max(bounds.x1, g?.x1 ?? -Infinity), z1: Math.max(bounds.z1, g?.z1 ?? -Infinity) };
+  for (const o of allOutlines())
+    for (const [x, z] of o) {
+      ext.x0 = Math.min(ext.x0, x);
+      ext.z0 = Math.min(ext.z0, z);
+      ext.x1 = Math.max(ext.x1, x);
+      ext.z1 = Math.max(ext.z1, z);
+    }
+  ext.x0 = Math.max(-1600, ext.x0 - 60);
+  ext.z0 = Math.max(-1600, ext.z0 - 60);
+  ext.x1 = Math.min(1600, ext.x1 + 60);
+  ext.z1 = Math.min(1600, ext.z1 + 60);
+  const streets = keep(streetTexture(ext, allOutlines()));
+  streets.anisotropy = aniso;
+  const worldUv = (geo: THREE.BufferGeometry) => {
+    const p = geo.getAttribute("position");
+    const uv = new Float32Array(p.count * 2);
+    for (let i = 0; i < p.count; i++) {
+      uv[i * 2] = (p.getX(i) - ext.x0) / (ext.x1 - ext.x0);
+      uv[i * 2 + 1] = 1 - (p.getZ(i) - ext.z0) / (ext.z1 - ext.z0);
+    }
+    geo.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
+  };
+  const groundTint = { night: C(0x5a6070), dawn: C(0xffffff) };
+  const groundMats = [0, 1].map(() => keep(new THREE.MeshLambertMaterial({ map: streets, emissiveMap: streets, color: 0x8a92a4, emissive: groundTint.night.clone() })));
+  const [groundMat, outerMat] = groundMats;
+  // the aerial's own rectangle (the walkable bounds may be larger than it)
+  const rect = g ? { x0: g.x0, z0: g.z0, x1: g.x1, z1: g.z1 } : bounds;
+  const groundGeo = keep(new THREE.PlaneGeometry(rect.x1 - rect.x0, rect.z1 - rect.z0));
+  groundGeo.rotateX(-Math.PI / 2); // local +y (image top, v = 1) -> world -z (north) = z0; left (u = 0) = x0
+  groundGeo.translate((rect.x0 + rect.x1) / 2, 0, (rect.z0 + rect.z1) / 2);
+  add(new THREE.Mesh(groundGeo, groundMat));
+  let alive = true;
+  if (g?.image) {
+    new THREE.TextureLoader().load(
+      ctx.imageUrl(g.image),
+      (t) => {
+        if (!alive) return void t.dispose();
+        t.colorSpace = THREE.SRGBColorSpace;
+        t.anisotropy = aniso;
+        keep(t);
+        groundMat.map = t;
+        groundMat.emissiveMap = t;
+        groundMat.needsUpdate = true;
+      },
+      undefined,
+      () => worldUv(groundGeo),
+    );
+  } else {
+    worldUv(groundGeo);
+  }
+  // beyond the aerial, out to ~1.6 km, with a hole so it never z-fights the aerial
+  {
+    const S = 1600;
+    const sh = new THREE.Shape([new THREE.Vector2(-S, -S), new THREE.Vector2(S, -S), new THREE.Vector2(S, S), new THREE.Vector2(-S, S)]);
+    // Shape is in (x, -z) so that rotateX(-90deg) lands it on the ground
+    sh.holes.push(new THREE.Path([new THREE.Vector2(rect.x0, -rect.z0), new THREE.Vector2(rect.x0, -rect.z1), new THREE.Vector2(rect.x1, -rect.z1), new THREE.Vector2(rect.x1, -rect.z0)]));
+    const geo = keep(new THREE.ShapeGeometry(sh));
+    geo.rotateX(-Math.PI / 2);
+    geo.translate(0, -0.02, 0);
+    worldUv(geo);
+    add(new THREE.Mesh(geo, outerMat));
+  }
+
   const tex = facadeTextures(renderer);
   keep(tex.map);
   keep(tex.light);
@@ -151,19 +177,44 @@ export function createWorld(ctx: FootCtx): System {
   const roofs = newBuf();
   const lines: number[] = [];
   const PARAPET = 0.9;
-  const roofCol = (k: number) => C(0x2a2d33).multiplyScalar(0.8 + k * 0.4);
+  const ROOF_TONES = [0x3b3e44, 0x45474c, 0x34373c, 0x4b4945, 0x3f4247, 0x53555a];
   const parapetCol = C(0x6a6c70);
+  const boxCol = C(0x5d6066), boxTop = C(0x4a4d52);
 
   const addRoof = (ring: Pt[], h: number) => {
-    addCap(roofs, ring, h, roofCol(R()));
-    addWalls(roofs, ring, h, h + PARAPET, parapetCol, 0, 0, 0);
+    addCap(roofs, ring, h, C(ROOF_TONES[Math.floor(R() * ROOF_TONES.length)]).multiplyScalar(0.85 + R() * 0.3));
+    addPlainWalls(roofs, ring, h, h + PARAPET, parapetCol);
     addOutline(lines, ring, h + PARAPET);
+    // rooftop structures (stair/elevator penthouse, HVAC), aligned with the building's own grid
+    const area = areaOf(ring);
+    if (area < 220) return;
+    const ang = gridAngle(ring);
+    let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+    for (const [x, z] of ring) {
+      x0 = Math.min(x0, x);
+      x1 = Math.max(x1, x);
+      z0 = Math.min(z0, z);
+      z1 = Math.max(z1, z);
+    }
+    const want = area > 1500 ? 4 : area > 600 ? 3 : 1;
+    for (let t = 0, placed = 0; t < 16 && placed < want; t++) {
+      const big = placed === 0 && h > 18;
+      const w = big ? 5 + R() * 5 : 1.8 + R() * 2.6, d = big ? 4 + R() * 4 : 1.4 + R() * 2;
+      const bh = big ? 3 + R() * 1.6 : 1.1 + R() * 0.9;
+      const x = x0 + R() * (x1 - x0), z = z0 + R() * (z1 - z0);
+      if (!pointInPoly(x, z, ring) || closestOnPoly(x, z, ring).d < Math.hypot(w, d) / 2 + 1) continue;
+      const rr = rectRing(x, z, w, d, ang);
+      if (!rr.length) continue;
+      addPlainWalls(roofs, rr, h, h + bh, boxCol);
+      addCap(roofs, rr, h + bh, boxTop);
+      placed++;
+    }
   };
 
   for (const k of blocks) {
     const tone = C(BLOCK_TONES[Math.floor(R() * BLOCK_TONES.length)]).multiplyScalar(0.85 + R() * 0.3);
     const lit = [0.15, 0.3, 0.6, 0.6, 1, 1, 1.3][Math.floor(R() * 7)];
-    addWalls(walls, k.ring, 0, k.h, tone, lit, Math.floor(R() * TILE), Math.floor(R() * TILE));
+    addWalls(walls, k.ring, 0, k.h, tone, lit, Math.floor(R() * TILE));
     addRoof(k.ring, k.h);
   }
 
@@ -171,7 +222,7 @@ export function createWorld(ctx: FootCtx): System {
   for (const k of kits) {
     const { b, ring, h } = k;
     const lit = (b.people ?? 0) > 0 ? 2 : b.hero || b.door ? 1.6 : 1.1;
-    const uOff = Math.floor(R() * TILE), vOff = Math.floor(R() * TILE);
+    const uOff = Math.floor(R() * TILE);
     if (b.conflict) {
       const costar = C(MATERIAL_COLOR[b.conflict.costar] ?? MATERIAL_COLOR.unknown);
       const city = C(MATERIAL_COLOR[b.conflict.city] ?? MATERIAL_COLOR.unknown);
@@ -181,16 +232,16 @@ export function createWorld(ctx: FootCtx): System {
       upper.color.copy(city);
       const lb = newBuf(), ub = newBuf(), sb = newBuf();
       const mid = Math.round(h / 2 / 3.8) * 3.8 || h / 2;
-      addWalls(lb, ring, 0, mid, C(0xffffff), lit, uOff, vOff);
-      addWalls(ub, ring, mid, h, C(0xffffff), lit, uOff, vOff);
-      addWalls(sb, offsetRing(ring, 0.12), mid - 0.22, mid + 0.22, C(0xffffff), 0, 0, 0);
+      addWalls(lb, ring, 0, mid, C(0xffffff), lit, uOff);
+      addWalls(ub, ring, mid, h, C(0xffffff), lit, uOff);
+      addPlainWalls(sb, offsetRing(ring, 0.12), mid - 0.22, mid + 0.22, C(0xffffff));
       const seam = keep(new THREE.MeshBasicMaterial({ color: AMBER, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false }));
       for (const [buf, mat] of [[lb, lower], [ub, upper], [sb, seam]] as const) {
         add(new THREE.Mesh(keep(toGeometry(buf, { lit: mat !== seam })), mat));
       }
       splits.set(b.pid, { lower, upper, seam, costar, city, from: [costar.clone(), city.clone()], to: [costar.clone(), city.clone()], t0: -1, leaned: false });
     } else {
-      addWalls(walls, ring, 0, h, C(MATERIAL_COLOR[b.material] ?? MATERIAL_COLOR.unknown), lit, uOff, vOff);
+      addWalls(walls, ring, 0, h, C(MATERIAL_COLOR[b.material] ?? MATERIAL_COLOR.unknown), lit, uOff);
     }
     addRoof(ring, h);
   }
@@ -215,7 +266,7 @@ export function createWorld(ctx: FootCtx): System {
   const ringMats: THREE.MeshBasicMaterial[] = [];
   {
     const amber = newBuf(), red = newBuf();
-    for (const k of kits) if (k.b.unfinished) addBand(k.b.past_due ? red : amber, k.ring, 1.6, 3.0, 0.07);
+    for (const k of kits) if (k.b.unfinished) addBand(k.b.past_due ? red : amber, k.ring, 1.9, 2.5, 0.07);
     for (const [buf, col] of [[amber, AMBER], [red, RED]] as const) {
       if (!buf.pos.length) continue;
       const m = keep(new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
@@ -232,6 +283,7 @@ export function createWorld(ctx: FootCtx): System {
   const lintelGeo = keep(new THREE.BoxGeometry(3.0, 0.32, 0.4));
   const canopyGeo = keep(new THREE.BoxGeometry(3.6, 0.14, 1.4));
   const doorLights: THREE.PointLight[] = [];
+  const doorLabels: THREE.Sprite[] = [];
   /** A group at (x, z) whose local +z is the outward normal for a bearing `facing` (deg clockwise from north). */
   const facingGroup = (x: number, z: number, facing: number) => {
     const grp = new THREE.Group();
@@ -257,8 +309,10 @@ export function createWorld(ctx: FootCtx): System {
     const pl = new THREE.PointLight(0xffb066, 40, 16, 2);
     pl.position.set(0, 2.9, 0.9);
     doorLights.push(pl);
-    const label = labelSprite(k.b.label, 1.4);
-    label.position.set(0, 5.4, 0.4);
+    const label = labelSprite(k.b.label, 1.4, { depthTest: false });
+    label.renderOrder = 15;
+    label.position.set(0, 5.4, 0.6);
+    doorLabels.push(label);
     keep(label.material);
     keep(label.material.map!);
     grp.add(glow, jl, jr, li, ca, pl, label);
@@ -442,7 +496,7 @@ export function createWorld(ctx: FootCtx): System {
     if (!k) return;
     const buf = newBuf();
     const ring = offsetRing(k.ring, 0.15);
-    addWalls(buf, ring, 0, k.h + 0.3, C(0xffffff), 0, 0, 0);
+    addPlainWalls(buf, ring, 0, k.h + 0.3, C(0xffffff));
     addCap(buf, ring, k.h + PARAPET + 0.05, C(0xffffff));
     const mat = new THREE.MeshBasicMaterial({ color: 0xffd0c0, transparent: true, opacity: 1, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
     const mesh = new THREE.Mesh(toGeometry(buf, { lit: false }), mat);
@@ -488,6 +542,7 @@ export function createWorld(ctx: FootCtx): System {
 
   // ================================================================== frame
   const tmpC = new THREE.Color();
+  const tmpV = new THREE.Vector3();
   return {
     update(dt) {
       const t = ctx.time;
@@ -507,12 +562,12 @@ export function createWorld(ctx: FootCtx): System {
       fog.far = lerp(220, 900, dawn) + lift * 3.6;
       hemi.color.copy(NIGHT.hemiSky).lerp(DAWN.hemiSky, dawn);
       hemi.groundColor.copy(NIGHT.hemiGround).lerp(DAWN.hemiGround, dawn);
-      hemi.intensity = lerp(1.6, 2.6, dawn);
+      hemi.intensity = lerp(1.6, 2.4, dawn);
       moon.color.copy(NIGHT.moon).lerp(DAWN.moon, dawn);
-      moon.intensity = lerp(1.5, 2.8, dawn);
+      moon.intensity = lerp(1.5, 2.6, dawn);
       moon.position.set(lerp(-160, 320, dawn) + cam.x, lerp(260, 140, dawn), lerp(-220, -60, dawn) + cam.z);
       moonTarget.position.set(cam.x, 0, cam.z);
-      groundMat.emissive.copy(groundTint.night).lerp(groundTint.dawn, dawn * 0.85);
+      for (const m of groundMats) m.emissive.copy(groundTint.night).lerp(groundTint.dawn, dawn * 0.85);
       night.value = 1 - dawn * 0.9;
 
       // lamps + doors fade at dawn
@@ -522,6 +577,7 @@ export function createWorld(ctx: FootCtx): System {
       headMat.color.setHex(0xffd7a0).lerp(tmpC.setHex(0x5a5d63), dawn);
       for (const l of lampLights) l.intensity = 60 * lampOn;
       for (const l of doorLights) l.intensity = 40 * (1 - dawn * 0.7);
+      for (const lb of doorLabels) lb.visible = lb.getWorldPosition(tmpV).distanceTo(cam) < 80;
 
       // record conflicts: seam pulse + lean tween
       for (const s of splits.values()) {

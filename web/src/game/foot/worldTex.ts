@@ -38,6 +38,7 @@ export function facadeTextures(renderer: THREE.WebGLRenderer): { map: THREE.Canv
   const r = rng(7);
   const N = 1024;
   const cell = N / TILE;
+  const shop: ("glass" | "shutter")[] = [];
   const [c, g] = canvas(N, N);
   // wall
   g.fillStyle = "#c8c5bf";
@@ -55,6 +56,31 @@ export function facadeTextures(renderer: THREE.WebGLRenderer): { map: THREE.Canv
     g.fillStyle = "rgba(0,0,0,0.10)";
     g.fillRect(0, yTop + cell - 7, N, 2);
     for (let i = 0; i < TILE; i++) {
+      if (f === 0) {
+        // street level: shopfront glass under a sign band, or a roll-down shutter
+        shop[i] = r() < 0.38 ? "shutter" : "glass";
+        const x0 = i * cell + 0.05 * cell, x1 = i * cell + 0.95 * cell;
+        const y0 = yTop + 0.2 * cell, y1 = yTop + 0.95 * cell;
+        g.fillStyle = "#4d4a45";
+        g.fillRect(i * cell, yTop + 0.04 * cell, cell, 0.14 * cell);
+        g.fillStyle = "#2f2d2a";
+        g.fillRect(x0 - 2, y0 - 2, x1 - x0 + 4, y1 - y0 + 4);
+        if (shop[i] === "shutter") {
+          g.fillStyle = "#7c7e81";
+          g.fillRect(x0, y0, x1 - x0, y1 - y0);
+          g.fillStyle = "rgba(0,0,0,0.25)";
+          for (let y = y0; y < y1; y += 3) g.fillRect(x0, y, x1 - x0, 1);
+        } else {
+          const gr = g.createLinearGradient(0, y0, 0, y1);
+          gr.addColorStop(0, "#2c3440");
+          gr.addColorStop(1, "#11151b");
+          g.fillStyle = gr;
+          g.fillRect(x0, y0, x1 - x0, y1 - y0);
+          g.fillStyle = "#3a3936";
+          g.fillRect((x0 + x1) / 2 - 1.5, y0, 3, y1 - y0);
+        }
+        continue;
+      }
       const x0 = i * cell + WIN.u0 * cell, x1 = i * cell + WIN.u1 * cell;
       const y0 = yTop + (1 - WIN.v1) * cell, y1 = yTop + (1 - WIN.v0) * cell;
       // frame
@@ -88,13 +114,16 @@ export function facadeTextures(renderer: THREE.WebGLRenderer): { map: THREE.Canv
   for (let f = 0; f < TILE; f++) {
     for (let i = 0; i < TILE; i++) {
       const p = r();
-      const set = p < 0.2 ? 0 : p < 0.52 ? 1 : p < 0.57 ? 2 : -1; // R sparse, G busy-only, B cold, else dark
+      const store = f === 0;
+      if (store && shop[i] === "shutter") continue;
+      const set = store ? (p < 0.3 ? 0 : p < 0.55 ? 1 : p < 0.62 ? 2 : -1) : p < 0.2 ? 0 : p < 0.52 ? 1 : p < 0.57 ? 2 : -1; // R sparse, G busy-only, B cold, else dark
       if (set < 0) continue;
       const bright = 0.55 + r() * 0.45;
-      const blinds = r() < 0.3;
-      const half = r() < 0.2 ? (r() < 0.5 ? 1 : 2) : 0; // one pane only
-      const x0 = Math.round(i * mc + WIN.u0 * mc), x1 = Math.round(i * mc + WIN.u1 * mc);
-      const y0 = Math.round(f * mc + WIN.v0 * mc), y1 = Math.round(f * mc + WIN.v1 * mc); // DataTexture rows run bottom-up
+      const blinds = !store && r() < 0.3;
+      const half = !store && r() < 0.2 ? (r() < 0.5 ? 1 : 2) : 0; // one pane only
+      const w = store ? { u0: 0.05, u1: 0.95, v0: 0.05, v1: 0.8 } : WIN;
+      const x0 = Math.round(i * mc + w.u0 * mc), x1 = Math.round(i * mc + w.u1 * mc);
+      const y0 = Math.round(f * mc + w.v0 * mc), y1 = Math.round(f * mc + w.v1 * mc); // DataTexture rows run bottom-up
       const mid = (x0 + x1) / 2;
       for (let y = y0; y < y1; y++) {
         const t = (y - y0) / Math.max(1, y1 - y0);
@@ -220,16 +249,16 @@ export function questionSprite(sizeM: number): THREE.Sprite {
  * Stub ground (no aerial mosaic): asphalt with sidewalks drawn around every building outline, so streets read as
  * streets whatever the grid's angle. Covers `bounds`; returns a texture for a plane over exactly that rectangle.
  */
-export function stubGroundTexture(bounds: { x0: number; z0: number; x1: number; z1: number }, outlines: Pt[][]): THREE.CanvasTexture {
+export function streetTexture(bounds: { x0: number; z0: number; x1: number; z1: number }, outlines: Pt[][]): THREE.CanvasTexture {
   const r = rng(3);
   const wM = bounds.x1 - bounds.x0, hM = bounds.z1 - bounds.z0;
   const scale = Math.min(4, 2048 / Math.max(wM, hM)); // px per metre
   const W = Math.max(64, Math.round(wM * scale)), H = Math.max(64, Math.round(hM * scale));
   const [c, g] = canvas(W, H);
-  g.fillStyle = "#2a2d32";
+  g.fillStyle = "#4b4d52";
   g.fillRect(0, 0, W, H);
   for (let i = 0; i < 9000; i++) {
-    const v = 30 + Math.floor(r() * 26);
+    const v = 60 + Math.floor(r() * 30);
     g.fillStyle = `rgba(${v},${v + 2},${v + 6},0.5)`;
     g.fillRect(r() * W, r() * H, 1 + r() * 3, 1 + r() * 3);
   }
@@ -244,15 +273,15 @@ export function stubGroundTexture(bounds: { x0: number; z0: number; x1: number; 
   for (const o of outlines) {
     path(o);
     g.lineWidth = 11 * scale;
-    g.strokeStyle = "#5c5f63";
+    g.strokeStyle = "#9a9b9d";
     g.stroke();
   }
   for (const o of outlines) {
     path(o);
     g.lineWidth = 9.6 * scale;
-    g.strokeStyle = "#47494d";
+    g.strokeStyle = "#78797c";
     g.stroke();
-    g.fillStyle = "#3a3c40";
+    g.fillStyle = "#5a5b5e";
     g.fill();
   }
   const t = new THREE.CanvasTexture(c);

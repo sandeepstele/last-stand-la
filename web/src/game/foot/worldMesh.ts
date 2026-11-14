@@ -36,6 +36,8 @@ export function cleanRing(raw: Pt[]): Pt[] {
   return a > 0 ? out : out.reverse();
 }
 
+export const areaOf = (ring: Pt[]): number => Math.abs(area2(ring)) / 2;
+
 export function centroid(ring: Pt[]): Pt {
   let x = 0, z = 0;
   for (const p of ring) {
@@ -72,13 +74,29 @@ export function offsetRing(ring: Pt[], d: number): Pt[] {
 }
 
 /**
- * Walls from y0 to y1 around a cleaned ring. u counts bays (each edge snapped to whole bays so windows never wrap a
- * corner), v counts floors from the ground. uOff/vOff shift the shared window grid so neighbours look different.
+ * Vertical chunks of a wall and the texture row shift for each: row 0 of the facade tile is the street-level
+ * storefront (the ground floor), rows 1..15 are upper floors, repeating every 15 floors above that.
  */
-export function addWalls(buf: Buf, ring: Pt[], y0: number, y1: number, color: THREE.Color, lit: number, uOff: number, vOff: number): void {
+function chunks(y0: number, y1: number): [number, number, number][] {
+  const out: [number, number, number][] = [];
+  const edges = [0, FLOOR_M];
+  while (edges[edges.length - 1] < y1) edges.push(edges[edges.length - 1] + 15 * FLOOR_M);
+  for (let c = 0; c + 1 < edges.length; c++) {
+    const a = Math.max(y0, edges[c]), b = Math.min(y1, edges[c + 1]);
+    if (b - a > 1e-3) out.push([a, b, c === 0 ? 0 : 15 * (c - 1)]);
+  }
+  return out;
+}
+
+/**
+ * Walls from y0 to y1 around a cleaned ring. u counts bays (each edge snapped to whole bays so windows never wrap a
+ * corner), v counts floors from the ground (the ground floor is a storefront). uOff shifts the shared window grid
+ * sideways so neighbours look different. UVs are in facade-tile units (TILE bays x TILE floors).
+ */
+export function addWalls(buf: Buf, ring: Pt[], y0: number, y1: number, color: THREE.Color, lit: number, uOff: number): void {
   let u = uOff;
   const n = ring.length;
-  const v0 = (y0 / FLOOR_M + vOff) / TILE, v1 = (y1 / FLOOR_M + vOff) / TILE;
+  const parts = chunks(y0, y1);
   for (let i = 0; i < n; i++) {
     const [ax, az] = ring[i];
     const [bx, bz] = ring[(i + 1) % n];
@@ -88,17 +106,64 @@ export function addWalls(buf: Buf, ring: Pt[], y0: number, y1: number, color: TH
     const bays = len < 2 * BAY_M ? len / BAY_M : Math.round(len / BAY_M);
     const ua = u / TILE, ub = (u + bays) / TILE;
     u = Math.ceil(u + bays);
-    // (a0, a1, b1), (a0, b1, b0): counter-clockwise seen from outside
-    const P = [ax, y0, az, ax, y1, az, bx, y1, bz, ax, y0, az, bx, y1, bz, bx, y0, bz];
-    const UV = [ua, v0, ua, v1, ub, v1, ua, v0, ub, v1, ub, v0];
-    buf.pos.push(...P);
-    buf.uv.push(...UV);
+    for (const [ya, yb, shift] of parts) {
+      const v0 = (ya / FLOOR_M - shift) / TILE, v1 = (yb / FLOOR_M - shift) / TILE;
+      // (a0, a1, b1), (a0, b1, b0): counter-clockwise seen from outside
+      buf.pos.push(ax, ya, az, ax, yb, az, bx, yb, bz, ax, ya, az, bx, yb, bz, bx, ya, bz);
+      buf.uv.push(ua, v0, ua, v1, ub, v1, ua, v0, ub, v1, ub, v0);
+      for (let k = 0; k < 6; k++) {
+        buf.nrm.push(nx, 0, nz);
+        buf.col.push(color.r, color.g, color.b);
+        buf.lit.push(len < 1.5 ? 0 : lit);
+      }
+    }
+  }
+}
+
+/** Plain walls (no window mapping): parapets, rooftop boxes, seams, flashes. */
+export function addPlainWalls(buf: Buf, ring: Pt[], y0: number, y1: number, color: THREE.Color): void {
+  const n = ring.length;
+  for (let i = 0; i < n; i++) {
+    const [ax, az] = ring[i];
+    const [bx, bz] = ring[(i + 1) % n];
+    const len = Math.hypot(bx - ax, bz - az);
+    if (len < 0.05) continue;
+    const nx = (bz - az) / len, nz = -(bx - ax) / len;
+    buf.pos.push(ax, y0, az, ax, y1, az, bx, y1, bz, ax, y0, az, bx, y1, bz, bx, y0, bz);
+    buf.uv.push(0, 0, 0, 1, 1, 1, 0, 0, 1, 1, 1, 0);
     for (let k = 0; k < 6; k++) {
       buf.nrm.push(nx, 0, nz);
       buf.col.push(color.r, color.g, color.b);
-      buf.lit.push(len < 1.5 ? 0 : lit);
+      buf.lit.push(0);
     }
   }
+}
+
+/** Bearing of the ring's longest edge (radians, atan2(dz, dx)), so rooftop boxes follow the street grid. */
+export function gridAngle(ring: Pt[]): number {
+  let best = 0, bl = -1;
+  for (let i = 0; i < ring.length; i++) {
+    const [ax, az] = ring[i];
+    const [bx, bz] = ring[(i + 1) % ring.length];
+    const l = Math.hypot(bx - ax, bz - az);
+    if (l > bl) {
+      bl = l;
+      best = Math.atan2(bz - az, bx - ax);
+    }
+  }
+  return best;
+}
+
+/** A rotated rectangle ring (area2 > 0) centred at (x, z). */
+export function rectRing(x: number, z: number, w: number, d: number, ang: number): Pt[] {
+  const c = Math.cos(ang), s = Math.sin(ang);
+  const pts: Pt[] = [
+    [-w / 2, -d / 2],
+    [w / 2, -d / 2],
+    [w / 2, d / 2],
+    [-w / 2, d / 2],
+  ].map(([u, v]) => [x + u * c - v * s, z + u * s + v * c] as Pt);
+  return cleanRing(pts);
 }
 
 /** A flat horizontal cap at height y (roof), facing up. */

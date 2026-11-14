@@ -196,7 +196,7 @@ export function createRoute(ctx: FootCtx, grid: Grid) {
   const uniforms = { uTime: { value: 0 }, uLen: { value: 1 }, uColor: { value: new THREE.Color(0xffa62b) }, uFade: { value: 0 } };
   const mat = new THREE.ShaderMaterial({
     uniforms, vertexShader: RIBBON_VS, fragmentShader: RIBBON_FS,
-    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false,
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false, side: THREE.DoubleSide,
     polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4,
   });
   const mesh = new THREE.Mesh(new THREE.BufferGeometry(), mat);
