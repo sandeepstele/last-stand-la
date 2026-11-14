@@ -6,6 +6,7 @@
 import { CaseFile } from "@/components/Cases";
 import { kind, type Msg } from "../radio";
 import { DISCLAIMER } from "../types";
+import { HqDrafts } from "./hqDrafts";
 import { Keycap, footStyles as styles } from "./ui";
 
 export type DawnProps = {
@@ -111,6 +112,7 @@ export function DawnView({ title, lines, messages, loading, onPlayAgain, score, 
               </span>
             </p>
           )}
+          <HqDrafts messages={messages} busy={loading} />
           {hasCase ? (
             <>
               <p>

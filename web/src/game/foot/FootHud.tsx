@@ -385,26 +385,26 @@ function Decision({ d, busy }: { d: DecisionView; busy: boolean }) {
 }
 
 // ------------------------------------------------------------------ bottom-right: live feeds (drawn in WebGL at FEED_RECTS)
+// Honesty: the live views are GAME camera renders, not real feeds. Only a `photo` (an image HQ actually read) is real.
 function FeedFrame({ slot, feed }: { slot: "drone" | "cctv"; feed: FeedView }) {
   const r = FEED_RECTS[slot];
-  const label = slot === "drone" ? "DRONE" : "CCTV";
+  const prefix = slot === "drone" ? "DRONE" : "CCTV";
   const cap = feed.caption.trim();
-  const caption = cap.toUpperCase().startsWith(label) ? cap.slice(label.length).replace(/^[\s·:-]+/, "") : cap;
+  const caption = cap.toUpperCase().startsWith(prefix) ? cap.slice(prefix.length).replace(/^[\s·:-]+/, "") : cap;
+  const real = !!feed.photo;
   return (
-    <div className={styles.feed} data-photo={!!feed.photo} style={{ right: r.right, bottom: r.bottom, width: r.w, height: r.h }}>
+    <div className={styles.feed} data-photo={real} style={{ right: r.right, bottom: r.bottom, width: r.w, height: r.h }}>
       <div className={styles.feedHead}>
-        <span className={styles.feedLabel}>REC {label}</span>
-        <span className={styles.feedCaption}>{feed.photo ? "HQ's own look" : caption}</span>
+        <span className={styles.feedLabel} data-real={real}>
+          {real ? "HQ EVIDENCE · real image" : slot === "drone" ? "DRONE VIEW" : "CAMERA VIEW"}
+        </span>
+        {!real && <span className={styles.feedCaption}>{caption}</span>}
       </div>
       {feed.photo && (
         <>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img key={feed.photo.src} src={feed.photo.src} alt={feed.photo.caption} />
-          <span className={styles.scan} />
-          <div className={styles.photoCap}>
-            <b>AGENT VISION</b>
-            {feed.photo.caption}
-          </div>
+          <div className={styles.photoCap}>{feed.photo.caption}</div>
         </>
       )}
     </div>
