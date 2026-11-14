@@ -21,51 +21,56 @@ export type Feeds = System & {
 
 const DRONE_ALT = 70;
 const DRONE_BACK = 12; // metres south of the player: a slight tilt, north stays up
-const CCTV_R = 120, CCTV_MIN = 5, CCTV_H = 7, CCTV_OUT = 1.5, CCTV_FOV = 55;
+const CCTV_R = 60, CCTV_MIN = 5, CCTV_H = 7, CCTV_OUT = 1.5, CCTV_FOV = 55; // corners farther than CCTV_R show a speck
+const POLE_R = 13, POLE_MAX = 40; // fallback: a street camera on a pole this far from the player
+const POLE_ANGLES = [1.2, -1.2, 0.8, -0.8, 1.7, -1.7, 2.4, -2.4, 0.35, -0.35]; // relative to behind the player
 const CCTV_HOLD_S = 2.5; // never switch faster than this unless the current camera lost the player
 const COMPASS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
 
-type Cam = { mx: number; mz: number; label: string; corner: string };
+type Cam = { mx: number; mz: number; label: string; corner: string; pole?: boolean };
 
 const VERT = /* glsl */ `
 varying vec2 vUv;
 void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }
 `;
 const FRAG = /* glsl */ `
+// Grading happens in display (gamma) space: the render targets are linear, and grain added in linear space turns
+// into loud grey noise in the darks once it's encoded. So: decode to ~sRGB, grade, write it out as is.
 uniform sampler2D map;
 uniform float time;
 uniform int mode; // 0 drone, 1 cctv, 2 no signal
 uniform vec2 res;
 varying vec2 vUv;
 float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+vec3 toDisplay(vec3 lin) { return pow(max(lin, vec3(0.0)), vec3(1.0 / 2.2)); }
 void main() {
   vec2 uv = vUv;
   vec2 q = uv - 0.5;
   vec3 c;
   if (mode == 2) {
-    float n = hash(floor(uv * res / 2.0) + floor(time * 20.0));
-    c = vec3(0.015 + n * 0.035);
+    // no camera: a calm dark panel with a slow scan bar
+    float bar = smoothstep(0.12, 0.0, abs(fract(uv.y - time * 0.12) - 0.5));
+    c = vec3(0.05, 0.065, 0.075) + bar * 0.035 + (hash(uv * res + floor(time * 8.0)) - 0.5) * 0.01;
   } else if (mode == 1) {
-    // a little line jitter, like an old camera
-    uv.x += (hash(vec2(floor(uv.y * res.y / 3.0), floor(time * 12.0))) - 0.5) * 0.0025;
-    vec3 s = texture2D(map, uv).rgb;
+    // security camera: grey-green, contrasty, faint scanlines and grain
+    uv.x += (hash(vec2(floor(uv.y * res.y / 3.0), floor(time * 6.0))) - 0.5) * 0.0015;
+    vec3 s = toDisplay(texture2D(map, uv).rgb);
     float l = dot(s, vec3(0.299, 0.587, 0.114));
-    l = pow(max(l, 0.0), 0.85) * 1.45 + 0.01;
-    c = vec3(l * 0.80, l, l * 0.84);
-    c *= 0.86 + 0.14 * sin(uv.y * res.y * 3.14159);
-    c += (hash(uv * res + fract(time) * 91.0) - 0.5) * 0.025;
-    c *= 1.0 - dot(q, q) * 1.3;
+    l = smoothstep(0.04, 0.82, l * 1.12) * 0.92 + 0.04;
+    c = vec3(l * 0.84, l, l * 0.88);
+    c *= 0.95 + 0.05 * sin(uv.y * res.y * 3.14159);
+    c += (hash(uv * res + fract(time) * 91.0) - 0.5) * 0.03;
+    c *= 1.0 - dot(q, q) * 0.9;
   } else {
-    vec3 s = texture2D(map, uv).rgb;
-    c = pow(max(s, vec3(0.0)), vec3(0.9)) * 1.5 + vec3(0.004, 0.006, 0.008);
-    c *= 1.0 - dot(q, q) * 0.7;
+    vec3 s = toDisplay(texture2D(map, uv).rgb);
+    c = s * 1.12 + vec3(0.01, 0.012, 0.016);
+    c *= 1.0 - dot(q, q) * 0.6;
     // thin centre reticle
     vec2 px = abs(q * res);
     float ret = (px.x < 0.6 && px.y > 5.0 && px.y < 13.0) || (px.y < 0.6 && px.x > 5.0 && px.x < 13.0) ? 1.0 : 0.0;
     c = mix(c, vec3(0.95, 0.75, 0.3), ret * 0.7);
   }
-  gl_FragColor = vec4(max(c, vec3(0.0)), 1.0);
-  #include <colorspace_fragment>
+  gl_FragColor = vec4(clamp(c, 0.0, 1.0), 1.0);
 }
 `;
 
@@ -146,6 +151,22 @@ export function createFeeds(ctx: FootCtx): Feeds {
     }
   }
   let cur: Cam | null = null;
+  const pole: Cam = { mx: 0, mz: 0, label: "street camera", corner: "", pole: true };
+  /** No building corner sees the player well: put a street camera on a pole beside them (13 m, line of sight). */
+  function placePole(): Cam | null {
+    const base = P.yaw + Math.PI;
+    for (const da of POLE_ANGLES) {
+      const a = base + da;
+      const px = P.x + Math.sin(a) * POLE_R, pz = P.z - Math.cos(a) * POLE_R;
+      const [qx, qz] = ctx.collide(px, pz, 0.6);
+      if (Math.hypot(qx - px, qz - pz) > 0.3) continue; // inside a building
+      if (blocked(qx, qz, P.x, P.z, ctx.colliders)) continue;
+      pole.mx = qx;
+      pole.mz = qz;
+      return pole;
+    }
+    return null;
+  }
   let curSince = -99;
   let pickT = 0;
   const look = new THREE.Vector3();
@@ -169,11 +190,17 @@ export function createFeeds(ctx: FootCtx): Feeds {
       }
     }
     const curD = cur ? Math.hypot(cur.mx - P.x, cur.mz - P.z) : Infinity;
-    const curOk = !!cur && curD <= CCTV_R + 10 && curD >= CCTV_MIN - 1 && sees(cur);
+    const curOk = !!cur && curD <= (cur.pole ? POLE_MAX : CCTV_R + 10) && curD >= CCTV_MIN - 1 && sees(cur);
     let next = cur;
-    if (!curOk) next = best;
-    else if (best && best !== cur && ctx.time - curSince > CCTV_HOLD_S && bestD < curD * 0.6) next = best;
-    if (next !== cur) {
+    let cut = false;
+    if (!curOk) {
+      next = best ?? placePole();
+      cut = true;
+    } else if (best && best !== cur && ctx.time - curSince > CCTV_HOLD_S && (cur!.pole || bestD < curD * 0.6)) {
+      next = best;
+      cut = true;
+    }
+    if (cut || next !== cur) {
       cur = next;
       curSince = ctx.time;
       if (cur) look.set(P.x, 1.2, P.z); // snap the pan on a cut
@@ -281,7 +308,8 @@ export function createFeeds(ctx: FootCtx): Feeds {
     },
     caption(slot) {
       if (slot === "drone") return `DRONE · ${DRONE_ALT} m above you · N up`;
-      return cur ? `CCTV · ${cur.label} · ${cur.corner} corner` : "CCTV · no camera in range";
+      if (!cur) return "CCTV · no camera in range";
+      return cur.pole ? "CCTV · street camera" : `CCTV · ${cur.label} · ${cur.corner} corner`;
     },
   };
 }
