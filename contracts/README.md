@@ -6,7 +6,7 @@ The messages that cross a process boundary. Change the schema and every side tog
 |---|---|---|---|
 | `frontend_action.schema.json` | agent → web (LangGraph `custom` stream channel) | `app/scene.py` `stage()` | `web/src/lib/useSceneActions.ts` |
 | `ack.schema.json` | web → Store `["acks"]` via `web/src/app/api/ack/route.ts` | WorldPane after rendering | `app/scene.py` `stage()` |
-| `field_scan.schema.json` | iPhone → `POST /field/scan` | `ios/RadarField/.../ScanStore.swift` | `app/routes.py`, `app/field.py` |
+| `field_scan.schema.json` | iPhone → `POST /field/scan` | `archive/ios-RadarField/.../ScanStore.swift` (archived) | `app/routes.py`, `app/field.py` |
 
 HTTP routes on the agent server (`app/routes.py`):
 

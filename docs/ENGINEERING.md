@@ -71,7 +71,7 @@ Judging is at your table. Special-track judges come only in round 1 (9:30–12:3
  │ Verifier card · Approvals │  channel      │ graph radar_worker background: + queue tools      │
  │ /api/ack ──put_item──────────────────────▶│ Store: memories skills properties queue acks      │
  └───────────────────────────┘               │        outbox scene field/<pid>                   │
- iPhone: ios/RadarField ── POST /field/scan ▶│ http.app (app/routes.py): /field/scan /healthz   │
+ iPhone: archive/ios-RadarField ── POST /field/scan ▶│ http.app (app/routes.py): /field/scan /healthz   │
                                              └───────┬──────────────────────────────────────────┘
  app/layers.py: CoStar records · Vexcel attributes · Matterport twin (CoStar data kit + live Vexcel, cached after the first fetch; synthetic TEST-* fixtures)
  Models: live gemini-3.8-flash · live specialists gemini-3.5-flash-lite · worker gemini-4-argon (Vertex AI; live calls capped at 8 s, then the other model)
@@ -87,7 +87,7 @@ Judging is at your table. Special-track judges come only in round 1 (9:30–12:3
 | Web app | `web/` | B | Builds and type-checks. One page. |
 | HTTP routes | `app/routes.py` | D | Upload, token gate and Store writes verified through `langgraph dev` |
 | Heartbeat, seeding | `scripts/heartbeat.py`, `scripts/seed_store.py` | D | Seeding verified. `heartbeat.py tick` verified (as SDK calls). Cron not yet created. |
-| iOS field check (stretch) | `ios/RadarField/` | C | Compiles for device; not run on a phone |
+| iOS field check (stretch) | `archive/ios-RadarField/` (archived) | C | Compiles for device; not run on a phone |
 
 ## 4. Flows
 
@@ -109,7 +109,7 @@ Live model calls (`app/agent.py` `models()`): the orchestrator is gemini-3.8-fla
 
 **Texts** (Photon Spectrum, `photon/`): a text from a team number starts a `radar_worker` run on one thread per sender and the answer is texted back. When a run stops at an approval, the bridge (not the model) texts the request from the interrupt payload, and YES / NO resumes it with one decision per action request. Only the numbers in `.env` can text or be texted. See `photon/README.md`.
 
-**Field check** (stretch): see §7 and `ios/RadarField/README.md`. A stand-in scan never changes a verdict.
+**Field check** (stretch): see §7 and `archive/ios-RadarField/README.md`. A stand-in scan never changes a verdict.
 
 ## 5. Contracts
 
