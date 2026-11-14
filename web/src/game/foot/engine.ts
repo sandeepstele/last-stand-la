@@ -57,6 +57,26 @@ export type HordeInfo = {
   alive: number; // zombies currently simulated
   chasing: number; // of those, how many are chasing the player
   nearest: number; // metres to the nearest zombie (Infinity when none)
+  pressing: number; // zombies within 2.5 m of the current horde:target point (drains the barricade during HOLD)
+};
+
+// ------------------------------------------------------------------ missions (v2: "Night 1")
+/** A non-player character the horde can also go after (a rescued survivor). The mission system owns them. */
+export type Npc = { id: string; x: number; z: number; alive: boolean; hidden: boolean };
+
+export type SupplyKind = "boards" | "medkit";
+/** A supply crate. why = where it comes from, e.g. "a medical office is on record here (CoStar)" or "scavenged". */
+export type SupplySpot = { id: string; x: number; z: number; kind: SupplyKind; n: number; why: string; pid: string | null };
+/** A trapped survivor (fictional people; the game's, not the data's). */
+export type SurvivorSpot = { id: string; x: number; z: number; name: string };
+export type SurvivorState = "trapped" | "following" | "safe" | "lost";
+
+export type MissionState = {
+  boards: number; // carried
+  medkits: number; // carried
+  found: number; // crates picked up (score)
+  survivors: { id: string; name: string; state: SurvivorState }[];
+  barricade: { active: boolean; hp: number; max: number };
 };
 
 export type Events = {
@@ -90,6 +110,32 @@ export type Events = {
   "fx:shake": { amp: number; secs: number };
   /** director -> world: the aftershock cracked this building (a flash + debris, PG). */
   "fx:crack": { pid: string };
+  // ---- missions (v2)
+  /** director -> horde: a pack of `count` zombies that loiters around (x, z) (guarding a trapped survivor). */
+  "horde:pack": { x: number; z: number; count: number };
+  /** horde -> mission: a zombie reached an NPC. */
+  "npc:hit": { id: string; damage: number; fromX: number; fromZ: number };
+  /** director -> mission: place crates and trapped survivors (once per night). */
+  "mission:setup": { supplies: SupplySpot[]; survivors: SurvivorSpot[] };
+  /** director -> mission: following survivors go into the building at (x, z) and become safe. */
+  "mission:shelter": { pid: string; x: number; z: number };
+  /** director -> mission: sheltered survivors come back out at (x, z) and follow the player again (RUN or breach). */
+  "mission:evacuate": { x: number; z: number };
+  /** director -> mission: HOLD. Defend this door: barricade on, drained by ctx.horde.pressing, repaired with [E] + boards. */
+  "mission:defend": { pid: string; x: number; z: number; facing: number };
+  /** director -> mission: the defence is over (held = the server's roll). Barricade off. */
+  "mission:defend-end": { held: boolean };
+  /** director -> mission: aftershock debris (game outcome, not an engineering assessment) falls in these zones for secs. */
+  "mission:debris": { zones: { x: number; z: number; r: number }[]; secs: number };
+  /** mission -> director: crate picked up / survivor state changed / medkit used / barricade broke. */
+  "mission:pickup": { kind: SupplyKind; n: number; why: string };
+  "mission:survivor": { id: string; name: string; state: SurvivorState };
+  "mission:medkit": { hp: number };
+  "mission:barricade-broken": Record<string, never>;
+  /** director -> audio: a new radio line appeared (the agent's squads / HQ / you). Speak it, crackle. */
+  "radio:line": { who: string; text: string; tone?: string };
+  /** director -> mission: clear everything (play again). */
+  "mission:reset": Record<string, never>;
 };
 
 export type Bus = {
@@ -127,11 +173,15 @@ export type FootCtx = {
   /** Every building as a ground polygon (kit footprints, kit boxes, backdrop blocks). */
   colliders: Collider[];
   colliderOf: Map<string, Collider>;
-  /** The walkable rectangle (the ground mosaic when present). Systems clamp to it. */
+  /** The walkable rectangle (the ground mosaic + 80 m when present). Systems clamp to it. The mosaic itself is district.ground. */
   bounds: { x0: number; z0: number; x1: number; z1: number };
   input: Input;
   player: PlayerState;
   horde: HordeInfo;
+  /** Survivors etc. Zombies chase the nearest of the player and these (alive && !hidden). The mission system writes them. */
+  npcs: Npc[];
+  /** Carried supplies, survivors, barricade. The mission system writes it; the director and HUD read it. */
+  mission: MissionState;
   bus: Bus;
   /** "player": the player system drives the camera. "director": the director does (intro flyover). */
   cameraOwner: "player" | "director";
@@ -194,7 +244,9 @@ export function buildColliders(d: District): { colliders: Collider[]; colliderOf
 }
 
 export function boundsOf(d: District, focus: Pt[]): FootCtx["bounds"] {
-  if (d.ground) return { x0: d.ground.x0, z0: d.ground.z0, x1: d.ground.x1, z1: d.ground.z1 };
+  // The mosaic is drawn at its exact rectangle (world), but the walkable area extends past it: the hero's street only
+  // connects to the rest of the grid outside the mosaic (Builder C's flood fill), so pad it.
+  if (d.ground) return { x0: d.ground.x0 - 80, z0: d.ground.z0 - 80, x1: d.ground.x1 + 80, z1: d.ground.z1 + 80 };
   let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
   for (const [x, z] of focus) {
     x0 = Math.min(x0, x);
