@@ -811,7 +811,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
         : null;
       setNearVisit((v) => (v === (visitDoor?.label ?? null) ? v : visitDoor?.label ?? null));
       // Walking past a building with real aerial imagery on file: show it in the camera slot (labelled as such).
-      if ((st0 === "office" || st0 === "approach" || st0 === "night" || st0 === "escape") && ctx.time - nearAt.current > 4) {
+      if (!ctx.stub && (st0 === "office" || st0 === "approach" || st0 === "night" || st0 === "escape") && ctx.time - nearAt.current > 4) {
         let best: { pid: string; label: string; d: number } | null = null;
         for (const b of ctx.district.buildings) {
           const d = Math.hypot(b.x - p.x, b.z - p.z);
