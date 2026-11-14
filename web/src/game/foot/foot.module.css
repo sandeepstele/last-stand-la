@@ -329,7 +329,7 @@
   88% { opacity: 1; transform: translate(-50%, -50%) scale(1) rotate(-6deg); }
   100% { opacity: 0; transform: translate(-50%, -50%) scale(1.05) rotate(-6deg); }
 }
-.holdCard { position: absolute; left: 50%; top: 58%; transform: translateX(-50%); width: min(640px, calc(100vw - 40px)); padding: 14px 20px; text-align: center; border-top: 3px solid var(--red); background: var(--panel-solid); }
+.holdCard { position: absolute; left: 50%; top: 44%; transform: translateX(-50%); width: min(640px, calc(100vw - 40px)); padding: 14px 20px; text-align: center; border-top: 3px solid var(--red); background: var(--panel-solid); }
 .holdCard h3 { margin: 0; font-family: var(--display); font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; font-size: 30px; color: var(--red); }
 .holdCard p { margin: 6px 0 0; font-size: 16px; }
 
@@ -370,3 +370,6 @@
   .question { bottom: 70px; }
   .swatch { height: 34px; }
 }
+
+.insideTitle { max-width: calc(100% - 420px); }
+.outcomeEmpty { margin: 0; padding: 14px 18px; border-radius: 12px; background: rgba(10, 8, 24, 0.6); color: #f1dfe6; font-size: 15px; }
