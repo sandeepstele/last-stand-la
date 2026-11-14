@@ -17,7 +17,9 @@ export default function LiveRun() {
   const stream = useStream({ assistantId: "radar", apiUrl: API_URL });
   const world = useRef<WorldHandle>(null);
   const [question, setQuestion] = useState("Check building 247337.");
-  const ask = (q: string) => void stream.submit({ messages: [{ type: "human", content: q }] });
+  // Every question starts a fresh thread: the previous case's tool results can't leak into this one's
+  // cards, the agent's context stays small (latency), and replay keys stay stable.
+  const ask = (q: string) => void stream.submit({ messages: [{ type: "human", content: q }] }, { threadId: null });
 
   useSceneActions(stream, async (action) =>
     world.current ? world.current.perform(action) : { id: action.id, ok: false, error: "world pane not mounted" },
@@ -49,7 +51,7 @@ export default function LiveRun() {
     <main className={styles.main}>
       <aside className={styles.queuePane}>
         <InboxCard refreshKey={stream.isLoading} />
-        <CaseQueue onOpen={open} busy={stream.isLoading} />
+        <CaseQueue onOpen={open} busy={stream.isLoading} refreshKey={stream.isLoading} />
       </aside>
       <div className={styles.worldPane}>
         <WorldPane ref={world} />
