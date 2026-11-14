@@ -15,6 +15,8 @@ const CONTROLS: [string, string][] = [
   ["G", "throw a flare (lures zombies)"],
   ["Hold your light", "on a zombie to stun it"],
   ["E", "enter a lit door · nail boards"],
+  ["C", "survey a nearby roof for solar"],
+  ["W / S inside", "walk between the real scan spots"],
   ["1 / 2 / 3", "answer HQ's question inside"],
   ["H / R", "hold or run when HQ asks"],
   ["Q", "medkit"],
