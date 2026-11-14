@@ -1,11 +1,13 @@
 // OWNER: builder F (HQ panel). Pure: (messages, heroPid, busy) -> what the HQ panel shows.
 // Every number here comes from a tool result (computed server-side); this file only picks, labels and words them.
+// Two flows share it: the night shift ("Brief the night shift" -> night_cases, then a case at a time) and the
+// fortress scout ("Scout property <pid>"). The active case is read from the stream (newest open_case / weigh_case).
 
 import { firstSentence, kind, parse, text, type Msg } from "../radio";
 
 type Call = { id?: string; name?: string; args?: Record<string, unknown> };
 
-// ---------------------------------------------------------------- words (never keys, never pids)
+// ---------------------------------------------------------------- words (never keys, never pids, never companies)
 
 export type SquadKey = "records" | "aerial" | "interior" | "civic";
 export const SQUADS: { key: SquadKey; label: string }[] = [
@@ -22,10 +24,10 @@ const HYP_WORDS: Record<string, string> = {
   different_structure: "a different structure",
   replaced: "replaced since it was listed",
   year_is_renovation: "the same building, renovated",
-  still_there: "the tenant is still there",
-  gone_dark: "the tenant has left",
-  subleasing: "the tenant is subleasing",
-  moved_within: "moved within the building",
+  still_there: "still there",
+  gone_dark: "gone; the record is out of date",
+  subleasing: "subleasing its own space",
+  moved_within: "moved to another suite",
   listing_stale: "the listing is stale",
 };
 /** Hypotheses in a word or two, for the +/- chips. */
@@ -36,11 +38,17 @@ const HYP_SHORT: Record<string, string> = {
   replaced: "replaced",
   year_is_renovation: "renovated",
   still_there: "still there",
-  gone_dark: "left",
+  gone_dark: "gone",
   subleasing: "subleasing",
-  moved_within: "moved within",
+  moved_within: "moved suites",
   listing_stale: "stale listing",
 };
+export const CASE_WORDS: Record<string, string> = {
+  material_conflict: "Records disagree on the walls",
+  ghost_tenant: "Is the office on record still there?",
+  stale_entry: "Was the listed building replaced?",
+};
+const CASE_SHORT: Record<string, string> = { material_conflict: "walls", ghost_tenant: "office", stale_entry: "replaced?" };
 export const CHECK_NAME: Record<string, string> = {
   compliance_filings: "City retrofit filings",
   permit_text: "Permit wording",
@@ -58,6 +66,7 @@ export const CHECK_NAME: Record<string, string> = {
 };
 
 const humanize = (s: string) => s.replace(/_+/g, " ").trim();
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 /** A hypothesis in words: the known phrase, else the claim's first clause, never the key. */
 function hypWords(key: string, claim?: string): string {
   if (HYP_WORDS[key]) return HYP_WORDS[key];
@@ -65,18 +74,23 @@ function hypWords(key: string, claim?: string): string {
   return c ? c.charAt(0).toLowerCase() + c.slice(1) : "another explanation";
 }
 const hypShort = (key: string, claim?: string) => HYP_SHORT[key] ?? firstSentence(hypWords(key, claim), 22);
-const checkName = (key: string) => CHECK_NAME[key] ?? (humanize(key).charAt(0).toUpperCase() + humanize(key).slice(1));
+const checkName = (key: string) => CHECK_NAME[key] ?? cap(humanize(key));
+const caseWords = (c: string | undefined) => (c && CASE_WORDS[c]) || (c ? cap(humanize(c)) : "Open case");
 
-/** Text safe to show: known pids become labels, hypothesis keys become words, vendor names become what they are. */
-function scrubber(labels: Map<string, string>) {
+const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+/** Text safe to show: known pids become labels, tenant names become "a tenant", hypothesis keys become words. */
+function scrubber(labels: Map<string, string>, tenants: Set<string>) {
   const pids = [...labels.keys()].filter((p) => p.length >= 3).sort((a, b) => b.length - a.length);
-  const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const pidRe = pids.length ? new RegExp(`\\b(?:property\\s+(?:id\\s+)?)?(?:${pids.map(esc).join("|")})\\b`, "gi") : null;
+  const names = [...tenants].filter((t) => t.length >= 3).sort((a, b) => b.length - a.length);
+  const nameRe = names.length ? new RegExp(names.map(esc).join("|"), "gi") : null;
   const keyRe = new RegExp(`\\b(${Object.keys(HYP_WORDS).join("|")})\\b`, "g");
   return (s: string, max = 150): string => {
     let t = s;
+    if (nameRe) t = t.replace(nameRe, "a tenant");
     if (pidRe) t = t.replace(pidRe, (m) => labels.get(m.replace(/^property\s+(?:id\s+)?/i, "")) ?? "the building");
     t = t
+      .replace(/\bCoStar records (?!a tenant\b)(.{1,80}?) here since\b/g, "CoStar records a tenant here since")
       .replace(/\bproperty\s+(?:id\s+)?#?\d{5,}\b/gi, "the building")
       .replace(keyRe, (k) => `"${HYP_SHORT[k]}"`)
       .replace(/\bVexcel\b/g, "aerial imagery")
@@ -85,16 +99,26 @@ function scrubber(labels: Map<string, string>) {
   };
 }
 
+const norm = (v: unknown) => (v == null ? "" : String(v).trim());
+/** A suite as the tools and the model may write it ("1100", "Suite 1100", "#1100", 1100) -> "1100". */
+const suiteOf = (v: unknown) => norm(v).replace(/^(suite|ste\.?)\s*/i, "").replace(/^#\s*/, "").toLowerCase();
+const keyOf = (pid: unknown, suite: unknown) => `${norm(pid)}|${suiteOf(suite)}`;
+/** The suite a tip is about ("Tip: I'm inside suite 1100. ..."), or "" for the building. */
+const tipSuite = (t: string) => suiteOf(t.match(/\bsuite\s+#?([\w-]+)/i)?.[1]);
+
 // ---------------------------------------------------------------- the view
 
 export type SquadView = { key: SquadKey; label: string; state: "idle" | "working" | "done" | "silent"; finding: string | null };
 export type TodoView = { text: string; status: "pending" | "in_progress" | "completed" };
 export type BarView = { key: string; words: string; pct: number; lead: boolean };
+export type VerdictView = { label: "likely" | "leaning" | "unresolved"; words: string; pct: number; text: string | null };
 export type CaseView = {
+  title: string; // "#7 · 122 7th St, suite 1100" in the night shift; "the records disagree" otherwise
+  inBrief: boolean; // the case is one of tonight's cases (its row already shows what it asks)
   question: string;
   bars: BarView[];
   weighed: boolean; // false: the starting odds (priors), before HQ has weighed anything
-  verdict: { label: "likely" | "leaning" | "unresolved"; words: string; pct: number; text: string | null } | null;
+  verdict: VerdictView | null;
   delta: { pts: number; why: string; key: string } | null; // how the leader moved on the latest weigh
   chose: { ran: number; of: number } | null;
 };
@@ -103,34 +127,47 @@ export type EvidenceView = {
   id: string; at: number; name: string; finding: string | null; effects: EffectView[];
   pending: boolean; vision: boolean; human: boolean;
 };
+export type BriefCase = {
+  id: string; n: number | null; type: string; short: string; where: string; stakes: string | null; question: string | null;
+  state: "open" | "checking" | "report" | "weighed"; verdict: VerdictView | null; active: boolean;
+};
+export type BriefView = { total: number | null; cases: BriefCase[]; loading: boolean };
 export type HqView = {
   started: boolean;
   status: string; // what the agent is doing right now, in words
+  brief: BriefView | null; // tonight's cases, from night_cases
+  squadsSent: boolean; // any task call in the thread
   squads: SquadView[];
   todos: TodoView[];
   current: TodoView | null; // the in-progress todo, if any
-  noCase: boolean; // open_case ran for the building and found nothing to settle
+  noCase: boolean; // open_case ran and found nothing to settle
   caseView: CaseView | null;
   evidence: EvidenceView[];
   waiting: { proposal: string } | null; // commit_plan is waiting for the player's HOLD or RUN
 };
 
-type OpenCase = { property_id?: unknown; cases?: { case: string; question: string; hypotheses: { key: string; claim: string; prior: number }[]; checks?: unknown[] }[] };
-type Check = { property_id?: unknown; case?: string; check?: string; finding?: string; effects?: { hypothesis: string; delta: number }[]; status?: string };
+type Spec = { case: string; question: string; hypotheses: { key: string; claim: string; prior: number }[]; checks?: unknown[] };
+type OpenCase = { property_id?: unknown; suite?: unknown; tenant?: unknown; cases?: Spec[] };
+type Effect = { hypothesis: string; delta: number };
+type Check = { property_id?: unknown; suite?: unknown; case?: string; check?: string; finding?: string; effects?: Effect[]; status?: string };
 type Weighed = {
-  property_id?: unknown; case?: string; posterior?: Record<string, number>; checks_used?: string[];
-  trail?: { check: string; finding?: string; effects?: { hypothesis: string; delta: number }[] }[];
+  property_id?: unknown; suite?: unknown; case?: string; posterior?: Record<string, number>; checks_used?: string[];
+  trail?: { check: string; finding?: string; effects?: Effect[] }[];
   verdict?: { hypothesis?: string; claim?: string; confidence?: number; label?: string; text?: string };
   status?: string;
 };
+type NightCase = { n?: number; case?: string; property_id?: unknown; suite?: unknown; label?: string; question?: string; stakes?: string };
+type NightCases = { total?: number; cases?: NightCase[] };
 
 const VISION = new Set(["look_from_above", "compare_captures", "suite_tour"]);
-const PRIORITY = ["commit_plan", "task", "check_evidence", "weigh_case", "record_note", "find_fallback", "horde_status", "open_case", "fortress_dossier", "write_todos"];
+const PRIORITY = ["commit_plan", "task", "check_evidence", "weigh_case", "record_note", "open_case", "night_cases",
+  "find_fallback", "horde_status", "fortress_dossier", "write_todos"];
 const STATUS_BY_CALL: Record<string, string> = {
+  night_cases: "reading tonight's case queue",
   write_todos: "writing its plan",
   task: "sending out the squads",
   fortress_dossier: "pulling the building's file",
-  open_case: "opening the case",
+  open_case: "opening a case",
   check_evidence: "checking the evidence it chose",
   weigh_case: "weighing the case",
   record_note: "logging your report",
@@ -139,7 +176,7 @@ const STATUS_BY_CALL: Record<string, string> = {
   commit_plan: "deciding: hold or run",
 };
 
-function effectsOf(list: Check["effects"], words: (k: string) => string): EffectView[] {
+function effectsOf(list: Effect[] | undefined, words: (k: string) => string): EffectView[] {
   return (list ?? [])
     .filter((e) => e && typeof e.delta === "number" && Math.round(e.delta * 100) !== 0)
     .map((e) => {
@@ -148,29 +185,51 @@ function effectsOf(list: Check["effects"], words: (k: string) => string): Effect
     });
 }
 
+function verdictOf(w: Weighed, claimOf: (k: string) => string | undefined, clean: (s: string, max?: number) => string): VerdictView | null {
+  const v = w.verdict;
+  if (!v) return null;
+  const lead = v.hypothesis ?? "";
+  return {
+    label: v.label === "likely" || v.label === "leaning" ? v.label : "unresolved",
+    words: hypWords(lead, v.claim ?? claimOf(lead)),
+    pct: Math.round((v.confidence ?? w.posterior?.[lead] ?? 0) * 100),
+    text: v.text ? clean(v.text.replace(/\s*\(\d+%\)\s*$/, ""), 160) : null,
+  };
+}
+
 export function hqModel(messages: readonly unknown[], heroPid: string | null, busy: boolean): HqView {
   const ms = messages as readonly Msg[];
-  const same = (pid: unknown) => heroPid == null || String(pid) === heroPid;
 
-  // One pass: index tool results, remember the newest of everything we draw.
+  // ---- one pass: index tool results and calls; remember everything we draw, with where it sits in the thread
   const resultById = new Map<string, number>();
   const labels = new Map<string, string>();
+  const tenants = new Set<string>();
   let scoutAt = -1;
+  let briefAt = -1;
   let lastAi = -1;
   let todos: TodoView[] = [];
+  const nightRef: { v: NightCases | null } = { v: null }; // a holder: assigned inside the forEach below
   const tasks: { call: Call; at: number }[] = [];
   const checkCalls: { call: Call; at: number }[] = [];
-  const recordNotes: number[] = [];
-  const tips: { at: number; text: string }[] = [];
+  const openCalls: { call: Call; at: number }[] = [];
+  const noteCalls: { call: Call; at: number }[] = [];
+  const tips: { at: number; text: string; suite: string }[] = [];
+  const opens: { o: OpenCase; at: number }[] = [];
+  const checks: { c: Check; at: number }[] = [];
+  const weighs: { w: Weighed; at: number }[] = [];
   ms.forEach((m, i) => {
     const k = kind(m);
     if (k === "human") {
       const t = text(m.content).trim();
-      if (/^Scout property /.test(t)) {
+      if (/^Brief the night shift/i.test(t)) briefAt = i;
+      else if (/^Scout property /.test(t)) {
         scoutAt = i;
         const pid = t.match(/^Scout property (\S+)/)?.[1];
         if (pid && !labels.has(pid)) labels.set(pid, "the building");
-      } else if (/^Tip:/i.test(t)) tips.push({ at: i, text: t.replace(/^Tip:\s*/i, "") });
+      } else if (/^Tip:/i.test(t)) {
+        const body = t.replace(/^Tip:\s*/i, "");
+        tips.push({ at: i, text: body, suite: tipSuite(body) });
+      }
       return;
     }
     if (k === "ai") {
@@ -189,23 +248,59 @@ export function hqModel(messages: readonly unknown[], heroPid: string | null, bu
           if (next.length) todos = next;
         } else if (c.name === "task") tasks.push({ call: c, at: i });
         else if (c.name === "check_evidence") checkCalls.push({ call: c, at: i });
-        else if (c.name === "record_note") recordNotes.push(i);
+        else if (c.name === "open_case") openCalls.push({ call: c, at: i });
+        else if (c.name === "record_note") noteCalls.push({ call: c, at: i });
       }
       return;
     }
-    if (k === "tool") {
-      if (m.tool_call_id) resultById.set(m.tool_call_id, i);
-      if (m.name === "fortress_dossier") {
+    if (k !== "tool") return;
+    if (m.tool_call_id) resultById.set(m.tool_call_id, i);
+    switch (m.name) {
+      case "fortress_dossier": {
         const d = parse<{ pid?: unknown; label?: string }>(m);
         if (d?.pid != null && d.label) labels.set(String(d.pid), d.label);
-      } else if (m.name === "find_fallback") {
+        break;
+      }
+      case "find_fallback": {
         const f = parse<{ to_pid?: unknown; to_label?: string }>(m);
         if (f?.to_pid != null && f.to_label) labels.set(String(f.to_pid), f.to_label);
+        break;
+      }
+      case "night_cases": {
+        const r = parse<NightCases>(m);
+        if (r && Array.isArray(r.cases)) {
+          nightRef.v = r;
+          for (const c of r.cases) if (c?.property_id != null && c.label) labels.set(String(c.property_id), c.label);
+        }
+        break;
+      }
+      case "open_case": {
+        const o = parse<OpenCase>(m);
+        if (o && o.property_id != null) {
+          opens.push({ o, at: i });
+          if (typeof o.tenant === "string" && !/^\d+ tenants on record/.test(o.tenant)) tenants.add(o.tenant);
+        }
+        break;
+      }
+      case "check_evidence": {
+        const c = parse<Check>(m);
+        if (c?.check && !c.status) checks.push({ c, at: i });
+        break;
+      }
+      case "weigh_case": {
+        const w = parse<Weighed>(m);
+        if (w?.posterior && !w.status) weighs.push({ w, at: i });
+        break;
       }
     }
   });
   if (heroPid && !labels.has(heroPid)) labels.set(heroPid, "the building");
-  const clean = scrubber(labels);
+  const clean = scrubber(labels, tenants);
+  const where = (pid: unknown, suite: unknown) => {
+    const l = labels.get(norm(pid));
+    const s = norm(suite);
+    return `${l && l !== "the building" ? l : "a building"}${s ? `, suite ${s}` : ""}`;
+  };
 
   // ---- squads: the task calls since the newest scout order
   const squads: SquadView[] = SQUADS.map(({ key, label }) => {
@@ -231,115 +326,136 @@ export function hqModel(messages: readonly unknown[], heroPid: string | null, bu
     return { key, label, state: "done", finding: finding || "Report in." };
   });
 
-  // ---- the case for the building: newest open_case for heroPid
-  let openAt = -1;
-  let opened: OpenCase | null = null;
-  for (let i = ms.length - 1; i >= 0; i--) {
-    const m = ms[i];
-    if (kind(m) !== "tool" || m.name !== "open_case") continue;
-    const o = parse<OpenCase>(m);
-    if (o && same(o.property_id)) {
-      openAt = i;
-      opened = o;
-      break;
-    }
-  }
-  const after = openAt >= 0 ? ms.slice(openAt + 1) : [];
-  const offset = openAt + 1;
-  const checks: { c: Check; at: number; callId?: string }[] = [];
-  const weighs: { w: Weighed; at: number }[] = [];
-  after.forEach((m, j) => {
-    if (kind(m) !== "tool") return;
-    if (m.name === "check_evidence") {
-      const c = parse<Check>(m);
-      if (c?.check && !c.status && same(c.property_id)) checks.push({ c, at: offset + j, callId: m.tool_call_id });
-    } else if (m.name === "weigh_case") {
-      const w = parse<Weighed>(m);
-      if (w?.posterior && !w.status && same(w.property_id)) weighs.push({ w, at: offset + j });
-    }
-  });
-  const working = weighs[weighs.length - 1]?.w.case ?? checks[checks.length - 1]?.c.case;
-  const spec = opened?.cases?.find((x) => x.case === working) ?? opened?.cases?.[0] ?? null;
-  const noCase = !!opened && !spec;
+  // ---- the active case: the newest open_case or weigh_case in the stream
+  let activeKey: string | null = null;
+  let activeAt = -1;
+  for (const { o, at } of opens) if (at > activeAt) { activeAt = at; activeKey = keyOf(o.property_id, o.suite); }
+  for (const { w, at } of weighs) if (at > activeAt) { activeAt = at; activeKey = keyOf(w.property_id, w.suite); }
+  const night = nightRef.v;
+  const nightList: NightCase[] = night?.cases?.filter((c) => c && c.property_id != null) ?? [];
+  const nightTotal = night?.total ?? null;
+  const nightOf = (key: string) => nightList.find((c) => keyOf(c.property_id, c.suite) === key) ?? null;
 
   let caseView: CaseView | null = null;
+  let noCase = false;
   const evidence: EvidenceView[] = [];
-  if (spec) {
-    const hyps = spec.hypotheses ?? [];
-    const claimOf = (k: string) => hyps.find((h) => h.key === k)?.claim;
-    const short = (k: string) => hypShort(k, claimOf(k));
-    const mine = weighs.filter((x) => x.w.case === spec.case);
-    const last = mine[mine.length - 1] ?? null;
-    const prev = mine[mine.length - 2] ?? null;
-    const odds: Record<string, number> = last?.w.posterior ?? Object.fromEntries(hyps.map((h) => [h.key, h.prior]));
-    const lead = last?.w.verdict?.hypothesis ?? hyps.reduce((a, h) => ((odds[h.key] ?? 0) > (odds[a] ?? -1) ? h.key : a), hyps[0]?.key ?? "");
-    const bars = hyps.map((h) => ({ key: h.key, words: hypWords(h.key, h.claim), pct: Math.round((odds[h.key] ?? 0) * 100), lead: h.key === lead }));
-    let verdict: CaseView["verdict"] = null;
-    let delta: CaseView["delta"] = null;
-    if (last?.w.verdict) {
-      const v = last.w.verdict;
-      const label = v.label === "likely" || v.label === "leaning" ? v.label : "unresolved";
-      verdict = {
-        label, words: hypWords(lead, v.claim), pct: Math.round((v.confidence ?? odds[lead] ?? 0) * 100),
-        text: v.text ? clean(v.text.replace(/\s*\(\d+%\)\s*$/, ""), 160) : null,
+  if (activeKey) {
+    const ak = activeKey;
+    const opened = [...opens].reverse().find((x) => keyOf(x.o.property_id, x.o.suite) === ak) ?? null;
+    const mineW = weighs.filter((x) => keyOf(x.w.property_id, x.w.suite) === ak);
+    const mineC = checks.filter((x) => keyOf(x.c.property_id, x.c.suite) === ak);
+    const working = mineW[mineW.length - 1]?.w.case ?? mineC[mineC.length - 1]?.c.case;
+    const nc = nightOf(ak);
+    let spec: Spec | null = opened?.o.cases?.find((x) => x.case === working) ?? opened?.o.cases?.[0] ?? null;
+    if (!spec && mineW.length) {
+      // weighed without an open_case result in view: the hypotheses are the posterior's keys
+      const w = mineW[mineW.length - 1].w;
+      spec = { case: w.case ?? "", question: nc?.question ?? "", hypotheses: Object.keys(w.posterior ?? {}).map((key) => ({ key, claim: "", prior: NaN })) };
+    }
+    noCase = !!opened && !spec && !nc;
+    if (spec) {
+      const sp = spec;
+      const hyps = sp.hypotheses ?? [];
+      const claimOf = (k: string) => hyps.find((h) => h.key === k)?.claim;
+      const short = (k: string) => hypShort(k, claimOf(k));
+      const ws = mineW.filter((x) => !x.w.case || x.w.case === sp.case);
+      const last = ws[ws.length - 1] ?? null;
+      const prev = ws[ws.length - 2] ?? null;
+      const odds: Record<string, number> = last?.w.posterior ?? Object.fromEntries(hyps.map((h) => [h.key, h.prior || 0]));
+      const lead = last?.w.verdict?.hypothesis ?? hyps.reduce((a, h) => ((odds[h.key] ?? 0) > (odds[a] ?? -1) ? h.key : a), hyps[0]?.key ?? "");
+      const bars = hyps.map((h) => ({ key: h.key, words: hypWords(h.key, h.claim), pct: Math.round((odds[h.key] ?? 0) * 100), lead: h.key === lead }));
+      const caseSuite = ak.split("|")[1];
+      const myTips = tips.filter((t) => t.suite === caseSuite);
+      const verdict = last ? verdictOf(last.w, claimOf, clean) : null;
+      let delta: CaseView["delta"] = null;
+      if (last && verdict) {
+        const base = prev ? prev.w.posterior?.[lead] : hyps.find((h) => h.key === lead)?.prior;
+        if (typeof base === "number" && !Number.isNaN(base)) {
+          const pts = Math.round(((odds[lead] ?? 0) - base) * 100);
+          const from = prev?.at ?? opened?.at ?? -1;
+          const tipBetween = myTips.some((t) => t.at > from && t.at < last.at);
+          const humanUsed = !!last.w.checks_used?.includes("human_report") && !prev?.w.checks_used?.includes("human_report");
+          const why = tipBetween || humanUsed ? "after your report" : prev ? "since HQ last weighed" : "from the evidence";
+          if (pts !== 0) delta = { pts, why, key: `${last.at}` };
+        }
+      }
+      const offered = Array.isArray(sp.checks) ? sp.checks.length : 0;
+      const ran = new Set(mineC.filter((x) => x.c.case === sp.case).map((x) => x.c.check));
+      caseView = {
+        title: nc ? `${nc.n != null ? `#${nc.n} · ` : ""}${where(nc.property_id, nc.suite)}` : "the records disagree",
+        inBrief: !!nc,
+        question: clean(sp.question || nc?.question || "", 200),
+        bars, weighed: !!last, verdict, delta,
+        chose: offered && ran.size ? { ran: ran.size, of: offered } : null,
       };
-      const base = prev ? prev.w.posterior?.[lead] : hyps.find((h) => h.key === lead)?.prior;
-      if (typeof base === "number") {
-        const pts = Math.round(((odds[lead] ?? 0) - base) * 100);
-        const tipBetween = tips.some((t) => t.at > (prev?.at ?? openAt) && t.at < last.at);
-        const humanUsed = !!last.w.checks_used?.includes("human_report") && !prev?.w.checks_used?.includes("human_report");
-        const why = tipBetween || humanUsed ? "after your report" : prev ? "since HQ last weighed" : "from the evidence";
-        if (pts !== 0) delta = { pts, why, key: `${last.at}` };
-      }
-    }
-    const offered = Array.isArray(spec.checks) ? spec.checks.length : 0;
-    const ran = new Set(checks.filter((x) => x.c.case === spec.case).map((x) => x.c.check));
-    caseView = {
-      question: clean(spec.question, 200),
-      bars, weighed: !!last, verdict, delta,
-      chose: offered && ran.size ? { ran: ran.size, of: offered } : null,
-    };
 
-    // ---- evidence the agent chose: results (newest per check), checks still running, and the player's report
-    const seen = new Set<string>();
-    const cards: EvidenceView[] = [];
-    for (let i = checks.length - 1; i >= 0; i--) {
-      const { c, at } = checks[i];
-      if (c.case !== spec.case || seen.has(c.check!)) continue;
-      seen.add(c.check!);
-      cards.push({
-        id: `c-${c.check}`, name: checkName(c.check!), finding: c.finding ? clean(c.finding, 140) : null,
-        effects: effectsOf(c.effects, short), pending: false, vision: VISION.has(c.check!), human: c.check === "human_report", at,
-      });
-    }
-    if (busy) {
-      for (const { call, at } of checkCalls) {
-        const a = call.args ?? {};
-        const name = typeof a.check === "string" ? a.check : "";
-        if (at <= openAt || !name || seen.has(name) || !same(a.property_id)) continue;
-        if (call.id && resultById.has(call.id)) continue;
-        seen.add(name);
-        cards.push({ id: `p-${name}`, name: checkName(name), finding: null, effects: [], pending: true, vision: VISION.has(name), human: name === "human_report", at });
-      }
-    }
-    // The player's report: weigh_case counts it as human_report (in its trail), after record_note saved it.
-    if (!seen.has("human_report")) {
-      const trail = last?.w.trail?.find((t) => t.check === "human_report");
-      const noteAt = recordNotes.filter((i) => i > openAt).pop();
-      const tip = tips.filter((t) => t.at > openAt).pop();
-      if (trail || (noteAt !== undefined && tip)) {
-        const t = tip?.text.replace(/\s+/g, " ").trim() ?? "";
-        const said = t ? `"${t.length > 160 ? `${t.slice(0, 159).trimEnd()}…` : t}"` : null;
+      // ---- evidence the agent chose: results (newest per check), checks still running, and the player's report
+      const seen = new Set<string>();
+      const cards: EvidenceView[] = [];
+      for (let i = mineC.length - 1; i >= 0; i--) {
+        const { c, at } = mineC[i];
+        if (c.case !== sp.case || seen.has(c.check!)) continue;
+        seen.add(c.check!);
         cards.push({
-          id: "c-human_report", name: CHECK_NAME.human_report,
-          finding: said ?? (trail?.finding ? clean(trail.finding, 140) : null),
-          effects: effectsOf(trail?.effects, short), pending: false, vision: false, human: true,
-          at: Math.max(noteAt ?? -1, tip?.at ?? -1, last && trail ? last.at : -1),
+          id: `c-${c.check}`, at, name: checkName(c.check!), finding: c.finding ? clean(c.finding, 140) : null,
+          effects: effectsOf(c.effects, short), pending: false, vision: VISION.has(c.check!), human: c.check === "human_report",
         });
       }
+      if (busy) {
+        for (const { call, at } of checkCalls) {
+          const a = call.args ?? {};
+          const name = typeof a.check === "string" ? a.check : "";
+          if (!name || seen.has(name) || keyOf(a.property_id, a.suite) !== ak || (opened && at < opened.at)) continue;
+          if (call.id && resultById.has(call.id)) continue;
+          seen.add(name);
+          cards.push({ id: `p-${name}`, at, name: checkName(name), finding: null, effects: [], pending: true, vision: VISION.has(name), human: name === "human_report" });
+        }
+      }
+      // The player's report: record_note saves it; weigh_case counts it as human_report (in its trail).
+      if (!seen.has("human_report")) {
+        const trail = last?.w.trail?.find((t) => t.check === "human_report");
+        const note = [...noteCalls].reverse().find((x) => keyOf(x.call.args?.property_id, x.call.args?.suite) === ak);
+        const tip = [...myTips].reverse().find((t) => !note || t.at <= note.at) ?? null;
+        if (trail || note) {
+          const said = tip?.text.replace(/\s+/g, " ").trim() || (typeof note?.call.args?.note === "string" ? note.call.args.note : "");
+          cards.push({
+            id: "c-human_report", name: CHECK_NAME.human_report,
+            finding: said ? `"${said.length > 160 ? `${said.slice(0, 159).trimEnd()}…` : said}"` : trail?.finding ? clean(trail.finding, 140) : null,
+            effects: effectsOf(trail?.effects, short), pending: false, vision: false, human: true,
+            at: Math.max(note?.at ?? -1, tip?.at ?? -1, last && trail ? last.at : -1),
+          });
+        }
+      }
+      cards.sort((a, b) => b.at - a.at);
+      evidence.push(...cards);
     }
-    cards.sort((a, b) => b.at - a.at);
-    evidence.push(...cards);
+  }
+
+  // ---- tonight's cases: each row's state is the newest thing the agent did on it
+  let brief: BriefView | null = null;
+  if (night) {
+    const caseRows = nightList.map((nc, i) => {
+      const k = keyOf(nc.property_id, nc.suite);
+      let state: BriefCase["state"] = "open";
+      let at = -1;
+      const bump = (s: BriefCase["state"], j: number) => { if (j >= at) { at = j; state = s; } };
+      for (const x of openCalls) if (keyOf(x.call.args?.property_id, x.call.args?.suite) === k) bump("checking", x.at);
+      for (const x of opens) if (keyOf(x.o.property_id, x.o.suite) === k) bump("checking", x.at);
+      for (const x of checkCalls) if (keyOf(x.call.args?.property_id, x.call.args?.suite) === k) bump("checking", x.at);
+      for (const x of noteCalls) if (keyOf(x.call.args?.property_id, x.call.args?.suite) === k) bump("report", x.at);
+      const ws = weighs.filter((x) => keyOf(x.w.property_id, x.w.suite) === k);
+      for (const x of ws) bump("weighed", x.at);
+      const lastW = ws[ws.length - 1]?.w;
+      return {
+        id: `${k}|${i}`, n: typeof nc.n === "number" ? nc.n : null, type: caseWords(nc.case ?? lastW?.case),
+        short: CASE_SHORT[nc.case ?? lastW?.case ?? ""] ?? "case", where: where(nc.property_id, nc.suite),
+        stakes: nc.stakes ? clean(nc.stakes, 60) : null, question: nc.question ? clean(nc.question, 200) : null,
+        state, verdict: lastW ? verdictOf(lastW, () => undefined, clean) : null, active: k === activeKey,
+      } as BriefCase;
+    });
+    brief = { total: typeof nightTotal === "number" ? nightTotal : null, cases: caseRows, loading: false };
+  } else if (briefAt >= 0) {
+    brief = { total: null, cases: [], loading: busy };
   }
 
   // ---- waiting for the human: the newest AI message proposes commit_plan and nothing answered it yet
@@ -355,22 +471,19 @@ export function hqModel(messages: readonly unknown[], heroPid: string | null, bu
   }
 
   const current = todos.find((t) => t.status === "in_progress") ?? null;
-  const started = ms.some((m) => kind(m) === "ai" || kind(m) === "tool") || scoutAt >= 0;
-  let status = started ? "standing by" : "standing by for the scout";
+  const started = ms.some((m) => kind(m) === "ai" || kind(m) === "tool") || scoutAt >= 0 || briefAt >= 0;
+  let status = "standing by";
   if (waiting) status = "waiting for your call";
   else if (busy) {
     const newest = ms[ms.length - 1];
     const nk = newest ? kind(newest) : "";
     const out = tasks.filter((t) => t.at > scoutAt && !(t.call.id && resultById.has(t.call.id))).length;
     const open = lastAi >= 0 ? ((ms[lastAi].tool_calls ?? []) as Call[]).filter((c) => c?.name && !(c.id && resultById.has(c.id))) : [];
-    const pick = (calls: Call[]) => PRIORITY.find((n) => calls.some((c) => c.name === n));
+    const pick = PRIORITY.find((n) => open.some((c) => c.name === n));
     if (nk === "human") status = "reading your message";
     else if (nk === "ai" && !(newest.tool_calls ?? []).length) status = "on the radio";
     else if (out) status = `${out} squad${out === 1 ? "" : "s"} out`;
-    else {
-      const n = pick(open);
-      status = n ? STATUS_BY_CALL[n] : "thinking it over";
-    }
+    else status = pick ? STATUS_BY_CALL[pick] : "thinking it over";
   }
-  return { started, status, squads, todos, current, noCase, caseView, evidence, waiting };
+  return { started, status, brief, squadsSent: tasks.length > 0, squads, todos, current, noCase, caseView, evidence, waiting };
 }

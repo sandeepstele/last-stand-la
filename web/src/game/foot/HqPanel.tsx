@@ -4,7 +4,7 @@
 // Parsing is pure and memoised (hqModel.ts); nothing here computes a number, it only shows the tools' numbers.
 
 import { useMemo } from "react";
-import { hqModel, type CaseView, type EvidenceView, type HqView, type SquadView } from "./hqModel";
+import { hqModel, type BriefCase, type BriefView, type CaseView, type EvidenceView, type HqView, type SquadView } from "./hqModel";
 import styles from "./hq.module.css";
 
 export type HqProps = {
@@ -26,7 +26,7 @@ export function HqPanel({ messages, busy, heroPid, compact }: HqProps) {
       aria-label="HQ, the AI commander: its plan, its squads, the evidence it chose and the odds"
     >
       <Header view={view} busy={busy} />
-      {compact ? <Compact view={view} /> : <Full view={view} />}
+      {compact ? <Compact view={view} busy={busy} /> : <Full view={view} busy={busy} />}
     </section>
   );
 }
@@ -48,11 +48,13 @@ function Header({ view, busy }: { view: HqView; busy: boolean }) {
 
 // ---------------------------------------------------------------- compact: while walking or fighting
 
-function Compact({ view }: { view: HqView }) {
+function Compact({ view, busy }: { view: HqView; busy: boolean }) {
   const c = view.caseView;
+  // one strip: the squads while they work (or when there is no night brief), else tonight's cases
+  const squadsLive = view.squads.some((s) => s.state === "working");
   return (
     <>
-      <Squads squads={view.squads} compact />
+      {view.brief && !squadsLive ? <BriefStrip brief={view.brief} busy={busy} /> : <Squads squads={view.squads} compact />}
       {c && <CompactOdds c={c} />}
       {view.waiting ? (
         <div className={styles.now} data-wait>
@@ -92,7 +94,7 @@ function CompactOdds({ c }: { c: CaseView }) {
 
 // ---------------------------------------------------------------- full: inside, or the night decision
 
-function Full({ view }: { view: HqView }) {
+function Full({ view, busy }: { view: HqView; busy: boolean }) {
   const shown = view.evidence.slice(0, MAX_CARDS);
   const more = view.evidence.length - shown.length;
   return (
@@ -104,11 +106,15 @@ function Full({ view }: { view: HqView }) {
         </div>
       )}
 
-      <div className={styles.section}>
-        <h4 className={styles.h}>Squads <em>· subagents, sent in parallel</em></h4>
-        {/* once every squad has reported and the case is open, their findings are on the radio: chips only */}
-        <Squads squads={view.squads} compact={!!view.caseView && view.squads.every((s) => s.state !== "working")} />
-      </div>
+      {view.brief && <Brief brief={view.brief} busy={busy} />}
+
+      {(view.squadsSent || !view.brief) && (
+        <div className={styles.section}>
+          <h4 className={styles.h}>Squads <em>· subagents, sent in parallel</em></h4>
+          {/* once every squad has reported and the case is open, their findings are on the radio: chips only */}
+          <Squads squads={view.squads} compact={!!view.caseView && view.squads.every((s) => s.state !== "working")} />
+        </div>
+      )}
 
       {(view.todos.length > 0 || view.started) && (
         <div className={styles.section}>
@@ -144,7 +150,7 @@ function Full({ view }: { view: HqView }) {
         </div>
       )}
 
-      {!view.started && <p className={styles.muted}>Walk to the building: HQ starts scouting it when you get close.</p>}
+      {!view.started && <p className={styles.muted}>HQ is standing by for orders.</p>}
     </>
   );
 }
@@ -170,9 +176,10 @@ function Squads({ squads, compact = false }: { squads: SquadView[]; compact?: bo
 
 function CaseBlock({ c }: { c: CaseView }) {
   return (
-    <div className={styles.section}>
-      <h4 className={styles.h}>The case <em>· the records disagree</em></h4>
-      <p className={styles.question}>{c.question}</p>
+    <div className={styles.section} title={c.question || undefined}>
+      <h4 className={styles.h}>Now weighing <em>· {c.title}</em></h4>
+      {/* in the night shift the brief row already says what the case asks; the question stays as a tooltip */}
+      {!c.inBrief && c.question && <p className={styles.question}>{c.question}</p>}
       <ul className={styles.bars}>
         {c.bars.map((b) => (
           <li key={b.key} className={styles.bar} data-lead={b.lead}>
@@ -220,5 +227,69 @@ function EvidenceCard({ e }: { e: EvidenceView }) {
       </div>
       {e.finding && <p>{e.finding}</p>}
     </li>
+  );
+}
+
+// ---------------------------------------------------------------- tonight's cases (the night shift brief)
+
+const STATE_WORDS: Record<BriefCase["state"], string> = { open: "open", checking: "being checked", report: "report logged", weighed: "weighed" };
+
+function Brief({ brief, busy }: { brief: BriefView; busy: boolean }) {
+  return (
+    <div className={styles.section}>
+      <h4 className={styles.h}>
+        Tonight&apos;s cases <em>· from CoStar&apos;s open-case queue{brief.total != null ? ` (${brief.total})` : ""}</em>
+      </h4>
+      {brief.cases.length ? (
+        <ul className={styles.brief}>
+          {brief.cases.map((c) => (
+            <li key={c.id} className={styles.case} data-active={c.active} data-state={c.state} title={c.question ?? undefined}>
+              <div className={styles.caseTop}>
+                <strong>{c.type}</strong>
+                <span className={styles.state} data-state={c.state}>
+                  {c.state === "checking" && c.active && busy && <span className={styles.spin} aria-hidden />}
+                  {STATE_WORDS[c.state]}
+                </span>
+              </div>
+              <div className={styles.caseWhere}>
+                {c.n != null && <b>Case #{c.n}{brief.total != null ? ` of ${brief.total}` : ""}</b>}
+                {c.n != null && " · "}
+                {c.where}
+                {c.stakes && <span> · {c.stakes}</span>}
+              </div>
+              {c.verdict && (
+                <div className={styles.caseVerdict}>
+                  <span className={styles.label} data-label={c.verdict.label}>{c.verdict.label}</span>
+                  <span className={styles.caseLead}>{c.verdict.label === "unresolved" ? "not settled yet" : c.verdict.words}</span>
+                  <strong key={c.verdict.pct}>{c.verdict.pct}%</strong>
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className={styles.muted}>{brief.loading ? "HQ is reading the queue…" : "No open cases in the queue tonight."}</p>
+      )}
+    </div>
+  );
+}
+
+function BriefStrip({ brief, busy }: { brief: BriefView; busy: boolean }) {
+  return (
+    <div className={styles.strip}>
+      {!brief.cases.length && (
+        <span className={styles.pill}>
+          {brief.loading ? <span className={styles.spin} aria-hidden /> : null}
+          <em>{brief.loading ? "reading tonight's cases" : "no open cases tonight"}</em>
+        </span>
+      )}
+      {brief.cases.map((c) => (
+        <span key={c.id} className={styles.pill} data-active={c.active} data-state={c.state} title={`${c.type} · ${c.where}`}>
+          {c.state === "checking" && c.active && busy ? <span className={styles.spin} aria-hidden /> : <span className={styles.icon} aria-hidden />}
+          {c.n != null ? `#${c.n} ` : ""}{c.short}
+          <em>{c.verdict && c.state === "weighed" ? `${c.verdict.label} ${c.verdict.pct}%` : STATE_WORDS[c.state]}</em>
+        </span>
+      ))}
+    </div>
   );
 }

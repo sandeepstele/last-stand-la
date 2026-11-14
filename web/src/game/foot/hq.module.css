@@ -41,7 +41,7 @@
 /* ---- section titles */
 .section { display: flex; flex-direction: column; gap: 5px; }
 .h { margin: 0; font: 700 10px/1 var(--mono); letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); }
-.h em { font-style: normal; letter-spacing: 0.04em; text-transform: none; color: var(--faint); font-weight: 600; }
+.h em { font: italic 500 10.5px/1 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; letter-spacing: 0; text-transform: none; color: var(--muted); }
 .muted { margin: 0; color: var(--muted); font-size: 11px; }
 
 /* ---- squads: 2x2 tiles (full), one row of chips (compact) */
@@ -82,7 +82,7 @@
 /* ---- the case: question, odds bars, verdict */
 .question { margin: 0; font-size: 12px; color: var(--ink); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .bars { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
-.bar { display: grid; grid-template-columns: 158px 1fr 34px; column-gap: 8px; align-items: center; }
+.bar { display: grid; grid-template-columns: minmax(0, 178px) 1fr 34px; column-gap: 8px; align-items: center; }
 .bar .words { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .bar[data-lead="true"] .words { color: var(--ink); font-weight: 600; }
 .track { height: 6px; border-radius: 3px; background: var(--track); overflow: hidden; }
@@ -135,3 +135,34 @@
   .panel *, .panel *::before, .panel *::after { animation: none !important; transition: none !important; }
 }
 .effects span:not([data-sign]) { color: var(--faint); background: rgba(255, 255, 255, 0.05); }
+
+/* ---- tonight's cases (the night shift brief): the headline */
+.brief { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.case { padding: 5px 8px 6px; border-radius: 6px; border: 1px solid var(--line); border-left: 3px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.03); transition: border-color 0.3s ease, background 0.3s ease; animation: in 0.4s ease; }
+.case[data-active="true"] { border-left-color: var(--amber); background: rgba(245, 165, 36, 0.08); }
+.caseTop { display: flex; align-items: flex-start; gap: 8px; min-width: 0; }
+.caseTop strong { font-size: 12px; line-height: 1.3; }
+.state { margin-left: auto; flex: none; display: inline-flex; align-items: center; gap: 5px; font: 700 9.5px/1 var(--mono); letter-spacing: 0.1em;
+  text-transform: uppercase; padding: 3px 5px; border-radius: 4px; border: 1px solid var(--line); color: var(--muted); }
+.state[data-state="checking"] { border-color: var(--amber); color: var(--amber); }
+.state[data-state="report"] { border-color: var(--blue); color: var(--blue); }
+.state[data-state="weighed"] { border-color: var(--green); color: var(--green); }
+.caseWhere { margin-top: 2px; font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.caseWhere b { font: 600 10.5px var(--mono); color: var(--ink); }
+.caseVerdict { display: flex; align-items: center; gap: 6px; margin-top: 4px; font-size: 11px; min-width: 0; animation: in 0.4s ease; }
+.caseLead { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); }
+.caseVerdict strong { margin-left: auto; font: 700 12px/1 var(--mono); color: var(--amber); animation: pop 0.9s ease; }
+
+/* compact: one pill per case */
+.strip { display: flex; gap: 4px; overflow: hidden; }
+.pill { flex: 1 1 0; min-width: 0; display: inline-flex; align-items: center; gap: 5px; padding: 4px 6px; border-radius: 6px; border: 1px solid var(--line);
+  font: 700 9.5px/1 var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink); white-space: nowrap; overflow: hidden; }
+.pill em { font-style: normal; font-weight: 600; color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
+.pill[data-active="true"] { border-color: var(--amber); background: rgba(245, 165, 36, 0.1); }
+.pill[data-state="weighed"] em { color: var(--green); }
+.pill[data-state="checking"] em { color: var(--amber); }
+.pill[data-state="report"] em { color: var(--blue); }
+.pill .icon { color: var(--faint); }
+.pill[data-state="weighed"] .icon { background: var(--green); border-color: var(--green); color: #07130d; }
+.pill[data-state="weighed"] .icon::before { content: "\2713"; font-weight: 900; }

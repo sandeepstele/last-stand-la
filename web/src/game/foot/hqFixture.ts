@@ -147,3 +147,140 @@ export function hqFixture(): { name: string; busy: boolean; messages: Msg[] }[] 
   snap("resolved", false);
   return out;
 }
+
+// ---------------------------------------------------------------- the night shift: two cases from the queue
+
+const GHOST_HYPS = [
+  { key: "still_there", claim: "Still there: the suite is being marketed ahead of the lease ending", prior: 0.3 },
+  { key: "gone_dark", claim: "Gone: the tenant has left and CoStar's occupancy record is out of date", prior: 0.25 },
+  { key: "subleasing", claim: "Subleasing: the tenant is offering its own space", prior: 0.1 },
+  { key: "moved_within", claim: "Moved within the building to another suite", prior: 0.1 },
+  { key: "listing_stale", claim: "The listing is stale: the suite was leased and the listing never came down", prior: 0.25 },
+];
+const GHOST = {
+  case: "ghost_tenant",
+  question: "CoStar records a tenant in this suite, and the suite is listed for lease right now. Is the tenant still there?",
+  hypotheses: GHOST_HYPS,
+  checks: ["listing_timeline", "lease_terms", "tenancy_trail", "lot_activity", "suite_tour"].map((check) => ({ check, looks_at: check })),
+};
+const GHOST_PID = "syn-k";
+const SUITE = "1100";
+// A planted company name: the panel must never show it (it says "a tenant").
+const TENANT = "Synthetic Widgets LLC";
+
+export function nightFixture(): { name: string; busy: boolean; messages: Msg[] }[] {
+  n = 0;
+  const out: { name: string; busy: boolean; messages: Msg[] }[] = [];
+  const ms: Msg[] = [];
+  const snap = (name: string, busy: boolean) => out.push({ name, busy, messages: [...ms] });
+  const PLAN = (s: ("pending" | "in_progress" | "completed")[]) => ({
+    todos: [
+      { content: "Case #6: settle what Building A's walls are made of", status: s[0] },
+      { content: "Case #7: is the office in suite 1100 still there?", status: s[1] },
+      { content: "Log the field reports and re-weigh", status: s[2] },
+    ],
+  });
+  const walls = (check: string, finding: string, effects: { hypothesis: string; delta: number }[]) =>
+    ({ property_id: PID, case: "material_conflict", check, looks_at: check, finding, effects, why: "synthetic" });
+  const office = (check: string, finding: string, effects: { hypothesis: string; delta: number }[]) =>
+    ({ property_id: GHOST_PID, suite: SUITE, case: "ghost_tenant", check, looks_at: check, finding, effects, why: "synthetic" });
+
+  snap("standby", false);
+  ms.push(human("Brief the night shift"));
+  ms.push(ai("", [{ id: "n-q", name: "night_cases", args: {} }]));
+  snap("reading the queue", true);
+  ms.push(tool("night_cases", "n-q", {
+    total: 328,
+    cases: [
+      { n: 6, case: "material_conflict", property_id: PID, suite: null, label: "Building A",
+        question: "The city lists this building as concrete; the listing records another material. Which is current?", stakes: "12 stories, built 1926" },
+      { n: 7, case: "ghost_tenant", property_id: GHOST_PID, suite: SUITE, label: "Building K",
+        question: "A tenant is on record in this suite, and the suite is listed for lease. Is the tenant still there?", stakes: "a 3-person office on record" },
+    ],
+  }));
+  ms.push(ai("Two cases tonight. Starting with the walls at Building A.", [
+    { id: "n-t1", name: "write_todos", args: PLAN(["in_progress", "pending", "pending"]) },
+    { id: "n-o1", name: "open_case", args: { property_id: PID } },
+  ]));
+  ms.push(tool("write_todos", "n-t1", "Updated todo list"));
+  ms.push(tool("open_case", "n-o1", { property_id: PID, cases: [CASE], note: "Pick the checks most likely to separate the hypotheses." }));
+  ms.push(ai("", [
+    { id: "n-c1", name: "check_evidence", args: { property_id: PID, case: "material_conflict", check: "compliance_filings" } },
+    { id: "n-c2", name: "check_evidence", args: { property_id: PID, case: "material_conflict", check: "look_from_above" } },
+  ]));
+  ms.push(tool("check_evidence", "n-c1", walls("compliance_filings", "filed: screening checklist (2019-06-12); structural plans not yet filed",
+    [{ hypothesis: "city_list_current", delta: 0.12 }, { hypothesis: "costar_current", delta: -0.05 }])));
+  snap("checking the walls", true);
+  ms.push(tool("check_evidence", "n-c2", walls("look_from_above", "concrete frame: regular column grid and cast spandrels; a second pass agreed",
+    [{ hypothesis: "city_list_current", delta: 0.08 }])));
+  ms.push(ai("", [{ id: "n-w1", name: "weigh_case", args: { property_id: PID, case: "material_conflict", checks: ["compliance_filings", "look_from_above"] } }]));
+  ms.push(tool("weigh_case", "n-w1", {
+    property_id: PID, case: "material_conflict", checks_used: ["compliance_filings", "look_from_above"], trail: [],
+    posterior: { city_list_current: 0.57, costar_current: 0.26, different_structure: 0.17 },
+    verdict: { hypothesis: "city_list_current", claim: HYPS[0].claim, confidence: 0.57, label: "leaning",
+      text: "Leaning: the building may be concrete, as the city lists it; CoStar's material is worth a look (57%)" },
+    next_check: "permit_text", correction_draft: null,
+  }));
+  ms.push(ai("Case #6 is leaning concrete, 57%. Go look at the walls."));
+  snap("walls weighed", false);
+
+  ms.push(human("Tip: I'm inside the building. The walls and columns look like concrete."));
+  ms.push(ai("", [{ id: "n-n1", name: "record_note", args: { property_id: PID, note: "Walls and columns look like concrete.", source: "the player", supports: "city_list_current" } }]));
+  ms.push(tool("record_note", "n-n1", "Saved as a team note; later investigations will show it as a claim to verify."));
+  ms.push(ai("", [{ id: "n-w2", name: "weigh_case", args: { property_id: PID, case: "material_conflict", checks: ["compliance_filings", "look_from_above", "human_report"] } }]));
+  ms.push(tool("weigh_case", "n-w2", {
+    property_id: PID, case: "material_conflict", checks_used: ["compliance_filings", "look_from_above", "human_report"],
+    trail: [{ check: "human_report", finding: "the player reported: walls and columns look like concrete", effects: [{ hypothesis: "city_list_current", delta: 0.25 }] }],
+    posterior: { city_list_current: 0.64, costar_current: 0.21, different_structure: 0.14 },
+    verdict: { hypothesis: "city_list_current", claim: HYPS[0].claim, confidence: 0.64, label: "likely" },
+    next_check: null, correction_draft: "DRAFT ...",
+  }));
+  ms.push(ai("Your report moved Case #6 to likely concrete, 64%. On to Case #7."));
+  snap("walls after your report", false);
+
+  ms.push(ai("", [
+    { id: "n-t2", name: "write_todos", args: PLAN(["completed", "in_progress", "pending"]) },
+    { id: "n-o2", name: "open_case", args: { property_id: GHOST_PID, suite: SUITE } },
+  ]));
+  ms.push(tool("write_todos", "n-t2", "Updated todo list"));
+  ms.push(tool("open_case", "n-o2", { property_id: GHOST_PID, suite: SUITE, tenant: TENANT, cases: [GHOST], tour: { available: true } }));
+  ms.push(ai("", [
+    { id: "n-c3", name: "check_evidence", args: { property_id: GHOST_PID, suite: SUITE, case: "ghost_tenant", check: "listing_timeline" } },
+    { id: "n-c4", name: "check_evidence", args: { property_id: GHOST_PID, suite: SUITE, case: "ghost_tenant", check: "lease_terms" } },
+    { id: "n-c5", name: "check_evidence", args: { property_id: GHOST_PID, suite: SUITE, case: "ghost_tenant", check: "suite_tour" } },
+  ]));
+  ms.push(tool("check_evidence", "n-c3", office("listing_timeline",
+    `listed since 2025-03-01 (20 months, direct listing); CoStar records ${TENANT} here since 2015-04-01`,
+    [{ hypothesis: "gone_dark", delta: 0.1 }, { hypothesis: "still_there", delta: 0.05 }])));
+  ms.push(tool("check_evidence", "n-c4", office("lease_terms", "lease expired 2025-06-30, tenancy still marked current",
+    [{ hypothesis: "gone_dark", delta: 0.15 }, { hypothesis: "still_there", delta: -0.1 }])));
+  snap("checking the office", true);
+  ms.push(tool("check_evidence", "n-c5", office("suite_tour", "empty: bare floor, no desks or screens in the leasing tour (2025-09); a second pass agreed",
+    [{ hypothesis: "gone_dark", delta: 0.15 }, { hypothesis: "listing_stale", delta: 0.05 }])));
+  ms.push(ai("", [{ id: "n-w3", name: "weigh_case", args: { property_id: GHOST_PID, suite: SUITE, case: "ghost_tenant", checks: ["listing_timeline", "lease_terms", "suite_tour"] } }]));
+  ms.push(tool("weigh_case", "n-w3", {
+    property_id: GHOST_PID, suite: SUITE, case: "ghost_tenant", checks_used: ["listing_timeline", "lease_terms", "suite_tour"], trail: [],
+    posterior: { still_there: 0.18, gone_dark: 0.46, subleasing: 0.07, moved_within: 0.07, listing_stale: 0.21 },
+    verdict: { hypothesis: "gone_dark", claim: GHOST_HYPS[1].claim, confidence: 0.46, label: "leaning",
+      text: "Leaning: the tenant may have left; CoStar's occupancy record is worth a look (46%)" },
+    next_check: "tenancy_trail", correction_draft: null,
+  }));
+  ms.push(ai("Case #7 is leaning gone, 46%. Check suite 1100 on your way."));
+  snap("office weighed", false);
+
+  ms.push(human("Tip: I'm inside suite 1100. It's empty: no desks, no people, the phones are unplugged."));
+  ms.push(ai("", [{ id: "n-n2", name: "record_note", args: { property_id: GHOST_PID, suite: SUITE, note: "Suite is empty.", source: "the player", supports: "gone_dark" } }]));
+  snap("logging the suite report", true);
+  ms.push(tool("record_note", "n-n2", "Saved as a team note; later investigations will show it as a claim to verify."));
+  ms.push(ai("", [{ id: "n-w4", name: "weigh_case", args: { property_id: GHOST_PID, suite: SUITE, case: "ghost_tenant", checks: ["listing_timeline", "lease_terms", "suite_tour", "human_report"] } }]));
+  ms.push(tool("weigh_case", "n-w4", {
+    property_id: GHOST_PID, suite: SUITE, case: "ghost_tenant", checks_used: ["listing_timeline", "lease_terms", "suite_tour", "human_report"],
+    trail: [{ check: "human_report", finding: "the player reported: suite is empty", effects: [{ hypothesis: "gone_dark", delta: 0.25 }] }],
+    posterior: { still_there: 0.15, gone_dark: 0.55, subleasing: 0.06, moved_within: 0.06, listing_stale: 0.18 },
+    verdict: { hypothesis: "gone_dark", claim: GHOST_HYPS[1].claim, confidence: 0.55, label: "likely" },
+    next_check: null, correction_draft: "DRAFT ...",
+  }));
+  ms.push(ai("Your report moved Case #7 to likely gone, 55%. A person's report is strong but capped, never final."));
+  snap("office after your report", false);
+  return out;
+}
