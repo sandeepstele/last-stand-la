@@ -324,7 +324,7 @@ export function FootGame({ game, replay, agentOff = false }: { game: Game; repla
     ctx.bus.emit("world:beacon", { pid: toPid });
     if (to) ctx.bus.emit("horde:target", { x: to[0], z: to[1] });
     setStep("escape");
-    setBanner(breach ? { title: "They're through!", sub: to ? `Run to ${labelOf(toPid)}.` : "Get clear and survive.", tone: "bad" } : { title: `Run to ${labelOf(toPid)}`, sub: "Shift to sprint. Space to shove.", tone: "warn" });
+    setBanner(breach ? { title: "They're through!", sub: to ? `Run to ${labelOf(toPid)}.` : "Get clear and survive.", tone: "bad" } : { title: `Run to ${labelOf(toPid)}`, sub: "Adrenaline: hold Shift and sprint the whole way. Space to shove.", tone: "warn" });
   };
 
   const startDefend = (ctx: FootCtx, door: Pt) => {
@@ -499,6 +499,8 @@ export function FootGame({ game, replay, agentOff = false }: { game: Game; repla
       if (s === "escape") {
         const to = routeTo.current;
         if (to) ctx.bus.emit("world:route", { pts: [here, to] });
+        // Adrenaline: the real route goes around a city block (about 356 m on the demo night), so sprint never runs dry.
+        p.stamina = Math.max(p.stamina, 0.6);
         if (since > 8) fireDebris();
         if ((to && dist(here, to) < DOOR_R + 1) || (!to && since > 25)) {
           if (to) ctx.bus.emit("mission:shelter", { pid: fallbackPid ?? "", x: to[0], z: to[1] });
