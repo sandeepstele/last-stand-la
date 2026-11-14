@@ -311,10 +311,8 @@ export function createAudio(ctx: FootCtx): System {
     return !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable);
   };
   const onKey = (e: KeyboardEvent) => {
-    const first = !A;
     unlock();
     if (e.code === "KeyV" && !e.repeat && !typing(e.target)) setMuted(!muted);
-    else if (first && muted) showToast("MUTED (V)");
   };
   const onPointer = () => unlock();
   window.addEventListener("keydown", onKey, true);
@@ -477,8 +475,8 @@ export function createAudio(ctx: FootCtx): System {
         }
       } else stepT = 0.4;
 
-      // Heartbeat under 40% health, faster under 20%.
-      if (p.health > 0 && p.health < 40) {
+      // Heartbeat under 40% health, faster under 20% (not once dawn is up).
+      if (p.health > 0 && p.health < 40 && ctx.dawn < 0.5) {
         heartT -= dt;
         if (heartT <= 0) {
           const low = p.health < 20;

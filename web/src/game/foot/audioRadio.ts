@@ -171,7 +171,11 @@ export function createRadio(hooks: RadioHooks) {
       if (!text) return;
       const who = String(l.who ?? "");
       q.push({ who, text, tone: l.tone, speak: !/^you$/i.test(who) });
-      while (q.length > MAX_QUEUE) q.shift();
+      // Too many waiting: drop the oldest, but keep warnings ("records disagree", "proposing HOLD. Your call.").
+      while (q.length > MAX_QUEUE) {
+        const i = q.findIndex((x) => x.tone !== "warn");
+        q.splice(i >= 0 ? i : 0, 1);
+      }
       if (!busy) next();
     },
     /** Mute / reset: drop the queue and stop speaking now. */
