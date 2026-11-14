@@ -152,14 +152,19 @@ def ask(pid: str, key: str, images: list[Path], question: str, choices: list[str
     second: dict[str, Any] = {"confirmed": False, "reason": "no claim to check"}
     if answer != "cant_tell":
         second = _invoke(images, (
-            "You are a skeptical reviewer. Another analyst looked at these aerial images and claimed: "
-            f'"{answer}" because "{first.get("observed", "")}". The question was: {question}\n'
-            "Confirm only if the images clearly show it; low resolution, shadows, roofs-only views or ambiguity mean no. "
-            'Reply with JSON: {"confirmed": true or false, "reason": "one sentence"}.'))
-        if not isinstance(second.get("confirmed"), bool):
+            "You are a skeptical reviewer checking another analyst's read of these aerial images. The question was: "
+            f"{question}\nThe analyst answered \"{answer}\" because \"{first.get('observed', '')}\".\n"
+            "Look for yourself and give YOUR OWN answer from the same choices; low resolution, shadows, roofs-only views or "
+            f"ambiguity mean cant_tell. Reply with JSON: {{\"answer\": one of [{labels}], \"reason\": \"one sentence\"}}."))
+        if "answer" not in second:
             raise VisionUnavailable("the second look returned no usable answer (not cached)")
+        # Confirmed only when the reviewer independently lands on the same answer. (A bare "confirmed" flag let a
+        # reviewer write "the analyst is incorrect" and still return true.)
+        second["confirmed"] = second.get("answer") == answer
+        second["reason"] = second.get("reason", "")
     result = {
         "answer": answer if second.get("confirmed") is True else "cant_tell",
+        "second_answer": second.get("answer"),
         "first_answer": answer,
         "observed": first.get("observed", ""),
         "confirmed": second.get("confirmed") is True,
