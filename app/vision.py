@@ -108,7 +108,26 @@ def _json(text: str) -> dict[str, Any]:
     return json.loads(t)
 
 
+def _invoke_claude(images: list[Path], prompt: str) -> dict[str, Any]:
+    """Claude on Vertex AI (ADC auth, same GCP project). Thinking is always on for Opus 5.5; effort keeps it quick."""
+    import anthropic
+
+    client = anthropic.AnthropicVertex(project_id=os.environ["GOOGLE_CLOUD_PROJECT"],
+                                       region=os.environ.get("RADAR_CLAUDE_REGION", "global"), timeout=90.0, max_retries=1)
+    content: list[dict[str, Any]] = [
+        {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg",
+                                     "data": base64.standard_b64encode(p.read_bytes()).decode()}} for p in images]
+    content.append({"type": "text", "text": prompt})
+    r = client.messages.create(model=VISION_MODEL, max_tokens=4000, output_config={"effort": os.environ.get("RADAR_VISION_EFFORT", "low")},
+                               messages=[{"role": "user", "content": content}])
+    if r.stop_reason == "refusal":
+        return {"answer": "cant_tell", "observed": "the model declined", "confirmed": False, "reason": "refusal"}
+    return _json("".join(b.text for b in r.content if b.type == "text"))
+
+
 def _invoke(images: list[Path], prompt: str) -> dict[str, Any]:
+    if VISION_MODEL.startswith("claude"):
+        return _invoke_claude(images, prompt)
     from langchain_core.messages import HumanMessage
 
     msg = HumanMessage(content=[{"type": "text", "text": prompt}, *[_image_part(p) for p in images]])
@@ -119,7 +138,7 @@ def _invoke(images: list[Path], prompt: str) -> dict[str, Any]:
 
 def ask(pid: str, key: str, images: list[Path], question: str, choices: list[str]) -> dict[str, Any]:
     """Two-pass read. Returns {answer, observed, confirmed, second_look, images}; answer is 'cant_tell' unless confirmed."""
-    h = hashlib.sha256((question + "|".join(p.name for p in images)).encode()).hexdigest()[:12]
+    h = hashlib.sha256((VISION_MODEL + "|" + question + "|".join(p.name for p in images)).encode()).hexdigest()[:12]
     cached = CACHE / f"{pid}_{key}_{h}.json"
     if cached.exists():
         return json.loads(cached.read_text())
