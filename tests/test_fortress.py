@@ -252,3 +252,8 @@ def test_mesh_route_serves_only_a_cached_mesh(monkeypatch, tmp_path):
     r = c.get("/game/mesh/1")
     assert r.status_code == 200 and r.text.startswith("v ")
     assert c.get("/game/mesh/2").status_code == 404 and c.get("/game/mesh/..%2Fx").status_code == 404
+
+
+def test_solar_stamps_come_from_the_screen_readiness():
+    assert fortress._SOLAR_STAMP["ready"] == "go_solar" and fortress._SOLAR_STAMP["reroof_first"] == "reroof_first"
+    assert fortress._SOLAR_STAMP["inspect"] == fortress._SOLAR_STAMP["unknown"] == "inspect_first"

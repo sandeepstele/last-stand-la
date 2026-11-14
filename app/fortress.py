@@ -678,3 +678,39 @@ def roof(pid: str) -> dict[str, Any] | None:
     return {"shape": aer.get("roof_shape"), "material": aer.get("roof_material"), "objects": aer.get("roof_objects") or {},
             "capture": (aer.get("capture_date") or "")[:7], "note": "counts from Vexcel; positions on screen are illustrative"}
 
+
+_SOLAR_STAMP = {"ready": "go_solar", "inspect": "inspect_first", "unknown": "inspect_first", "reroof_first": "reroof_first"}
+
+
+@lru_cache(maxsize=1)
+def _solar() -> str:
+    from app import layers
+
+    g, out = GROUND, []
+    with layers.cached_only():  # cached data only: the game never fetches while someone plays
+        for b in district()["buildings"]:
+            if not (g["x0"] - PLAY_PAD_M <= b["x"] <= g["x1"] + PLAY_PAD_M and g["z0"] - PLAY_PAD_M <= b["z"] <= g["z1"] + PLAY_PAD_M):
+                continue
+            if not (FIXTURES / "vexcel" / f"{b['pid']}.json").exists():
+                continue
+            try:
+                sc = layers.screen_solar(layers.load_building(b["pid"]))
+            except Exception:
+                continue
+            if sc.status != "screened":
+                continue
+            out.append({"pid": b["pid"], "label": b["label"], "x": b["x"], "z": b["z"], "kw": round(sc.system_kw),
+                        "panels": sc.panels, "mwh_per_year": round(sc.annual_kwh / 1000), "usable_roof_sqft": round(sc.usable_roof_sqft),
+                        "load_offset_pct": sc.load_offset_pct, "co2_t_per_year": round(sc.co2_t_per_year),
+                        "readiness": sc.readiness, "readiness_reasons": sc.readiness_reasons, "deal_fit": sc.deal_fit,
+                        "headline": sc.headline, "answer": _SOLAR_STAMP.get(sc.readiness, "inspect_first")})
+    out.sort(key=lambda r: -r["kw"])
+    return json.dumps({"roofs": out, "stamps": ["go_solar", "inspect_first", "reroof_first"],
+                       "source": "Vexcel roof + CoStar record + PVWatts yield, computed in code (app/solar.py); a screen, "
+                                 "not an engineering design"})
+
+
+def solar() -> dict[str, Any]:
+    """Solar-roof side mission: the play area's screened roofs, biggest first, each with a code answer stamp."""
+    return json.loads(_solar())
+
