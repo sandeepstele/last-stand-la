@@ -1,9 +1,10 @@
 "use client";
 
 import { useStream } from "@langchain/react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ApprovalBar, PlanPanel, QuakeBanner, SeismicCard, VerifierCard, finalAnswer, latestTool, latestVerify } from "@/components/Panels";
 import type { QuakeReplay, SeismicStatus } from "@/lib/contracts";
+import { CaseFile, CaseQueue } from "@/components/Cases";
 import { WorldPane, type WorldHandle } from "@/components/WorldPane";
 import { useSceneActions } from "@/lib/useSceneActions";
 import styles from "./page.module.css";
@@ -23,8 +24,27 @@ export default function LiveRun() {
   );
 
   const answer = finalAnswer(stream.messages);
+  const t0 = useRef<number | null>(null);
+  const [elapsed, setElapsed] = useState<number | null>(null);
+  useEffect(() => {
+    if (!stream.isLoading) {
+      if (t0.current !== null) setElapsed((Date.now() - t0.current) / 1000);
+      t0.current = null;
+      return;
+    }
+    t0.current = t0.current ?? Date.now();
+    const id = setInterval(() => t0.current !== null && setElapsed((Date.now() - t0.current) / 1000), 250);
+    return () => clearInterval(id);
+  }, [stream.isLoading]);
+  const open = (pid: string) => {
+    setQuestion(`Check building ${pid}.`);
+    ask(`Check building ${pid}.`);
+  };
   return (
     <main className={styles.main}>
+      <aside className={styles.queuePane}>
+        <CaseQueue onOpen={open} busy={stream.isLoading} />
+      </aside>
       <div className={styles.worldPane}>
         <WorldPane ref={world} />
       </div>
@@ -43,6 +63,10 @@ export default function LiveRun() {
             Replay Northridge 1994
           </button>
         </form>
+        {elapsed !== null && (
+          <p className={styles.muted}>{stream.isLoading ? `Investigating… ${elapsed.toFixed(0)} s` : `Answered in ${elapsed.toFixed(0)} s`}</p>
+        )}
+        <CaseFile messages={stream.messages} loading={stream.isLoading} />
         <QuakeBanner result={latestTool<QuakeReplay>(stream.messages, "quake_replay")} />
         <PlanPanel stream={stream} />
         <SeismicCard result={latestTool<SeismicStatus>(stream.messages, "seismic_status")} />
@@ -55,7 +79,7 @@ export default function LiveRun() {
         )}
       </aside>
       <footer className={styles.strip}>
-        <span>Retrofit Radar · city retrofit orders vs CoStar records vs measured buildings</span>
+        <span>Retrofit Radar · the AI auditor for CoStar&apos;s records: city records, aerial imagery and the inside of the building</span>
         <ApprovalBar stream={stream} />
       </footer>
     </main>

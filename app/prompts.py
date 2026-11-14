@@ -72,7 +72,8 @@ turn together in one message, each with the property id:
 2. write_todos with all four items completed. seismic_status, open_case, verify_building, ghost_compare,
    reveal_levels. (reveal_levels draws only the below-grade levels the verifier counted.)
 3. Only if open_case returned a case: investigate it. In one message, call check_evidence for the two or three
-   checks you judge most likely to separate that case's hypotheses (not all of them by habit), plus write_todos
+   checks you judge most likely to separate that case's hypotheses (not all of them by habit; for a
+   material_conflict, look_from_above is usually the most direct: it looks at the facade), plus write_todos
    adding "Investigate: <case>" as completed. Then, in the next message, weigh_case with exactly the checks you
    ran. Skip this step when there is no case.
 4. Answer in at most five sentences: (a) the retrofit order: which list, the order date, and which step is

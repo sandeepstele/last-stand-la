@@ -4,6 +4,9 @@ under `langgraph dev --host 0.0.0.0`, port 2024).
 POST /field/scan              Radar Field iOS upload; header X-Radar-Token must match RADAR_FIELD_TOKEN
 GET  /field/scans/{property}  stored scans for a property (same token)
 GET  /healthz                 configuration check (no secrets)
+GET  /cases/queue             the overnight case queue: counts by case type and the top cases by stakes
+POST /cases/decision          a person approves or rejects a DRAFT correction {property_id, case, decision, draft}
+GET  /evidence/image/{name}   a cached evidence image from fixtures/vision (file name only)
 
 Uploads are refused when RADAR_FIELD_TOKEN is unset. Custom routes skip the server's own auth,
 so the token is the only gate. Handlers do no blocking I/O on the event loop (langgraph dev's
@@ -16,10 +19,14 @@ import asyncio
 import hmac
 import json
 import os
+import re
+import uuid
+from datetime import UTC, datetime
+from functools import lru_cache
 
 from starlette.applications import Starlette
 from starlette.requests import Request
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
 
 from app import field, layers
@@ -89,8 +96,81 @@ async def healthz(request: Request) -> JSONResponse:
     })
 
 
+# ------------------------------------------------------------------ case queue and evidence
+
+
+@lru_cache(maxsize=1)
+def _queue() -> dict:
+    from app import retrofit_lists
+
+    rows = retrofit_lists.portfolio()
+    cases: list[dict] = []
+    for a in rows:
+        keys = {h["key"] for h in a["hypotheses"]}
+        past_due = any(h.get("past_due") for h in a["hypotheses"])
+        for case in ("material_conflict", "stale_entry"):
+            if case in keys:
+                cases.append({"case": case, "property_id": a["property_id"], "address": a["address"],
+                              "year_built": a["year_built"], "units": a["units"], "material": a["costar_material"],
+                              "past_due": past_due, "stakes": (2 if past_due else 0) + (a["stories"] or 0) / 10 + (a["units"] or 0) / 100})
+    try:
+        from app import tenants
+
+        cases += tenants.queue_rows()
+    except Exception:  # ghost tenants not built or kit missing: the other cases still show
+        pass
+    from app import vision
+
+    for c in cases:  # cases the overnight sweep already gathered imagery for come first
+        c["imagery"] = any(vision.CACHE.glob(f"{c['property_id']}_*.jpg"))
+        c["stakes"] += 5 if c["imagery"] else 0
+    cases.sort(key=lambda c: -c["stakes"])
+    counts: dict[str, int] = {}
+    for c in cases:
+        counts[c["case"]] = counts.get(c["case"], 0) + 1
+    return {"counts": counts, "total": len(cases), "top": cases[:25],
+            "source": "LA retrofit lists + CoStar kit, matched locally (fixtures/public)"}
+
+
+async def cases_queue(request: Request) -> JSONResponse:
+    return JSONResponse(await asyncio.to_thread(_queue))
+
+
+async def cases_decision(request: Request) -> JSONResponse:
+    try:
+        body = await request.json()
+    except json.JSONDecodeError:
+        return JSONResponse({"error": "bad json"}, status_code=400)
+    decision = body.get("decision")
+    pid = str(body.get("property_id") or "")
+    if decision not in ("approve", "reject") or not layers.PROPERTY_ID.match(pid):
+        return JSONResponse({"error": "decision must be approve or reject, with a valid property_id"}, status_code=400)
+    record = {"property_id": pid, "case": str(body.get("case") or "")[:40], "decision": decision,
+              "draft": str(body.get("draft") or "")[:2000], "at": datetime.now(UTC).isoformat(),
+              "note": "recorded only: nothing is sent to CoStar or the city"}
+    await _store(request).aput(("corrections",), uuid.uuid4().hex, record)
+    return JSONResponse({"status": "recorded", **record})
+
+
+IMAGE_NAME = re.compile(r"^[A-Za-z0-9_.-]{1,120}\.jpg$")
+
+
+async def evidence_image(request: Request) -> Response:
+    from app import vision
+
+    name = request.path_params["name"]
+    path = vision.CACHE / name
+    if not IMAGE_NAME.match(name) or ".." in name or not await asyncio.to_thread(path.is_file):
+        return JSONResponse({"error": "not found"}, status_code=404)
+    data = await asyncio.to_thread(path.read_bytes)
+    return Response(data, media_type="image/jpeg", headers={"cache-control": "private, max-age=3600"})
+
+
 app = Starlette(
     routes=[
+        Route("/cases/queue", cases_queue, methods=["GET"]),
+        Route("/cases/decision", cases_decision, methods=["POST"]),
+        Route("/evidence/image/{name}", evidence_image, methods=["GET"]),
         Route("/field/scan", post_scan, methods=["POST"]),
         Route("/field/scans/{property_id}", get_scans, methods=["GET"]),
         Route("/healthz", healthz, methods=["GET"]),
