@@ -20,7 +20,7 @@ const WAVE_CAP = 220;
 // states
 const FREE = 0, PENDING = 1, WANDER = 2, MARCH = 3, CHASE = 4, ATTACK = 5, STAGGER = 6, LEAVING = 7;
 // kinds
-const AMBIENT = 0, WAVE = 1;
+const AMBIENT = 0, WAVE = 1, PACK = 2;
 
 const HIT_R = 1.1, HIT_DAMAGE = 7, HIT_CD = 1;
 const SHOVE_R = 2.8, SHOVE_COS = Math.cos((70 * Math.PI) / 180), SHOVE_DIST = 3, KB_TAU = 0.25, STAGGER_S = 1.2;
@@ -33,6 +33,11 @@ const MARCH_SPEED = ZOMBIE_WALK * 1.45;
 const MOB_R = 7; // marchers this close to the target crowd and pound on it
 const AMBIENT_MIN = 45, AMBIENT_MAX = 100, AMBIENT_RECYCLE = 170;
 const TRICKLE_S = 8;
+const BREACH_RESERVE = 30; // slots a wave leaves free so a breach always has bodies
+const AMBIENT_PER_TICK = 3; // ramping up (14 -> 40 at nightfall) spawns a few at a time, out of sight
+const PACK_R = 6;
+const PRESS_R = 2.5; // ctx.horde.pressing counts zombies this close to the horde target
+const QMAX = 17; // the player + up to 16 npcs
 
 // body proportions (metres, before the per-zombie scale)
 const HIP_Y = 0.86, HIP_X = 0.12, TORSO_H = 0.62, SHOULDER_X = 0.31;
@@ -112,7 +117,8 @@ export function createHorde(ctx: FootCtx): System {
   const slideT = new Float32Array(MAX), slideSign = new Int8Array(MAX);
   const wx = new Float32Array(MAX), wz = new Float32Array(MAX);
   const mob = new Uint8Array(MAX);
-  const los = new Uint8Array(MAX); // chasers: can they see the player (refreshed a few times a second)
+  const los = new Uint8Array(MAX);
+  const hx = new Float32Array(MAX), hz = new Float32Array(MAX); // a pack's home (the survivor it guards) // chasers: can they see the player (refreshed a few times a second)
   // looks (fixed per zombie)
   const scale = new Float32Array(MAX), seed = new Float32Array(MAX), hunch = new Float32Array(MAX);
   const armL0 = new Float32Array(MAX), armR0 = new Float32Array(MAX), headRoll = new Float32Array(MAX), speedMul = new Float32Array(MAX);
@@ -133,6 +139,8 @@ export function createHorde(ctx: FootCtx): System {
   let playerFieldT = 0, needPlayerField = false;
   const cbuf = new Float64Array(2), fbuf = new Float64Array(2);
   let hasTarget = false, tx = 0, tz = 0;
+  // who the horde can go after this frame: the player (when not hidden) + live, visible npcs
+  const qX = new Float64Array(QMAX), qZ = new Float64Array(QMAX), qNpc = new Int16Array(QMAX);
 
   const col = new THREE.Color();
   const markColor = { calm: new THREE.Color(0xc21d1d), hot: new THREE.Color(0xff3b30) };
@@ -206,18 +214,53 @@ export function createHorde(ctx: FootCtx): System {
     freeStack[freeTop++] = i;
   }
 
-  /** Where a zombie goes when it loses the player: wave zombies (and everyone while the player hides) head for the target. */
-  const fallbackState = (i: number) => (hasTarget && (kind[i] === WAVE || P.hidden) ? MARCH : WANDER);
+  /** Where a zombie goes when it loses its quarry: packs go home, wave zombies (and everyone while the player hides) to the target. */
+  const fallbackState = (i: number) => (kind[i] === PACK ? WANDER : hasTarget && (kind[i] === WAVE || P.hidden) ? MARCH : WANDER);
+
+  /** Free k slots by dropping the zombies farthest from the player that aren't after anyone (ambient first). */
+  function reclaim(k: number) {
+    for (; k > 0; k--) {
+      let best = -1, bd = 30, bAmb = false;
+      for (let i = 0; i < MAX; i++) {
+        const s = st[i];
+        if ((s !== WANDER && s !== MARCH && s !== PENDING) || kind[i] === PACK) continue;
+        const d = Math.hypot(x[i] - P.x, z[i] - P.z);
+        const amb = kind[i] === AMBIENT;
+        if ((amb && !bAmb) || (amb === bAmb && d > bd)) {
+          best = i;
+          bd = d;
+          bAmb = amb;
+        }
+      }
+      if (best < 0) return;
+      free(best);
+    }
+  }
 
   /** A street point AMBIENT_MIN..AMBIENT_MAX m from the player, pushed out of buildings (null when none found). */
   function ambientPoint(): [number, number] | null {
-    for (let t = 0; t < 10; t++) {
+    const fx = Math.sin(P.yaw), fz = -Math.cos(P.yaw);
+    let fallback: [number, number] | null = null;
+    for (let t = 0; t < 12; t++) {
       const a = Math.random() * Math.PI * 2;
       const r = AMBIENT_MIN + Math.random() * (AMBIENT_MAX - AMBIENT_MIN);
       const [px, pz] = ctx.collide(P.x + Math.sin(a) * r, P.z - Math.cos(a) * r, ZOMBIE_R);
-      if (Math.hypot(px - P.x, pz - P.z) >= AMBIENT_MIN) return [px, pz];
+      if (Math.hypot(px - P.x, pz - P.z) < AMBIENT_MIN || !grid.walkable(px, pz)) continue;
+      // prefer a spot the player can't see: behind them, or around a corner
+      if ((px - P.x) * fx + (pz - P.z) * fz < 0 || blocked(P.x, P.z, px, pz, ctx.colliders)) return [px, pz];
+      fallback ??= [px, pz];
     }
-    return null;
+    return fallback;
+  }
+
+  /** The horde target, nudged out of any wall it sits on (a door), so the crowd (and `pressing`) can reach it. */
+  function setTarget(x0: number, z0: number) {
+    const [x1, z1] = ctx.collide(x0, z0, ZOMBIE_R);
+    const moved = !hasTarget || Math.hypot(x1 - tx, z1 - tz) > 1;
+    tx = x1;
+    tz = z1;
+    hasTarget = true;
+    if (moved || !toTarget.ready) toTarget.build(tx, tz);
   }
 
   // ------------------------------------------------------------------ events
@@ -232,12 +275,9 @@ export function createHorde(ctx: FootCtx): System {
 
   offs.push(
     bus.on("wave:start", (e) => {
-      const n = Math.min(Math.round(e.size * 0.3), WAVE_CAP, freeTop);
+      const n = Math.min(Math.round(e.size * 0.3), WAVE_CAP, freeTop - BREACH_RESERVE);
       if (n <= 0) return;
-      tx = e.targetX;
-      tz = e.targetZ;
-      hasTarget = true;
-      toTarget.build(tx, tz);
+      setTarget(e.targetX, e.targetZ);
       const [fx, fz] = dirOf(SECTOR_DEG[e.sector] ?? 0);
       const lx = -fz, lz = fx;
       // Over-sample, then put the nearest (to the player) first, and of those the ones the player can see.
@@ -272,11 +312,7 @@ export function createHorde(ctx: FootCtx): System {
 
   offs.push(
     bus.on("horde:target", (e) => {
-      const moved = !hasTarget || Math.hypot(e.x - tx, e.z - tz) > 1;
-      tx = e.x;
-      tz = e.z;
-      hasTarget = true;
-      if (moved || !toTarget.ready) toTarget.build(tx, tz);
+      setTarget(e.x, e.z);
     }),
   );
 
@@ -292,9 +328,26 @@ export function createHorde(ctx: FootCtx): System {
         }
       }
       const n = Math.max(0, Math.min(e.count | 0, 80));
+      if (freeTop < n) reclaim(n - freeTop);
       for (let k = 0; k < n; k++) {
         const [px, pz] = ctx.collide(e.x + (Math.random() * 2 - 1) * 1.5, e.z + (Math.random() * 2 - 1) * 1.5, ZOMBIE_R);
         spawn(px, pz, WAVE, CHASE, now + 0.35 + k * 0.07, false);
+      }
+    }),
+  );
+
+  offs.push(
+    bus.on("horde:pack", (e) => {
+      const n = Math.max(0, Math.min(e.count | 0, 20));
+      if (freeTop < n) reclaim(n - freeTop);
+      for (let k = 0; k < n; k++) {
+        const a = Math.random() * Math.PI * 2, r = 1.5 + Math.random() * (PACK_R - 1.5);
+        const [px, pz] = ctx.collide(e.x + Math.sin(a) * r, e.z - Math.cos(a) * r, ZOMBIE_R);
+        const i = spawn(px, pz, PACK, WANDER, 0, false);
+        if (i < 0) break;
+        hx[i] = e.x;
+        hz[i] = e.z;
+        timer[i] = Math.random() * 2;
       }
     }),
   );
@@ -401,7 +454,7 @@ export function createHorde(ctx: FootCtx): System {
         }
         n++;
       }
-      for (; n < ambWant; n++) {
+      for (let made = 0; n < ambWant && made < AMBIENT_PER_TICK; n++, made++) {
         const q = ambientPoint();
         if (!q || spawn(q[0], q[1], AMBIENT, WANDER, 0, true) < 0) break;
       }
@@ -458,7 +511,23 @@ export function createHorde(ctx: FootCtx): System {
 
     const kbDecay = Math.exp(-dt / KB_TAU);
     const noticeR = NOTICE_R * (P.sprinting ? SPRINT_NOTICE : 1);
-    let alive = 0, chasing = 0, nearest = Infinity;
+    let alive = 0, chasing = 0, nearest = Infinity, pressing = 0;
+    let qn = 0;
+    if (seen) {
+      qX[0] = P.x;
+      qZ[0] = P.z;
+      qNpc[0] = -1;
+      qn = 1;
+    }
+    const npcs = ctx.npcs;
+    for (let k = 0; k < npcs.length && qn < QMAX; k++) {
+      const n = npcs[k];
+      if (!n.alive || n.hidden) continue;
+      qX[qn] = n.x;
+      qZ[qn] = n.z;
+      qNpc[qn] = k;
+      qn++;
+    }
 
     for (let i = 0; i < MAX; i++) {
       let s = st[i];
@@ -468,8 +537,8 @@ export function createHorde(ctx: FootCtx): System {
         s = st[i] = after[i];
       }
       const zx = x[i], zz = z[i];
-      const dx = P.x - zx, dz = P.z - zz;
-      const d = Math.hypot(dx, dz) || 1e-3;
+      const pdx = P.x - zx, pdz = P.z - zz;
+      const pd = Math.hypot(pdx, pdz) || 1e-3;
 
       if (rise[i] > 0) {
         // climbing out of the ground: no steering yet
@@ -477,10 +546,24 @@ export function createHorde(ctx: FootCtx): System {
         phase[i] += dt * 2;
         if (s !== LEAVING) {
           alive++;
-          if (d < nearest) nearest = d;
+          if (pd < nearest) nearest = pd;
         }
         continue;
       }
+
+      // the nearest quarry (the player or a survivor); d = Infinity when nobody is out
+      let qk = -1, d2 = Infinity;
+      for (let k = 0; k < qn; k++) {
+        const ex = qX[k] - zx, ez = qZ[k] - zz, e2 = ex * ex + ez * ez;
+        if (e2 < d2) {
+          d2 = e2;
+          qk = k;
+        }
+      }
+      const qxx = qk >= 0 ? qX[qk] : P.x, qzz = qk >= 0 ? qZ[qk] : P.z;
+      const dx = qxx - zx, dz = qzz - zz;
+      const d = qk >= 0 ? Math.sqrt(d2) || 1e-3 : Infinity;
+      const onPlayer = qk >= 0 && qNpc[qk] < 0;
 
       hitCd[i] -= dt;
       mob[i] = 0;
@@ -495,18 +578,18 @@ export function createHorde(ctx: FootCtx): System {
             const tdx = tx - zx, tdz = tz - zz, td = Math.hypot(tdx, tdz) || 1;
             los[i] = td < 35 && !blocked(zx, zz, tx - (tdx / td) * 1.2, tz - (tdz / td) * 1.2, cols) ? 1 : 0;
           }
-          if (seen && (d < CLOSE_NOTICE || (d < noticeR && !blocked(zx, zz, P.x, P.z, cols)))) {
+          if (qk >= 0 && (d < CLOSE_NOTICE || (d < (onPlayer ? noticeR : NOTICE_R) && !blocked(zx, zz, qxx, qzz, cols)))) {
             s = CHASE;
             los[i] = 1;
           }
         }
-      } else if ((s === CHASE || s === ATTACK) && (!seen || d > LOSE_R)) {
+      } else if ((s === CHASE || s === ATTACK) && d > LOSE_R) {
         s = fallbackState(i);
       } else if (s === CHASE) {
         noticeT[i] -= dt;
         if (noticeT[i] <= 0) {
           noticeT[i] = 0.25 + Math.random() * 0.15;
-          los[i] = d < 4 || !blocked(zx, zz, P.x, P.z, cols) ? 1 : 0;
+          los[i] = d < 4 || !blocked(zx, zz, qxx, qzz, cols) ? 1 : 0;
         }
       }
 
@@ -522,10 +605,11 @@ export function createHorde(ctx: FootCtx): System {
             wz[i] = zz;
             timer[i] = 1.5 + Math.random() * 2.5; // stand and sway
           } else {
+            const pack = kind[i] === PACK;
             for (let t = 0; t < 4; t++) {
-              const a = Math.random() * Math.PI * 2, r = 5 + Math.random() * 12;
-              wx[i] = zx + Math.sin(a) * r;
-              wz[i] = zz - Math.cos(a) * r;
+              const a = Math.random() * Math.PI * 2, r = pack ? 1.5 + Math.random() * (PACK_R - 1.5) : 5 + Math.random() * 12;
+              wx[i] = (pack ? hx[i] : zx) + Math.sin(a) * r;
+              wz[i] = (pack ? hz[i] : zz) - Math.cos(a) * r;
               if (grid.walkable(wx[i], wz[i])) break;
             }
             timer[i] = 6 + Math.random() * 6;
@@ -572,13 +656,14 @@ export function createHorde(ctx: FootCtx): System {
           }
         }
         sp = s === ATTACK ? (d > 0.95 ? 0.9 : 0) : ZOMBIE_CHASE * (0.9 + (speedMul[i] - 0.85) * 0.6);
-        if (seen && d < HIT_R && hitCd[i] <= 0) {
+        if (d < HIT_R && hitCd[i] <= 0) {
           hitCd[i] = HIT_CD;
-          bus.emit("player:hit", { damage: HIT_DAMAGE, fromX: zx, fromZ: zz });
+          if (onPlayer) bus.emit("player:hit", { damage: HIT_DAMAGE, fromX: zx, fromZ: zz });
+          else bus.emit("npc:hit", { id: npcs[qNpc[qk]].id, damage: HIT_DAMAGE, fromX: zx, fromZ: zz });
         }
       } else if (s === STAGGER) {
         timer[i] -= dt;
-        if (timer[i] <= 0) s = seen && d < NOTICE_R ? CHASE : fallbackState(i);
+        if (timer[i] <= 0) s = d < NOTICE_R ? CHASE : fallbackState(i);
       } else if (s === LEAVING) {
         timer[i] -= dt;
         if (timer[i] <= 0) {
@@ -587,8 +672,8 @@ export function createHorde(ctx: FootCtx): System {
             free(i);
             continue;
           }
-          gx = -dx / d;
-          gz = -dz / d;
+          gx = -pdx / pd;
+          gz = -pdz / pd;
           sp = ZOMBIE_WALK * 0.55;
         }
       }
@@ -628,14 +713,16 @@ export function createHorde(ctx: FootCtx): System {
       kvz[i] *= kbDecay;
       let nx = zx + (vx[i] + kvx[i]) * dt + cx[i];
       let nz = zz + (vz[i] + kvz[i]) * dt + cz[i];
-      if (seen && s !== LEAVING) {
-        // don't walk through the player
-        const pdx = nx - P.x, pdz = nz - P.z;
-        const pd = Math.hypot(pdx, pdz);
+      if (s !== LEAVING) {
+        // don't walk through the player or the survivors
         const minD = PLAYER_R + ZOMBIE_R;
-        if (pd < minD && pd > 1e-4) {
-          nx = P.x + (pdx / pd) * minD;
-          nz = P.z + (pdz / pd) * minD;
+        for (let k = 0; k < qn; k++) {
+          const ex = nx - qX[k], ez = nz - qZ[k];
+          const el = Math.hypot(ex, ez);
+          if (el < minD && el > 1e-4) {
+            nx = qX[k] + (ex / el) * minD;
+            nz = qZ[k] + (ez / el) * minD;
+          }
         }
       }
       if (s === LEAVING) {
@@ -650,7 +737,7 @@ export function createHorde(ctx: FootCtx): System {
 
       // facing
       let want = yaw[i];
-      if (s === CHASE || s === ATTACK || s === STAGGER) want = Math.atan2(dx, -dz);
+      if ((s === CHASE || s === ATTACK || s === STAGGER) && qk >= 0) want = Math.atan2(dx, -dz);
       else if (mob[i]) want = Math.atan2(tx - zx, -(tz - zz));
       else if (spd[i] > 0.15) want = Math.atan2(vx[i], -vz[i]);
       let dy = want - yaw[i];
@@ -662,12 +749,14 @@ export function createHorde(ctx: FootCtx): System {
       if (s !== LEAVING) {
         alive++;
         if (s === CHASE || s === ATTACK) chasing++;
-        if (d < nearest) nearest = d;
+        if (pd < nearest) nearest = pd;
+        if (hasTarget && Math.abs(x[i] - tx) < PRESS_R && Math.abs(z[i] - tz) < PRESS_R && Math.hypot(x[i] - tx, z[i] - tz) < PRESS_R) pressing++;
       }
     }
     ctx.horde.alive = alive;
     ctx.horde.chasing = chasing;
     ctx.horde.nearest = nearest;
+    ctx.horde.pressing = pressing;
 
     draw(now);
   }
@@ -764,6 +853,9 @@ export function createHorde(ctx: FootCtx): System {
   ctx.horde.alive = 0;
   ctx.horde.chasing = 0;
   ctx.horde.nearest = Infinity;
+  ctx.horde.pressing = 0;
+  // dev only: test scripts read the horde's state (window.__horde)
+  if (process.env.NODE_ENV !== "production") (window as unknown as { __horde?: unknown }).__horde = { st, kind, x, z, target: () => (hasTarget ? [tx, tz] : null) };
 
   return {
     update,
