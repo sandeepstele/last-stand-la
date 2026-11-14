@@ -453,7 +453,12 @@ function ThreatGlow({ dir }: { dir: number | null }) {
   const k = 1 / Math.max(Math.abs(dx), Math.abs(dy), 1e-6);
   const x = 50 + dx * k * 50;
   const y = 50 + dy * k * 50;
-  return <div className={styles.threatGlow} style={{ background: `radial-gradient(ellipse 34% 38% at ${x}% ${y}%, rgba(229, 72, 77, 0.55), rgba(229, 72, 77, 0) 70%)` }} />;
+  return (
+    <div
+      className={styles.threatGlow}
+      style={{ background: `radial-gradient(ellipse 30% 42% at ${x}% ${y}%, rgba(229, 72, 77, 0.8) 0%, rgba(229, 72, 77, 0.35) 40%, rgba(229, 72, 77, 0) 72%)` }}
+    />
+  );
 }
 
 /** Night, HOLD and escape: one objective line instead of the mission list and the fortress card. */

@@ -487,7 +487,7 @@
 .nowLine svg { flex: none; color: var(--amber); }
 .nowLine p { margin: 0; flex: 1; min-width: 0; font-size: 16px; line-height: 1.25; font-weight: 700; }
 .threatGlow { position: absolute; inset: 0; pointer-events: none; animation: glowPulse 0.9s ease-in-out infinite; }
-@keyframes glowPulse { 50% { opacity: 0.4; } }
+@keyframes glowPulse { 50% { opacity: 0.55; } }
 .compassBox { position: relative; width: 100%; }
 .hordeEdge { position: absolute; top: calc(100% + 3px); font: 700 11px/1 var(--mono); letter-spacing: 0.12em; color: var(--red); white-space: nowrap; animation: wavePulse 1.2s ease-in-out infinite; }
 @media (max-width: 1365px) {
