@@ -77,7 +77,16 @@ def _load(name: str) -> dict[str, Any]:
     return json.loads(p.read_text()) if p.exists() else {}
 
 
+def _blank(msg: AIMessage) -> bool:
+    c = msg.content
+    text = c if isinstance(c, str) else "".join(b.get("text", "") if isinstance(b, dict) else str(b) for b in c or [])
+    return not getattr(msg, "tool_calls", None) and not text.strip()
+
+
 def _save(name: str, k: str, msg: AIMessage) -> None:
+    if _blank(msg):  # a blank response (no text, no tool calls) is a model hiccup: never make it the recorded answer
+        log.warning("replay %s: not recording a blank response for %s", name, k)
+        return
     with _lock:
         DIR.mkdir(parents=True, exist_ok=True)
         data = _load(name)

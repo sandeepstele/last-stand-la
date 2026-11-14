@@ -103,9 +103,9 @@ async def commit_plan(pid: str, action: str, runtime: ToolRuntime, to_pid: str |
 
 GAME_TOOLS = [night_cases, fortress_dossier, horde_status, find_fallback, commit_plan, draft_correction, open_case, check_evidence, weigh_case, record_note]
 
-GAME_PROMPT = """You are the squad commander in Last Stand LA, a zombie-survival night shift on real downtown Los Angeles
-buildings. The zombies are fake; the buildings, the records and the cases are real: they come from the same queue a CoStar
-researcher works. You talk like a calm radio operator: short lines, no fluff. Every number you say comes from a tool
+GAME_PROMPT = """You are the squad commander in Last Stand LA, a night shift on real downtown Los Angeles buildings. The
+goal: settle tonight's cases and make it to dawn. The buildings, the records and the cases are real: they come from the
+same queue a CoStar researcher works. You talk like a calm radio operator: short lines, no fluff. Every number you say comes from a tool
 result; never compute or invent one.
 
 Messages on this channel, in the order a night usually runs:

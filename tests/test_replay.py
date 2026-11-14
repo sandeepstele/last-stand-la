@@ -39,3 +39,16 @@ def test_unset_means_no_wrapper(monkeypatch):
     monkeypatch.delenv("RADAR_REPLAY", raising=False)
     sentinel = object()
     assert replay.wrap(sentinel) is sentinel
+
+
+def test_blank_responses_are_never_recorded(tmp_path, monkeypatch):
+    from langchain_core.messages import AIMessage
+
+    from app import replay
+
+    monkeypatch.setattr(replay, "DIR", tmp_path)
+    replay._save("t", "k1", AIMessage(content=""))
+    replay._save("t", "k2", AIMessage(content=[{"type": "text", "text": ""}]))
+    assert not (tmp_path / "t.json").exists()
+    replay._save("t", "k3", AIMessage(content="hello"))
+    assert list(replay._load("t")) == ["k3"]
