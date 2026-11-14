@@ -388,7 +388,8 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
     defendEnded.current = false;
     ctx.bus.emit("world:barricade", { pid: hero?.pid ?? null });
     ctx.bus.emit("mission:defend", { pid: hero?.pid ?? "", x: door[0], z: door[1], facing: hero?.door?.facing ?? 180 });
-    ctx.bus.emit("horde:target", { x: door[0] + f[0] * 1.2, z: door[1] + f[1] * 1.2 });
+    // The crowd presses on the defender's spot (door + 3 m): letting them crowd you drains the barricade (Builder B's measurement).
+    ctx.bus.emit("horde:target", { x: door[0] + f[0] * 3, z: door[1] + f[1] * 3 });
     ctx.input.lock();
     setStep("hold");
     setBanner({ title: "Hold the door", sub: "[Space] shove · hold [E] to nail boards · keep them off until the roll comes in", tone: "warn" }, 4500);
