@@ -33,7 +33,8 @@ export function InsideMesh3D({ url, hops, at, heading }: { url: string; hops: In
     scene.add(root);
     const disposables: { dispose(): void }[] = [];
     let alive = true;
-    let center = new THREE.Vector3(), radius = 20;
+    const center = new THREE.Vector3();
+    let radius = 20;
 
     fetch(`/api/${url}`)
       .then((r) => (r.ok ? r.text() : null))
