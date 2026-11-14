@@ -13,6 +13,13 @@ import { buildGrid, createRoute, walkableAt } from "./worldRoute";
 import { dustTexture, facadeTextures, glowTexture, labelSprite, questionSprite, rng, streetTexture, TILE } from "./worldTex";
 
 const AMBER = 0xf5a524;
+/**
+ * Name labels (door + beacon) live on their own layer, which only the main camera enables: the picture-in-picture
+ * feed cameras (layer 0, and builder B's DRONE_LAYER = 2) never draw them.
+ */
+export const LABEL_LAYER = 3;
+/** Largest on-screen height of a name label, CSS px (the sprite includes its rounded frame). */
+const LABEL_MAX_PX = 40;
 /** Backdrop blocks: neutral concrete and stone, darker than the kit's material colours. */
 const BLOCK_TONES = [0x8d8a84, 0x7d8188, 0x9a948a, 0x6f747b, 0x8a8278, 0xa19d96, 0x767069];
 
@@ -36,6 +43,7 @@ export function createWorld(ctx: FootCtx): System {
     return d;
   };
   const R = rng((district.seed || 1) * 7919 + 13);
+  ctx.camera.layers.enable(LABEL_LAYER);
   const aniso = renderer.capabilities.getMaxAnisotropy();
   const offs: (() => void)[] = [];
 
@@ -281,6 +289,7 @@ export function createWorld(ctx: FootCtx): System {
   const heroK = kits.find((k) => k.b.conflict && k.b.door) ?? kits.find((k) => k.b.conflict && k.b.hero) ?? null;
   const question = heroK ? add(questionSprite(9)) : null;
   if (question && heroK) {
+    question.layers.set(LABEL_LAYER); // a marker for the player, not something the feed cameras see
     question.position.set(heroK.c[0], heroK.h + 6.5, heroK.c[1]);
     keep(question.material);
     keep(question.material.map!);
@@ -356,7 +365,9 @@ export function createWorld(ctx: FootCtx): System {
     doorLights.push(pl);
     const label = labelSprite(k.b.label, 1.4, { depthTest: false });
     label.renderOrder = 15;
-    label.position.set(0, 5.4, 0.6);
+    label.layers.set(LABEL_LAYER);
+    label.position.set(0, 4.5, 0.6); // just above the canopy
+    label.userData.aspect = label.scale.x / label.scale.y;
     doorLabels.push(label);
     keep(label.material);
     keep(label.material.map!);
@@ -444,7 +455,6 @@ export function createWorld(ctx: FootCtx): System {
   add(beacon).visible = false;
   let beaconLabel: THREE.Sprite | null = null;
   let beaconPid: string | null = null;
-  let beaconH = 0;
   const setBeacon = (pid: string | null) => {
     beaconPid = pid;
     if (beaconLabel) {
@@ -455,12 +465,13 @@ export function createWorld(ctx: FootCtx): System {
     }
     const k = pid ? kitOf.get(pid) : null;
     if (!k) return;
-    beaconH = k.h;
     beacon.position.set(k.c[0], 0, k.c[1]);
     beacon.children.slice(0, 2).forEach((m) => (m.position.y = k.h + BEAM_H / 2));
     beaconLabel = labelSprite(k.b.label, 4, { depthTest: false });
     beaconLabel.renderOrder = 20;
-    beaconLabel.position.y = k.h + 10;
+    beaconLabel.layers.set(LABEL_LAYER);
+    beaconLabel.position.y = k.h + 12;
+    beaconLabel.visible = false; // sized and faded in update()
     beacon.add(beaconLabel);
     beacon.visible = true;
   };
@@ -626,7 +637,21 @@ export function createWorld(ctx: FootCtx): System {
       headMat.color.setHex(0xffd7a0).lerp(tmpC.setHex(0x5a5d63), dawn);
       for (const l of lampLights) l.intensity = 60 * lampOn;
       for (const l of doorLights) l.intensity = 40 * (1 - dawn * 0.7);
-      for (const lb of doorLabels) lb.visible = lb.getWorldPosition(tmpV).distanceTo(cam) < 80;
+      // name labels: never bigger than LABEL_MAX_PX on screen; hidden during the director's flyover
+      const viewH = renderer.domElement.clientHeight || 900;
+      const perPx = (2 * Math.tan((ctx.camera.fov * Math.PI) / 360)) / viewH; // world metres per px at 1 m
+      const flyover = ctx.cameraOwner === "director";
+      for (const lb of doorLabels) {
+        const d = lb.getWorldPosition(tmpV).distanceTo(cam);
+        // at the door itself the HUD's "go inside" prompt names the building; the label steps aside
+        const fade = THREE.MathUtils.smoothstep(d, 10, 15);
+        lb.material.opacity = fade;
+        lb.visible = !flyover && d < 80 && fade > 0.01;
+        // close up it sits in front of its own wall, so draw it on top; farther out, buildings hide it
+        lb.material.depthTest = d > 30;
+        const h = Math.min(1.4, LABEL_MAX_PX * perPx * d);
+        lb.scale.set((h * lb.userData.aspect) || h * 4, h, 1);
+      }
 
       // record conflicts: seam pulse + lean tween
       for (const s of splits.values()) {
@@ -654,13 +679,19 @@ export function createWorld(ctx: FootCtx): System {
       const bTarget = beaconPid ? 1 - dawn * 0.6 : 0;
       beamU.uAlpha.value += (bTarget - beamU.uAlpha.value) * Math.min(1, dt * 3);
       if (!beaconPid && beamU.uAlpha.value < 0.01) beacon.visible = false;
-      if (beaconLabel) {
-        const d = Math.hypot(cam.x - beacon.position.x, cam.y - beaconH, cam.z - beacon.position.z);
-        const hgt = Math.max(3, d * 0.03);
-        const mat = beaconLabel.material;
-        const img = mat.map?.image as { width: number; height: number } | undefined;
+      if (beaconLabel && beaconPid) {
+        // constant ~LABEL_MAX_PX on screen at any distance; fades out within ~25 m of the building (the door label
+        // serves up close)
+        const lp = beaconLabel.getWorldPosition(tmpV);
+        const d = lp.distanceTo(cam);
+        const hgt = LABEL_MAX_PX * perPx * d;
+        const img = beaconLabel.material.map?.image as { width: number; height: number } | undefined;
         beaconLabel.scale.set((hgt * (img?.width ?? 4)) / (img?.height ?? 1), hgt, 1);
-        beaconLabel.position.y = beaconH + 13 + hgt * 0.5;
+        const kb = kitOf.get(beaconPid);
+        const near = kb ? (pointInPoly(cam.x, cam.z, kb.ring) ? 0 : closestOnPoly(cam.x, cam.z, kb.ring).d) : Infinity;
+        const fade = THREE.MathUtils.smoothstep(near, 25, 42);
+        beaconLabel.material.opacity = fade;
+        beaconLabel.visible = !flyover && fade > 0.01;
       }
 
       route.update(dt);
@@ -697,6 +728,7 @@ export function createWorld(ctx: FootCtx): System {
     },
     dispose() {
       alive = false;
+      ctx.camera.layers.disable(LABEL_LAYER);
       offs.forEach((f) => f());
       setBarricade(null);
       setBeacon(null);
