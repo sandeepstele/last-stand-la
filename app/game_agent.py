@@ -22,6 +22,7 @@ from langchain.tools import ToolRuntime, tool
 from langchain_core.messages import AIMessage
 
 from app import fortress, prompts
+from app.guards import ForceCommitPlan, RetryBlank
 from app.agent import MODELS, _errors, _specialists
 from app.tools import _notes, check_evidence, open_case, record_note, weigh_case
 
@@ -178,7 +179,8 @@ def build(store=None, checkpointer=None, m=None):
         model=m.orch,
         tools=GAME_TOOLS,
         system_prompt=GAME_PROMPT,
-        middleware=[todos, _errors(), ModelFallbackMiddleware(*m.orch_fallbacks)],
+        middleware=[todos, _errors(), RetryBlank("Static on the line. Say again?"), ForceCommitPlan(),
+                    ModelFallbackMiddleware(*m.orch_fallbacks)],
         subagents=_specialists(True, m),
         # Its own scratch space only: the auditor's memories and worklog (other buildings) stay out of the game.
         # Player tips still go to the shared Store through record_note.

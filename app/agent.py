@@ -260,7 +260,10 @@ def _middleware(live: bool, m: Models | None = None) -> list:
     # The live todo prompt and tool description replace the stock "mark each step complete as soon as it
     # finishes", which cost one or two model turns per question that only updated the list.
     todos = TodoListMiddleware(system_prompt=prompts.TODO_PROMPT, tool_description=prompts.TODO_TOOL_DESCRIPTION)
-    return [todos, _errors(), ModelFallbackMiddleware(*m.orch_fallbacks)]
+    from app.guards import RetryBlank  # a blank live reply is retried once, then replaced by an honest line
+
+    blank = RetryBlank("I couldn't put this answer into words just now; the case file shows what the checks found. Ask again to retry.")
+    return [todos, _errors(), blank, ModelFallbackMiddleware(*m.orch_fallbacks)]
 
 
 def build(mode: str, store=None, checkpointer=None, m: Models | None = None):
