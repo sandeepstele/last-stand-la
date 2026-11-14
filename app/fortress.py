@@ -154,6 +154,52 @@ def _mmi(rec: dict[str, Any]) -> float | None:
 # ------------------------------------------------------------------ the district
 
 
+# ------------------------------------------------------------------ OpenStreetMap backdrop (contract v1.3)
+
+OSM = FIXTURES / "public" / "osm_buildings.json"  # Overpass extract, gitignored; (c) OpenStreetMap contributors, ODbL
+OSM_ATTRIBUTION = "© OpenStreetMap contributors"
+
+
+def _osm_height(tags: dict[str, str]) -> float:
+    for key, mult in (("height", 1.0), ("building:levels", FLOOR_M)):
+        try:
+            return round(float(str(tags[key]).split()[0].rstrip("m")) * mult, 1)
+        except (KeyError, ValueError):
+            continue
+    return 12.0
+
+
+def _inside(x: float, z: float, ring: list[list[float]]) -> bool:
+    hit = False
+    for (ax, az), (bx, bz) in zip(ring, ring[1:] + ring[:1]):
+        if (az > z) != (bz > z) and x < (bx - ax) * (z - az) / (bz - az) + ax:
+            hit = not hit
+    return hit
+
+
+def _area(ring: list[list[float]]) -> float:
+    return abs(sum(ax * bz - bx * az for (ax, az), (bx, bz) in zip(ring, ring[1:] + ring[:1]))) / 2
+
+
+def _osm_blocks(lat0: float, lon0: float) -> list[dict[str, Any]]:
+    """Every OSM building outline in the cached extract, in district metres (absolute), simplified."""
+    if not OSM.exists():
+        return []
+    out = []
+    for el in json.loads(OSM.read_text()).get("elements", []):
+        geom = el.get("geometry") or []
+        if el.get("type") != "way" or len(geom) < 4:
+            continue
+        ring = [list(_xz(g["lat"], g["lon"], lat0, lon0)) for g in geom]
+        if ring[0] == ring[-1]:
+            ring = ring[:-1]
+        far = max(range(len(ring)), key=lambda i: math.dist(ring[0], ring[i]))
+        simple = (_simplify(ring[: far + 1], 0.5)[:-1] + _simplify(ring[far:] + [ring[0]], 0.5)[:-1]) if far else ring
+        ring = [[round(x, 1), round(z, 1)] for x, z in (simple if len(simple) >= 3 else ring)]
+        out.append({"ring": ring, "height_m": _osm_height(el.get("tags") or {})})
+    return out
+
+
 def _outline(b: dict[str, Any]) -> list[tuple[float, float]]:
     if b["footprint"]:
         return [(b["x"] + px, b["z"] + pz) for px, pz in b["footprint"]]
@@ -216,16 +262,50 @@ def district() -> dict[str, Any]:
             "unfinished": city["unfinished"], "past_due": city["past_due"], "mmi": _mmi(rec), "hero": pid in HEROES,
             "year_built": rec.get("year_built"), "people": _employees().get(pid) or None, "conflict": conflict})
     buildings.sort(key=lambda b: (not b["hero"], b["pid"]))
+    # OSM: a kit building takes the OSM outline under its CoStar point when there is one. It sits where the building
+    # really is (Vexcel outlines are centred on the CoStar point, 11-13 m off for the heroes) and its area matches the
+    # kit's floor area. Height stays from Vexcel or the kit. Every other OSM building becomes backdrop and collision.
+    blocks, claimed = _osm_blocks(lat0, lon0), set()
     for b in buildings:
-        b["door"] = _door(b, buildings) if b["pid"] in ENTERABLE else None
+        if b["pid"] in NO_EXTRUDE:
+            continue
+        for i, blk in enumerate(blocks):
+            if i not in claimed and _inside(b["x"], b["z"], blk["ring"]) and _area(blk["ring"]) <= 4 * b["w"] * b["d"]:
+                claimed.add(i)
+                b["footprint"] = [[round(x - b["x"], 1), round(z - b["z"], 1)] for x, z in blk["ring"]]
+                break
+        else:
+            continue
+    for i, blk in enumerate(blocks):  # Vexcel-outlined kit buildings also stand on an OSM outline: don't double them
+        if i not in claimed and any(_inside(b["x"], b["z"], blk["ring"]) for b in buildings):
+            claimed.add(i)
+    backdrop = [blk for i, blk in enumerate(blocks) if i not in claimed]
+    obstacles = buildings + [{"pid": f"osm{i}", "x": sum(p[0] for p in k["ring"]) / len(k["ring"]),
+                              "z": sum(p[1] for p in k["ring"]) / len(k["ring"]), "w": 2 * math.sqrt(_area(k["ring"]) / math.pi),
+                              "d": 2 * math.sqrt(_area(k["ring"]) / math.pi)} for i, k in enumerate(backdrop)]
+    for b in buildings:
+        b["door"] = _door(b, obstacles) if b["pid"] in ENTERABLE else None
     waves = [{"n": w["n"], "sector": w["sector"], "arrive_s": w["arrive_s"], "size": max(50, round(units * w["share"] / 10) * 10)}
              for w in WAVES]
     return {"center": {"lat": round(lat0, 6), "lon": round(lon0, 6)}, "radius_m": RADIUS_M, "seed": SEED,
-            "buildings": buildings, "waves": waves, "ground": _ground()}
+            "buildings": buildings, "waves": waves, "ground": _ground(), "blocks": backdrop,
+            "attribution": OSM_ATTRIBUTION if blocks else None}
 
 
 def building(pid: str) -> dict[str, Any] | None:
     return next((b for b in district()["buildings"] if b["pid"] == str(pid)), None)
+
+
+OUTSIDE = ("{pid} is not a building in this district. The building is the property id in this thread's "
+           "'Scout property <pid>' message; use that one.")
+
+
+def outside(*pids: str | None) -> dict[str, str] | None:
+    """Guard for the game tools: they act only on district buildings (a run once drifted to an auditor demo building)."""
+    for p in pids:
+        if p is not None and not building(str(p).strip()):
+            return {"error": OUTSIDE.format(pid=p)}
+    return None
 
 
 # ------------------------------------------------------------------ scores

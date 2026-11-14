@@ -105,3 +105,25 @@ def test_ground_is_null_without_the_cached_mosaic(monkeypatch, tmp_path):
     assert fortress._ground() is None
     (tmp_path / fortress.GROUND["image"]).write_bytes(b"\xff\xd8fake")
     assert fortress._ground()["x0"] == fortress.GROUND["x0"]
+
+
+def test_game_tools_refuse_buildings_outside_the_district(monkeypatch):
+    monkeypatch.setattr(fortress, "building", lambda pid: {"pid": "1"} if str(pid) == "1" else None)
+    out = fortress.outside("1", "247386")
+    assert out and "247386 is not a building in this district" in out["error"] and "Scout property" in out["error"]
+    assert fortress.outside("1", None) is None
+
+
+def test_osm_heights_and_point_in_outline():
+    assert fortress._osm_height({"height": "35.2"}) == 35.2
+    assert fortress._osm_height({"height": "40 m"}) == 40.0
+    assert fortress._osm_height({"building:levels": "5"}) == 19.0
+    assert fortress._osm_height({"building": "yes"}) == 12.0
+    square = [[0, 0], [10, 0], [10, 10], [0, 10]]
+    assert fortress._inside(5, 5, square) and not fortress._inside(15, 5, square)
+    assert fortress._area(square) == 100
+
+
+def test_district_has_no_blocks_without_the_osm_extract(monkeypatch, tmp_path):
+    monkeypatch.setattr(fortress, "OSM", tmp_path / "missing.json")
+    assert fortress._osm_blocks(34.0, -118.0) == []

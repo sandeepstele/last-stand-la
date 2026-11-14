@@ -16,13 +16,18 @@ import asyncio
 import threading
 
 from deepagents import create_deep_agent
+from deepagents.backends import StateBackend
 from langchain.agents.middleware import ModelFallbackMiddleware, TodoListMiddleware
 from langchain.tools import ToolRuntime, tool
 from langchain_core.messages import AIMessage
 
 from app import fortress, prompts
-from app.agent import MODELS, _backend, _errors, _specialists
+from app.agent import MODELS, _errors, _specialists
 from app.tools import _notes, check_evidence, open_case, record_note, weigh_case
+
+
+async def _outside(*pids: str | None) -> dict | None:
+    return await asyncio.to_thread(fortress.outside, *pids)
 
 
 @tool
@@ -30,7 +35,7 @@ async def fortress_dossier(pid: str) -> dict:
     """The fortress card for a building in the district: walls, quake, roof, people and space scores (0-100, computed
     in code from CoStar, the city's retrofit lists, the Northridge ShakeMap and Vexcel), what is unknown, the cached
     images, and the open case when the records disagree. Quote its numbers; never compute your own."""
-    return await asyncio.to_thread(fortress.dossier, pid)
+    return await _outside(pid) or await asyncio.to_thread(fortress.dossier, pid)
 
 
 @tool
@@ -43,7 +48,7 @@ def horde_status(wave: int) -> dict:
 async def find_fallback(pid: str, away_from: str | None = None) -> dict:
     """The strongest building within 600 m of pid to fall back to, preferring ones that lie away from the horde
     (away_from: the wave's sector, e.g. "W"). Ranked in code by walls and quake scores."""
-    return await asyncio.to_thread(fortress.find_fallback, pid, away_from)
+    return await _outside(pid) or await asyncio.to_thread(fortress.find_fallback, pid, away_from)
 
 
 def _wave_and_checks(runtime: ToolRuntime, pid: str) -> tuple[int, list[str]]:
@@ -65,6 +70,8 @@ async def commit_plan(pid: str, action: str, runtime: ToolRuntime, to_pid: str |
     """Commit the squad's plan for this wave: action "hold" (stay in pid) or "run" (fall back to to_pid). ALWAYS
     waits for the player's HOLD or RUN; the player may switch it. Then the wave and an aftershock are rolled in
     code against the walls and quake scores, and the outcome comes back."""
+    if bad := await _outside(pid, to_pid if action == "run" else None):
+        return bad
     wave, checks = _wave_and_checks(runtime, pid)
     notes = await _notes(runtime, pid, None)
     if notes and "human_report" not in checks:
@@ -77,6 +84,9 @@ GAME_TOOLS = [fortress_dossier, horde_status, find_fallback, commit_plan, open_c
 GAME_PROMPT = """You are the squad commander in Last Stand LA, a zombie-survival night on real downtown Los Angeles
 buildings. The zombies are fake; the buildings and their records are real. You talk like a calm radio operator:
 short lines, no fluff. Every number you say comes from a tool result; never compute or invent one.
+
+The building is ALWAYS the property id from this thread's "Scout property <pid>" message (the latest one). Never use
+another id, from memory or anywhere else; a fallback building comes only from find_fallback.
 
 There are three kinds of message on this channel.
 
@@ -116,9 +126,9 @@ def build(store=None, checkpointer=None, m=None):
         system_prompt=GAME_PROMPT,
         middleware=[todos, _errors(), ModelFallbackMiddleware(*m.orch_fallbacks)],
         subagents=_specialists(True, m),
-        skills=["/skills/"],
-        memory=["/memories/AGENTS.md"],
-        backend=_backend(),
+        # Its own scratch space only: the auditor's memories and worklog (other buildings) stay out of the game.
+        # Player tips still go to the shared Store through record_note.
+        backend=StateBackend(),
         interrupt_on={"commit_plan": {"allowed_decisions": ["approve", "edit", "reject"]}},
         store=store,
         checkpointer=checkpointer,
