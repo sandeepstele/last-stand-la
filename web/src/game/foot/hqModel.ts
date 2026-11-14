@@ -68,18 +68,18 @@ export const CHECK_NAME: Record<string, string> = {
 const humanize = (s: string) => s.replace(/_+/g, " ").trim();
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 /** A hypothesis in words: the known phrase, else the claim's first clause, never the key. */
-function hypWords(key: string, claim?: string): string {
+export function hypWords(key: string, claim?: string): string {
   if (HYP_WORDS[key]) return HYP_WORDS[key];
   const c = (claim ?? "").split(/[:;]/)[0].trim();
   return c ? c.charAt(0).toLowerCase() + c.slice(1) : "another explanation";
 }
 const hypShort = (key: string, claim?: string) => HYP_SHORT[key] ?? firstSentence(hypWords(key, claim), 22);
 const checkName = (key: string) => CHECK_NAME[key] ?? cap(humanize(key));
-const caseWords = (c: string | undefined) => (c && CASE_WORDS[c]) || (c ? cap(humanize(c)) : "Open case");
+export const caseWords = (c: string | undefined) => (c && CASE_WORDS[c]) || (c ? cap(humanize(c)) : "Open case");
 
 const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 /** Text safe to show: known pids become labels, tenant names become "a tenant", hypothesis keys become words. */
-function scrubber(labels: Map<string, string>, tenants: Set<string>) {
+export function scrubber(labels: Map<string, string>, tenants: Set<string>) {
   const pids = [...labels.keys()].filter((p) => p.length >= 3).sort((a, b) => b.length - a.length);
   const pidRe = pids.length ? new RegExp(`\\b(?:property\\s+(?:id\\s+)?)?(?:${pids.map(esc).join("|")})\\b`, "gi") : null;
   const names = [...tenants].filter((t) => t.length >= 3).sort((a, b) => b.length - a.length);
@@ -100,14 +100,14 @@ function scrubber(labels: Map<string, string>, tenants: Set<string>) {
   const line = (s: string, max = 150): string => firstSentence(safe(s), max);
   /** Several sentences kept (a draft correction), markdown stripped, capped. */
   line.full = (s: string, max = 480): string => {
-    const t = safe(s).replace(/[#*`>]+/g, "").replace(/\s+/g, " ").trim();
+    const t = safe(s).replace(/[*`>]+|#+(?!\d)/g, "").replace(/\s+/g, " ").trim(); // keeps "Case #6"
     return t.length > max ? `${t.slice(0, max - 1).trimEnd()}…` : t;
   };
   return line;
 }
 
 /** Labels (pid -> address) and tenant names (to hide) from anywhere in the thread. */
-function namesIn(ms: readonly Msg[]): { labels: Map<string, string>; tenants: Set<string> } {
+export function namesIn(ms: readonly Msg[]): { labels: Map<string, string>; tenants: Set<string> } {
   const labels = new Map<string, string>();
   const tenants = new Set<string>();
   for (const m of ms) {
@@ -127,16 +127,16 @@ function namesIn(ms: readonly Msg[]): { labels: Map<string, string>; tenants: Se
   return { labels, tenants };
 }
 
-const norm = (v: unknown) => (v == null ? "" : String(v).trim());
+export const norm = (v: unknown) => (v == null ? "" : String(v).trim());
 /** A suite as the tools and the model may write it ("1100", "Suite 1100", "#1100", 1100) -> "1100". */
 const suiteOf = (v: unknown) => norm(v).replace(/^(suite|ste\.?)\s*/i, "").replace(/^#\s*/, "").toLowerCase();
-const keyOf = (pid: unknown, suite: unknown) => `${norm(pid)}|${suiteOf(suite)}`;
+export const keyOf = (pid: unknown, suite: unknown) => `${norm(pid)}|${suiteOf(suite)}`;
 /** The suite a tip is about ("Tip: I'm inside suite 1100. ..."), or "" for the building. */
-const tipSuite = (t: string) => suiteOf(t.match(/\bsuite\s+#?([\w-]+)/i)?.[1]);
+export const tipSuite = (t: string) => suiteOf(t.match(/\bsuite\s+#?([\w-]+)/i)?.[1]);
 
 // ---------------------------------------------------------------- the view
 
-export type SquadView = { key: SquadKey; label: string; state: "idle" | "working" | "done" | "silent"; finding: string | null };
+export type SquadView = { key: SquadKey; label: string; state: "idle" | "working" | "done" | "silent" | "you"; finding: string | null };
 export type TodoView = { text: string; status: "pending" | "in_progress" | "completed" };
 export type BarView = { key: string; words: string; pct: number; lead: boolean };
 export type VerdictView = { label: "likely" | "leaning" | "unresolved"; words: string; pct: number; text: string | null };
@@ -337,6 +337,11 @@ export function hqModel(messages: readonly unknown[], heroPid: string | null, bu
 
   // ---- squads: the task calls since the newest scout order
   const squads: SquadView[] = SQUADS.map(({ key, label }) => {
+    // The player IS the interior check: once their report is logged (record_note), the INTERIOR chip is "YOU".
+    if (key === "interior" && noteCalls.length) {
+      const tip = tips[tips.length - 1];
+      return { key, label, state: "you", finding: tip ? `"${firstSentence(tip.text, 110)}"` : "your report from inside" };
+    }
     const t = [...tasks].reverse().find((x) => x.at > scoutAt && x.call.args?.subagent_type === key);
     if (!t) return { key, label, state: "idle", finding: null };
     const r = t.call.id ? resultById.get(t.call.id) : undefined;
@@ -521,7 +526,7 @@ export function hqModel(messages: readonly unknown[], heroPid: string | null, bu
     else if (out) status = `${out} squad${out === 1 ? "" : "s"} out`;
     else status = pick ? STATUS_BY_CALL[pick] : "thinking it over";
   }
-  return { started, status, brief, squadsSent: tasks.length > 0, squads, todos, current, noCase, caseView, evidence, waiting, drafts };
+  return { started, status, brief, squadsSent: tasks.length > 0 || noteCalls.length > 0, squads, todos, current, noCase, caseView, evidence, waiting, drafts };
 }
 
 // ---------------------------------------------------------------- the dawn debrief: draft corrections

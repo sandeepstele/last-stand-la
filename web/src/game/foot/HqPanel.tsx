@@ -172,9 +172,10 @@ function Squads({ squads, compact = false }: { squads: SquadView[]; compact?: bo
           <span className={styles.chip}>
             <span className={styles.icon} aria-hidden />
             {s.label}
+            {s.state === "you" && <span className={styles.you}>YOU</span>}
           </span>
           {!compact && (
-            s.state === "done" ? <span className={styles.finding}>{s.finding}</span>
+            s.state === "done" || s.state === "you" ? <span className={styles.finding}>{s.finding}</span>
             : <span className={styles.squadNote}>{s.state === "working" ? "working…" : s.state === "silent" ? "no report" : "not sent"}</span>
           )}
         </div>
