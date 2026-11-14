@@ -186,7 +186,7 @@ export function FootGame({ game, replay, agentOff = false }: { game: Game; repla
     let last = performance.now();
     let hudAt = 0;
     const frame = (now: number) => {
-      const dt = Math.min(0.05, (now - last) / 1000);
+      const dt = Math.max(0, Math.min(0.05, (now - last) / 1000)); // the first rAF timestamp can precede `last`
       last = now;
       ctx.time += dt;
       tickRef.current(dt);
