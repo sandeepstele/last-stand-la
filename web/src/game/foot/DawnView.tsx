@@ -6,6 +6,7 @@
 import { CaseFile } from "@/components/Cases";
 import { kind, type Msg } from "../radio";
 import { DISCLAIMER } from "../types";
+import { HqDrafts } from "./hqDrafts";
 import { Keycap, footStyles as styles } from "./ui";
 
 export type DawnProps = {
@@ -26,8 +27,13 @@ const clock = (secs: number) => {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 };
 
+/** How a server line reads on the debrief: the records line is the night's main result. */
+const toneOf = (l: string) => (/^Records checked tonight/i.test(l) ? "records" : /^Case #\d+/.test(l) ? "hq" : /went down/i.test(l) ? "down" : undefined);
+
 export function DawnView({ title, lines, messages, loading, onPlayAgain, score, reportFiled, onFileReport }: DawnProps) {
   const hasCase = messages.some((m) => kind(m as Msg) === "tool" && (m as Msg).name === "open_case");
+  const records = lines.filter((l) => toneOf(l) === "records");
+  const rest = lines.filter((l) => toneOf(l) !== "records");
   const stats: { label: string; value: string }[] = [
     { label: "Survivors saved", value: `${score.saved}/${score.total}` },
     { label: "Crates found", value: String(score.found) },
@@ -40,6 +46,15 @@ export function DawnView({ title, lines, messages, loading, onPlayAgain, score, 
       <div className={styles.dawnCol}>
         <div className={styles.dawnKicker}>SUNRISE · DOWNTOWN LOS ANGELES</div>
         <h1 className={styles.dawnTitle}>{title}</h1>
+
+        {records.map((l) => (
+          <section key={l} className={styles.recordsLine}>
+            <span className={styles.dawnKicker} style={{ textAlign: "left" }}>
+              TONIGHT&apos;S RESULT
+            </span>
+            <p>{l}</p>
+          </section>
+        ))}
 
         <section className={styles.results}>
           <div className={styles.rank}>
@@ -62,10 +77,10 @@ export function DawnView({ title, lines, messages, loading, onPlayAgain, score, 
           </div>
         </section>
 
-        {lines.length > 0 && (
+        {rest.length > 0 && (
           <ul className={styles.outcome}>
-            {lines.map((l, i) => (
-              <li key={`${i}-${l}`} style={{ animationDelay: `${0.8 + i * 0.25}s` }}>
+            {rest.map((l, i) => (
+              <li key={`${i}-${l}`} data-tone={toneOf(l)} style={{ animationDelay: `${0.8 + i * 0.25}s` }}>
                 {l}
               </li>
             ))}
@@ -77,9 +92,9 @@ export function DawnView({ title, lines, messages, loading, onPlayAgain, score, 
             FINAL OBJECTIVE
           </span>
           <button type="button" className={styles.fileBtn} disabled={reportFiled} onClick={onFileReport}>
-            {reportFiled ? "Report filed for human review" : "File the report"}
+            {reportFiled ? "Reports filed for human review" : "File tonight's reports → open the auditor"}
           </button>
-          <p>The draft correction goes to a human researcher for review. Nothing is sent automatically.</p>
+          <p>Draft corrections go to a human researcher for review. Nothing is sent automatically.</p>
         </section>
 
         <section className={styles.found}>
@@ -87,6 +102,17 @@ export function DawnView({ title, lines, messages, loading, onPlayAgain, score, 
             THE NIGHT&apos;S REAL WORK
           </span>
           <h2>What the agent found</h2>
+          {loading && (
+            <p className={styles.drafting}>
+              HQ is drafting tonight&apos;s corrections
+              <span className={styles.thinking}>
+                <i />
+                <i />
+                <i />
+              </span>
+            </p>
+          )}
+          <HqDrafts messages={messages} busy={loading} />
           {hasCase ? (
             <>
               <p>
@@ -98,7 +124,7 @@ export function DawnView({ title, lines, messages, loading, onPlayAgain, score, 
               </div>
             </>
           ) : (
-            <p className={styles.outcomeEmpty}>{loading ? "HQ is writing up the case file…" : "No case file was opened tonight."}</p>
+            !loading && <p className={styles.outcomeEmpty}>No case file was opened tonight.</p>
           )}
         </section>
 

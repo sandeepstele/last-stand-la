@@ -23,10 +23,10 @@ const CARDS = 3;
 const CONTROLS: { keys: string[]; what: string }[] = [
   { keys: ["W", "A", "S", "D"], what: "move" },
   { keys: ["Shift"], what: "sprint" },
-  { keys: ["Mouse"], what: "look (or drag)" },
+  { keys: ["Mouse"], what: "look · your light stuns" },
   { keys: ["Space"], what: "shove" },
   { keys: ["E"], what: "enter · nail boards" },
-  { keys: ["Q"], what: "use a medkit" },
+  { keys: ["Q", "G"], what: "medkit · throw a flare" },
   { keys: ["H", "R"], what: "hold or run" },
   { keys: ["1", "2", "3"], what: "answer HQ" },
 ];
@@ -148,7 +148,7 @@ export function IntroOverlay({ heroLabel, ready, stub, replay, attribution, onSt
             Last Stand <span>LA</span>
           </h1>
           <p className={styles.tagline}>
-            The zombies are fake. <b>The weak spots are real.</b>
+            Settle tonight&apos;s cases <b>and make it to dawn.</b>
           </p>
         </header>
 
