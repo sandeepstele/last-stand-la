@@ -178,7 +178,7 @@ function Compass({ compass, threat }: { compass: HudProps["compass"]; threat: nu
 function Radio({ lines, busy }: { lines: RadioLine[]; busy: boolean }) {
   const shown = lines.slice(-6);
   return (
-    <section className={`${styles.panel} ${styles.radio}`}>
+    <section className={`${styles.panel} ${styles.radio}`} data-busy={busy}>
       <div className={styles.radioHead}>
         <span className={styles.tag}>HQ radio · AI commander</span>
         {busy ? <span className={styles.busy}>THINKING</span> : <span className={styles.idle}>STANDING BY</span>}
