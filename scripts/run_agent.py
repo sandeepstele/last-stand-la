@@ -23,7 +23,7 @@ from dotenv import load_dotenv  # noqa: E402
 
 load_dotenv(ROOT / ".env")
 os.environ.setdefault("RADAR_SCENE_MODE", "dispatch")  # no browser here: send scene actions, do not wait
-os.environ["RADAR_MATTERPORT"] = os.environ.get("RADAR_MATTERPORT_RUN", "cached")
+os.environ["RADAR_MATTERPORT"] = os.environ.get("RADAR_MATTERPORT_RUN", os.environ.get("RADAR_MATTERPORT", "auto"))
 
 from langgraph.checkpoint.memory import InMemorySaver  # noqa: E402
 from langgraph.store.memory import InMemoryStore  # noqa: E402

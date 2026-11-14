@@ -10,7 +10,7 @@ Modes (env), default auto:
   RADAR_LAYER_VEXCEL  cached = fixtures/vexcel/<id>.json only
                       live   = Vexcel property/extract at the CoStar coordinates (VEXCEL_API_KEY), then cached
                       auto   = the cache if there is one, else live
-  RADAR_MATTERPORT    cached | live (app/matterport.py)
+  RADAR_MATTERPORT    auto | live | cached (app/matterport.py; team token)
 Everything here blocks (files, HTTP): call it through asyncio.to_thread from async code.
 
 Licensing: real CoStar / Vexcel / Matterport data must not reach the public repo.
@@ -20,6 +20,7 @@ Licensing: real CoStar / Vexcel / Matterport data must not reach the public repo
 from __future__ import annotations
 
 import json
+import math
 import os
 import re
 from dataclasses import dataclass, field
@@ -88,7 +89,7 @@ def get_record(property_id: str) -> dict[str, Any]:
     except costar.CoStarError as e:
         raise LayerError(str(e)) from e
     models = rec.get("matterport_model_ids") or []
-    rec["matterport_model_id"] = models[0] if models else None
+    rec["matterport_model_id"] = models[0] if models else None  # get_twin picks the best linked twin
     rec["building_type"] = VERIFIER_TYPE.get(rec.get("property_type"), str(rec.get("property_type") or "office").lower())
     return rec
 
@@ -116,12 +117,60 @@ def get_aerial(property_id: str, record: dict[str, Any] | None = None) -> dict[s
     return data
 
 
+TWIN_MAX_DISTANCE_M = 250  # heuristic: a linked twin geolocated farther than this from the CoStar point is ignored
+
+
+def _distance_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    a = math.sin((p2 - p1) / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(math.radians(lon2 - lon1) / 2) ** 2
+    return 2 * 6_371_000 * math.asin(math.sqrt(a))
+
+
+MAX_TWINS = 10  # the kit links up to 10 twins (suites, lobbies, floors) to one property
+
+
+def _twin_distance_m(rec: dict[str, Any], layout: dict[str, Any]) -> float | None:
+    geo = layout.get("geolocation") or {}
+    try:
+        return _distance_m(float(rec["latitude"]), float(rec["longitude"]), float(geo["lat"]), float(geo["long"]))
+    except (KeyError, TypeError, ValueError):
+        return None  # no geolocation on one side (e.g. the synthetic TEST-A record): no distance check
+
+
+def _scanned_sqft(layout: dict[str, Any]) -> float:
+    """Matterport's measured area of the twin's largest floor (its best shot at covering the footprint)."""
+    floors = [(f.get("dimensions") or {}).get("areaFloor") or 0 for f in layout.get("floors") or []]
+    return float(max(floors, default=0) or (layout.get("dimensions") or {}).get("areaFloor") or 0)
+
+
 def get_twin(property_id: str, record: dict[str, Any] | None = None) -> tuple[str | None, interior.InteriorProfile | None]:
-    """The Matterport twin linked to this property in its CoStar record, if any."""
-    model_id = (record if record is not None else get_record(property_id)).get("matterport_model_id")
-    if not model_id:
+    """The best Matterport twin the CoStar record links to this property: among linked twins
+    geolocated within TWIN_MAX_DISTANCE_M of the CoStar point, the one with the largest scanned floor.
+    Raises LayerError when every linked twin is far away or unreadable."""
+    rec = record if record is not None else get_record(property_id)
+    ids = list(rec.get("matterport_model_ids") or ([rec["matterport_model_id"]] if rec.get("matterport_model_id") else []))
+    if not ids:
         return None, None
-    return model_id, interior.profile(matterport.fetch_layout(model_id))
+    best: tuple[float, str, dict[str, Any]] | None = None
+    refused: list[str] = []
+    for model_id in ids[:MAX_TWINS]:
+        try:
+            layout = matterport.fetch_layout(model_id)
+        except matterport.MatterportError as e:
+            refused.append(f"{model_id}: {e}")
+            continue
+        d = _twin_distance_m(rec, layout)
+        if d is not None and d > TWIN_MAX_DISTANCE_M:
+            refused.append(f"the linked twin '{layout.get('name')}' is geolocated {d:,.0f} m from the CoStar point, "
+                           "so it is probably not this building")
+            continue
+        area = _scanned_sqft(layout)
+        if best is None or area > best[0]:
+            best = (area, model_id, layout)
+    if best is None:
+        raise LayerError("; ".join(refused))
+    rec["matterport_model_id"] = best[1]
+    return best[1], interior.profile(best[2])
 
 
 @dataclass
@@ -206,7 +255,8 @@ def load_building(property_id: str) -> Building:
     }
     if twin_id:
         provenance["matterport"] = {
-            "source": f"{os.environ.get('RADAR_MATTERPORT', 'cached')}:{twin_id}",
+            "source": f"matterport:{twin_id}",
+            "twin_loaded": twin is not None,  # the verifier may still ignore it (see warnings)
             "synthetic": False,
             "linked_by": "costar record (synthetic link)" if rec["synthetic"] else "costar record",
         }

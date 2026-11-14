@@ -53,7 +53,7 @@ All three run at `thinking_level=low` on Vertex AI.
 | Verifier, twin analysis, field-scan parsing | Real; 51 tests |
 | Live and worker graphs through `langgraph dev` | Real. Live answer in 22–31 s; worker tick writes dossiers. |
 | CoStar / Vexcel data | **Cached fixtures.** `TEST-A` is **synthetic**. The CoStar toolkit adapter is in progress. |
-| Matterport | Real read-only client. The sandbox account sees only Matterport's demo model. |
+| Matterport | Real read-only client on the HackPrinceton team token: picks the best twin the CoStar kit links to each property (nearest 250 m, largest scanned floor). |
 | Web app | One page: 3D world pane, plan, specialists, verifier card, approvals |
 | Photon texting | Outbound adapter written; not configured. Notifications land in the in-app outbox. |
 | Radar Field (iOS LiDAR field check) | Compiles for device; see [ios/RadarField/README.md](ios/RadarField/README.md) |

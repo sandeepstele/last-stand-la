@@ -133,3 +133,77 @@ def test_place_solar_draws_nothing_for_the_wrong_structure(kit, vexcel_calls):
 def test_gross_area_uses_its_own_band(listed, basis, expected):
     inv = investigate(Records(rba_sqft=listed, stories=1, area_basis=basis), Aerial(footprint_sqft=238_000))
     assert inv.initial.status == expected
+
+
+# ------------------------------------------------------------- Matterport team token + twin link check
+
+
+def _layout(lat, lon):
+    return {"id": "TWINx00001", "name": "Synthetic lobby", "geolocation": {"lat": str(lat), "long": str(lon)},
+            "floors": [{"id": "f1", "sequence": 0, "label": "Floor 1"}],
+            "locations": [{"id": f"l{i}", "position": {"x": i * 2.0, "y": 0.0, "z": 0.1}, "floor": {"id": "f1"}, "room": None}
+                          for i in range(4)]}
+
+
+def test_team_token_is_preferred_and_auto_mode_caches(tmp_path, monkeypatch):
+    from app import matterport
+
+    monkeypatch.setattr(matterport, "FIXTURES", tmp_path)
+    monkeypatch.delenv("RADAR_MATTERPORT", raising=False)  # default auto
+    monkeypatch.setenv("MATTERPORT_TOKEN_ID", "personal-id")
+    monkeypatch.setenv("MATTERPORT_TOKEN_SECRET", "personal-secret")
+    monkeypatch.setenv("MATTERPORT_TEAM_TOKEN_ID", "team-id")
+    monkeypatch.setenv("MATTERPORT_TEAM_TOKEN_SECRET", "team-secret")
+    sent = []
+
+    def post(url, json, auth, timeout):
+        sent.append((auth, json["query"]))
+        return SimpleNamespace(raise_for_status=lambda: None, json=lambda: {"data": {"model": _layout(29.75, -95.40)}})
+
+    monkeypatch.setattr(matterport.httpx, "post", post)
+    assert matterport.token_label() == "team"
+    matterport.fetch_layout("TWINx00001")
+    matterport.fetch_layout("TWINx00001")  # second call replays the cache
+    assert len(sent) == 1 and sent[0][0] == ("team-id", "team-secret")
+    assert "mutation" not in sent[0][1] and "geolocation" in sent[0][1]
+
+
+def test_invisible_model_is_a_readable_error(tmp_path, monkeypatch):
+    from app import matterport
+
+    monkeypatch.setattr(matterport, "FIXTURES", tmp_path)
+    monkeypatch.setenv("RADAR_MATTERPORT", "live")
+    monkeypatch.setenv("MATTERPORT_TEAM_TOKEN_ID", "team-id")
+    monkeypatch.setenv("MATTERPORT_TEAM_TOKEN_SECRET", "team-secret")
+    monkeypatch.setattr(matterport.httpx, "post", lambda *a, **k: SimpleNamespace(
+        raise_for_status=lambda: None, json=lambda: {"data": {"model": None}}))
+    with pytest.raises(matterport.MatterportError, match="not visible to the team token"):
+        matterport.fetch_layout("TWINx00001")
+
+
+@pytest.mark.parametrize("twin_at,used", [((29.7552, -95.4051), True), ((29.7600, -95.4050), False)])
+def test_twin_far_from_the_costar_point_is_refused(monkeypatch, twin_at, used):
+    from app import matterport
+
+    monkeypatch.setattr(matterport, "fetch_layout", lambda mid: _layout(*twin_at))
+    rec = {"matterport_model_id": "TWINx00001", "latitude": 29.755, "longitude": -95.405}
+    if used:  # ~25 m away
+        model_id, twin = layers.get_twin("900001", rec)
+        assert model_id == "TWINx00001" and twin is not None
+    else:  # ~560 m away
+        with pytest.raises(layers.LayerError, match="probably not this building"):
+            layers.get_twin("900001", rec)
+
+
+def test_best_linked_twin_is_the_largest_nearby_scan(monkeypatch):
+    from app import matterport
+
+    def layout(mid):
+        base = _layout(*{"SMALLnear1": (29.7551, -95.4050), "BIGnear001": (29.7552, -95.4051), "HUGEfar001": (29.7650, -95.4050)}[mid])
+        base["floors"][0]["dimensions"] = {"areaFloor": {"SMALLnear1": 900, "BIGnear001": 60_000, "HUGEfar001": 250_000}[mid]}
+        return base
+
+    monkeypatch.setattr(matterport, "fetch_layout", layout)
+    rec = {"matterport_model_ids": ["SMALLnear1", "HUGEfar001", "BIGnear001"], "latitude": 29.755, "longitude": -95.405}
+    model_id, twin = layers.get_twin("900001", rec)
+    assert model_id == "BIGnear001" and twin is not None and rec["matterport_model_id"] == "BIGnear001"

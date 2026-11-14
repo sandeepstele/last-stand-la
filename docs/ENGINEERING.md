@@ -42,7 +42,7 @@ Judging is at your table. Special-track judges come only in round 1 (9:30–12:3
 |---|---|---|---|
 | Graphs, prompts, models | `app/agent.py`, `app/prompts.py` | A | Both graphs run through `langgraph dev`. Live run 39.7 s with no tool errors. Worker tick finished, wrote a dossier and marked the queue item done. |
 | Tools | `app/tools.py` | A | Numbers loaded by property ID; tool errors become messages (ToolErrorMiddleware) |
-| Data layers | `app/layers.py`, `app/matterport.py` | **C** | Cached fixtures with provenance; Matterport read-only client works (sandbox demo model only). **CoStar toolkit not wired.** |
+| Data layers | `app/layers.py`, `app/matterport.py` | **C** | CoStar data kit + live Vexcel (cached) + Matterport twins via the team token (read-only, best linked twin within 250 m), all with provenance. |
 | Verifier | `app/verify.py`, `app/interior.py`, `app/field.py` | C | 51 tests, including a regression test for every reviewer finding |
 | Scene verbs + confirmations | `app/scene.py`, `web/src/lib/useSceneActions.ts`, `web/src/app/api/ack/route.ts` | B | Backend loop verified with a scripted frontend: 3 of 3 actions confirmed. Browser rendering not yet run. |
 | Web app | `web/` | B | Builds and type-checks. One page. |
