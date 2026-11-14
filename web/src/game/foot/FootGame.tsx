@@ -28,7 +28,7 @@ import type { Game } from "../useGame";
 import { evidenceUrl } from "../Pano";
 import { SECTOR_NAME, checksFor, kind, latestResult, parse, radioLines, type Msg } from "../radio";
 import { DISCLAIMER, type Building } from "../types";
-import { boundsOf, buildColliders, createBus, dirOf, makeCollide, reachPoint, DOOR_R, SCOUT_R, type FootCtx, type Pt, type SupplySpot, type SurvivorSpot, type SurvivorState, type System } from "./engine";
+import { boundsOf, buildColliders, createBus, dirOf, makeCollide, reachPoint, DOOR_R, SCOUT_R, SECTOR_DEG, type FootCtx, type Pt, type SupplySpot, type SurvivorSpot, type SurvivorState, type System } from "./engine";
 import { createInput, type Input } from "./input";
 import { closestOnPoly } from "./collide";
 import { createWorld } from "./world";
@@ -205,9 +205,13 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
   useEffect(() => {
     tipRef.current = tip;
   }, [tip]);
-  const [hud, setHud] = useState({ health: 100, stamina: 1, yawDeg: 0, threat: 0, nearDoor: false, target: null as null | { label: string; bearingDeg: number; dist: number } });
+  const [hud, setHud] = useState({ health: 100, stamina: 1, yawDeg: 0, threat: 0, threatDir: null as number | null, nearDoor: false, target: null as null | { label: string; bearingDeg: number; dist: number } });
   const [dronePhoto, setDronePhoto] = useState<{ src: string; caption: string } | null>(null);
   const [cctvPhoto, setCctvPhoto] = useState<{ src: string; caption: string } | null>(null);
+  const cctvPhotoOn = useRef(false);
+  useEffect(() => {
+    cctvPhotoOn.current = !!cctvPhoto;
+  }, [cctvPhoto]);
   const [feedCaps, setFeedCaps] = useState({ drone: "DRONE", cctv: "CCTV" });
   const routeTo = useRef<Pt | null>(null);
   const downed = useRef(false);
@@ -373,6 +377,11 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
     ctx.cameraOwner = "player";
     ctx.bus.emit("world:route", { pts: to ? [from, to] : null });
     ctx.bus.emit("world:beacon", { pid: toPid });
+    if (to) {
+      // Something waits on the way: a pack about 45% along the line to the fallback.
+      const [mx, mz] = ctx.collide(from[0] + (to[0] - from[0]) * 0.45, from[1] + (to[1] - from[1]) * 0.45, 0.5);
+      ctx.bus.emit("horde:pack", { x: mx, z: mz, count: 8 });
+    }
     // The horde swarms the fortress you left (chasers still come for you); not the door you're running to.
     if (hero?.door) ctx.bus.emit("horde:target", { x: hero.door.x, z: hero.door.z });
     setStep("escape");
@@ -390,6 +399,14 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
     defendEnded.current = false;
     ctx.bus.emit("world:barricade", { pid: hero?.pid ?? null });
     ctx.bus.emit("mission:defend", { pid: hero?.pid ?? "", x: door[0], z: door[1], facing: hero?.door?.facing ?? 180 });
+    ctx.mission.boards += 2; // two boards to start: [E] does something even without crates
+    {
+      // The first of the wave hits the door within ~5 s: a pack 28 m out on the wave's side.
+      const w1 = gRef.current.district?.waves.find((x) => x.n === 1);
+      const dir = w1 ? dirOf(SECTOR_DEG[w1.sector]) : f;
+      const [bx, bz] = ctx.collide(door[0] + dir[0] * 28, door[1] + dir[1] * 28, 0.5);
+      ctx.bus.emit("wave:breach", { x: bx, z: bz, count: 14 });
+    }
     // The crowd presses on the defender's spot (door + 3 m): letting them crowd you drains the barricade (Builder B's measurement).
     ctx.bus.emit("horde:target", { x: door[0] + f[0] * 3, z: door[1] + f[1] * 3 });
     ctx.input.lock();
@@ -425,7 +442,8 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
           .filter((b) => b.unfinished)
           .map((b) => ctx.colliderOf.get(b.pid))
           .filter((c): c is NonNullable<typeof c> => !!c && c.maxX > ctx.bounds.x0 && c.minX < ctx.bounds.x1 && c.maxZ > ctx.bounds.z0 && c.minZ < ctx.bounds.z1)
-          .map((c) => ({ x: (c.minX + c.maxX) / 2, z: (c.minZ + c.maxZ) / 2, r: Math.max(c.maxX - c.minX, c.maxZ - c.minZ) / 2 + 6 }));
+          .map((c) => ({ x: (c.minX + c.maxX) / 2, z: (c.minZ + c.maxZ) / 2, r: Math.max(c.maxX - c.minX, c.maxZ - c.minZ) / 2 + 6 }))
+          .filter((zn) => !(stepRef.current === "hold" && dist([zn.x, zn.z], heroDoor) < zn.r + 8)); // not on the door you're holding
         const b = g.outcome ? ctx.byPid.get(g.outcome.pid_final) : hero;
         const mmi = b?.mmi ?? 7;
         ctx.bus.emit("fx:shake", { amp: Math.max(0.12, Math.min(0.6, (mmi - 5.5) * 0.17)), secs: 4 });
@@ -594,7 +612,13 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
         if (k.has("KeyE") && (agentOff || (!tipBusy && !scoutBusy && g.phase !== "dusk"))) {
           // Step out: the night begins.
           [p.x, p.z] = ctx.collide(heroDoor[0] + dirOf(hero.door?.facing ?? 180)[0] * 2.5, heroDoor[1] + dirOf(hero.door?.facing ?? 180)[1] * 2.5, 0.5);
-          p.yaw = ((hero.door?.facing ?? 180) * Math.PI) / 180; // face the street, not the wall
+          {
+            const facing = hero.door?.facing ?? 180;
+            const w1 = g.district?.waves.find((x) => x.n === 1);
+            let d = w1 ? ((SECTOR_DEG[w1.sector] - facing + 540) % 360) - 180 : 0;
+            d = Math.max(-80, Math.min(80, d));
+            p.yaw = ((facing + d) * Math.PI) / 180; // toward the horde's side, never into the wall
+          }
           p.frozen = false;
           p.hidden = false;
           ctx.input.lock();
@@ -640,6 +664,12 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
           p.z = heroDoor[1] + ((p.z - heroDoor[1]) / dd) * 5;
         }
         if (since > 12) fireDebris();
+        // When the roll says the walls hold, the barricade doesn't visibly break (keep it above 15).
+        if (g.outcome?.held && ctx.mission.barricade.active) ctx.mission.barricade.hp = Math.max(ctx.mission.barricade.hp, 15);
+        // When the roll says the walls fail, the barricade gives way over the last 5 s (the code roll, made visible).
+        if (g.outcome && !g.outcome.held && since > DEFEND_MIN_S - 5 && ctx.mission.barricade.active) {
+          ctx.mission.barricade.hp = Math.max(0, ctx.mission.barricade.hp - 22 * dt);
+        }
         if ((g.outcome || agentOff) && since > DEFEND_MIN_S && !defendEnded.current) {
           defendEnded.current = true;
           const held = !!g.outcome?.held;
@@ -732,11 +762,17 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
       const nearDoor = (st0 === "approach" && !!hero && dist(here, doorOf(ctx, hero)!) < DOOR_R) || (st0 === "office" && !!office && dist(here, doorOf(ctx, office)!) < DOOR_R);
       const n = ctx.horde.nearest;
       const threat = n < 12 ? 3 : n < 35 ? 2 : ctx.horde.alive > 0 ? 1 : 0;
+      const hx = ctx.horde.nearestX, hz = ctx.horde.nearestZ;
+      const yawDeg0 = (((p.yaw * 180) / Math.PI) % 360 + 360) % 360;
+      const threatDir = Number.isFinite(hx) && Number.isFinite(hz) && Math.hypot(hx - p.x, hz - p.z) < 25 && !p.hidden
+        ? ((bearing(here, [hx, hz]) - yawDeg0 + 540) % 360) - 180
+        : null;
       setHud({
         health: p.health,
         stamina: p.stamina,
         yawDeg: (((p.yaw * 180) / Math.PI) % 360 + 360) % 360,
         threat,
+        threatDir,
         nearDoor,
         target: o ? { label: o.label, bearingDeg: bearing(here, o.at), dist: dist(here, o.at) } : null,
       });
@@ -747,6 +783,10 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
       const next = { flares: m.flares, boards: m.boards, medkits: m.medkits, found: m.found, crates: cratesTotal.current, survivors: m.survivors.map((v) => ({ name: v.name, state: v.state })), barricade: m.barricade.active ? { hp: Math.round(m.barricade.hp), max: m.barricade.max } : null, timer };
       setMhud((c) => (JSON.stringify(c) === JSON.stringify(next) ? c : next));
       const f = feedsRef.current;
+      if (f) {
+        const nightish = st === "night" || st === "hold" || st === "escape";
+        f.setOverride("cctv", cctvPhotoOn.current || (nightish && window.innerWidth < 1366));
+      }
       if (f) setFeedCaps((c) => (c.drone === f.caption("drone") && c.cctv === f.caption("cctv") ? c : { drone: f.caption("drone"), cctv: f.caption("cctv") }));
     };
   });
@@ -755,9 +795,18 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
   // (The scout is started from the loop: an effect keyed on the `game` prop never re-ran on night 2, when the dossier
   // was cached and nothing re-rendered the parent.)
 
+  // The roll is the night's reveal: the radio, HQ panel and moments don't see commit_plan's result (or anything after it)
+  // until the result step. The director itself still reads game.outcome to run the night.
+  const revealed = step === "result" || step === "dawn";
+  const shownMessages = useMemo(() => {
+    if (revealed) return game.messages;
+    const idx = game.messages.findIndex((m) => kind(m as Msg) === "tool" && (m as Msg).name === "commit_plan");
+    return idx < 0 ? game.messages : game.messages.slice(0, idx);
+  }, [game.messages, revealed]);
+
   // New radio lines go on the bus (spoken + crackle by the audio system).
   const radioSeen = useRef(0);
-  const radioNow = useMemo(() => radioLines(game.messages), [game.messages]);
+  const radioNow = useMemo(() => radioLines(shownMessages), [shownMessages]);
   useEffect(() => {
     const ctx = ctxRef.current;
     if (radioNow.length < radioSeen.current) radioSeen.current = 0; // play again: a fresh thread
@@ -1031,6 +1080,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
           decision={decision}
           compass={{ yawDeg: hud.yawDeg, waveSector: step === "night" || step === "escape" || step === "hold" ? game.wave?.sector ?? null : null, target: hud.target }}
           threat={hud.threat}
+          threatDir={hud.threatDir}
           feeds={{ drone: { caption: feedCaps.drone, photo: dronePhoto }, cctv: { caption: feedCaps.cctv, photo: cctvPhoto } }}
           badges={{ stub: game.stub, replay }}
           disclaimer={DISCLAIMER}
@@ -1040,7 +1090,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
           supplies={{ boards: mhud.boards, medkits: mhud.medkits, flares: mhud.flares }}
           survivors={mhud.survivors}
           barricade={mhud.barricade}
-          hq={<HqPanel messages={game.messages} busy={game.isLoading} heroPid={hero?.pid ?? null} compact={step === "approach" || step === "escape" || step === "hold"} />}
+          hq={<HqPanel messages={shownMessages} busy={game.isLoading} heroPid={hero?.pid ?? null} compact={step === "approach" || step === "escape" || step === "hold"} />}
         />
       )}
       {step === "suite" && office && (

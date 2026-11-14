@@ -570,7 +570,8 @@ export function createMission(ctx: FootCtx): System {
     const b = ctx.mission.barricade;
     if (!b.active || !wall) return;
     const p = ctx.player;
-    b.hp = Math.max(0, b.hp - Math.max(0, ctx.horde.pressing) * DRAIN_PER_ZOMBIE * dt);
+    // Capped at 4 pressing zombies (~16 hp/s): a big crowd still takes ~6 s from full, so a board (+25) is worth nailing.
+    b.hp = Math.max(0, b.hp - Math.min(4, Math.max(0, ctx.horde.pressing)) * DRAIN_PER_ZOMBIE * dt);
     // repair: hold [E] within 4 m with boards
     const near = !p.hidden && Math.hypot(p.x - door.x, p.z - door.z) < REPAIR_R;
     const holding = near && ctx.input.down.has("KeyE");
