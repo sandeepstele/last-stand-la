@@ -43,6 +43,7 @@ import { createRoofObjects, type RoofSystem } from "./roofObjects";
 import { SuiteSweep, type SweepScore } from "./SuiteSweep";
 import { InsideMesh3D } from "./InsideMesh3D";
 import { PauseMenu } from "./PauseMenu";
+import { SolarSurvey, type SolarRoof } from "./SolarSurvey";
 import { HqPanel } from "./HqPanel";
 import { HqMoments } from "./hqMoments";
 import { mulberry32 } from "../prng";
@@ -244,6 +245,19 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
   }, [sweep]);
   // Walk between the real scan spots inside a building (Matterport twin positions), when the dossier has them.
   const [hop, setHop] = useState(0);
+  // Solar-roof survey (side mission): screened roofs in the play area, [C] near one to survey and stamp.
+  const [solar, setSolar] = useState<SolarRoof[]>([]);
+  const solarRef = useRef<SolarRoof[]>([]);
+  useEffect(() => {
+    solarRef.current = solar;
+  }, [solar]);
+  const [solarOpen, setSolarOpen] = useState<string | null>(null);
+  const [solarStamps, setSolarStamps] = useState<Record<string, SolarRoof["answer"]>>({});
+  const [nearSolar, setNearSolar] = useState<string | null>(null);
+  const solarRightRef = useRef(0);
+  useEffect(() => {
+    solarRightRef.current = solar.filter((r) => solarStamps[r.pid] === r.answer).length;
+  }, [solar, solarStamps]);
   // Pause (P / Esc / the button): the sim freezes; agent runs in flight keep streaming.
   const [paused, setPausedState] = useState(false);
   const pausedRef = useRef(false);
@@ -552,6 +566,11 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
         }
         if (s === "hold") stepAt.current = ctx.time - DEFEND_MIN_S;
       }
+      if ((s === "office" || s === "approach") && k.has("KeyC")) {
+        const near = solarRef.current.find((r) => Math.hypot(r.x - p.x, r.z - p.z) < 38);
+        setSolarOpen((v) => (v ? null : near?.pid ?? null));
+        if (near) ctx.input.unlock();
+      }
       if (s === "visit") {
         if (k.has("KeyE") && visit) {
           const b = ctx.byPid.get(visit);
@@ -837,7 +856,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
           const total = m.survivors.length;
           const secs = Math.round(ctx.time - startedAt.current);
           // Records verified (your reports logged as evidence on real cases) count most; then the people you brought in.
-          const verified = (tipRef.current.sentAt !== null ? 1 : 0) + (suiteTipRef.current.sentAt !== null ? 1 : 0) + sweepRef.current.right;
+          const verified = (tipRef.current.sentAt !== null ? 1 : 0) + (suiteTipRef.current.sentAt !== null ? 1 : 0) + sweepRef.current.right + solarRightRef.current;
           const points = Math.max(0, verified * 300 + saved * 150 + m.found * 40 + Math.round(p.health) * 2 + Math.max(0, 300 - secs) - downedCount.current * 100);
           const rank = points >= 900 ? "S" : points >= 700 ? "A" : points >= 450 ? "B" : "C";
           setScore({ saved, total, found: m.found, health: p.health, secs, points, rank, downed: downedCount.current });
@@ -864,6 +883,11 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
       const o = objectivePoint(ctx);
       const here: Pt = [p.x, p.z];
       const st0 = stepRef.current;
+      {
+        const free = st0 === "office" || st0 === "approach";
+        const near = free ? solarRef.current.find((r) => Math.hypot(r.x - p.x, r.z - p.z) < 38) ?? null : null;
+        setNearSolar((v) => (v === (near?.pid ?? null) ? v : near?.pid ?? null));
+      }
       const visitDoor = (st0 === "office" || st0 === "approach") && hero
         ? ctx.district.buildings.find((b) => b.door && b.pid !== hero.pid && (st0 !== "office" || b.pid !== office?.pid) && dist(here, [b.door.x, b.door.z]) < DOOR_R) ?? null
         : null;
@@ -1028,6 +1052,9 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
     downedCount.current = 0;
     for (const sv of plan.survivors) ctx.bus.emit("horde:pack", { x: sv.x, z: sv.z, count: 4 });
     nightfallAt.current = ctx.time + NIGHTFALL_S;
+    if (!ctx.stub && !solarRef.current.length) {
+      fetch("/api/game/solar").then((r) => (r.ok ? r.json() : null)).then((d: { roofs?: SolarRoof[] } | null) => d?.roofs && setSolar(d.roofs)).catch(() => {});
+    }
     nightFallen.current = false;
     startedAt.current = ctx.time;
     if (office) {
@@ -1087,6 +1114,8 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
     debriefSent.current = false;
     setSuiteTip({ chosen: null, sentAt: null });
     setSweep({ stamped: 0, right: 0 });
+    setSolarStamps({});
+    setSolarOpen(null);
     setProg({ reached: false, checked: false, survived: false, filed: false });
     ctx.bus.emit("mission:reset", {});
     routeTo.current = null;
@@ -1124,9 +1153,9 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
   const runLabel = fallbackPid ? labelOf(fallbackPid) : null;
 
   const hints: Hint[] = [];
-  // Movement and the full controls live in the pause menu; the HUD only shows what matters right now.
-  if (step !== "intro" && step !== "dawn") hints.push({ key: "P", label: "menu" });
+  // Movement and the full controls live in the pause menu; the HUD only shows what matters right now (menu hint last).
   if (step === "approach" && hud.nearDoor) hints.push({ key: "E", label: `go inside ${heroLabel}` });
+  if ((step === "office" || step === "approach") && nearSolar && !solarOpen) hints.push({ key: "C", label: `survey the roof for solar` });
   if ((step === "office" || step === "approach") && nearVisit) hints.push({ key: "E", label: `look inside ${nearVisit}` });
   if (step === "office" && hud.nearDoor && office) hints.push({ key: "E", label: `go up to suite ${case7?.suite ?? ""} at ${office.label}` });
   if (step === "night" && !game.decision) hints.push({ key: "H", label: "hold" }, { key: "R", label: runLabel ? `run to ${runLabel}` : "run", disabled: !runLabel });
@@ -1134,6 +1163,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
 
 
   if (step === "dawn") hints.push({ key: "Enter", label: "play again" });
+  if (step !== "intro" && step !== "dawn") hints.push({ key: "P", label: "menu" });
 
   const objective =
     step === "office" ? (case7 ? `Case #${case7.n}: is the office on record in suite ${case7.suite} still there? Go and look.` : "HQ is briefing the night shift…")
@@ -1168,6 +1198,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
       ? [{ id: "survivors", kind: "side" as const, text: "Bring the office on record to safety", done: saved === mhud.survivors.length, progress: `${saved + withYou}/${mhud.survivors.length}` }]
       : []),
     ...(sweep.stamped ? [{ id: "sweep", kind: "side" as const, text: "Sweep the suites on record (records only)", done: false, progress: `${sweep.right} right of ${sweep.stamped}` }] : []),
+    ...(solar.length ? [{ id: "solar", kind: "side" as const, text: "Survey roofs for solar (a screen, not a design)", done: Object.keys(solarStamps).length >= solar.length, progress: `${Object.keys(solarStamps).length}/${solar.length}` }] : []),
     { id: "crates", kind: "side", text: "Scavenge boards for the barricade", done: mhud.crates > 0 && mhud.found >= mhud.crates, progress: `${mhud.found}/${mhud.crates}` },
   ];
 
@@ -1206,6 +1237,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
   const verifiedN = (tip.sentAt !== null ? 1 : 0) + (suiteTip.sentAt !== null ? 1 : 0);
   const outcomeLines = [
     ...(presenter && case7 && case7Weighed ? [`Case #${case7.n} was worked by HQ from the records while you ran: the lease, the listing and the suite's own tour.`] : []),
+    ...(Object.keys(solarStamps).length ? [`Solar survey: ${solar.filter((r) => solarStamps[r.pid] === r.answer).length} of ${Object.keys(solarStamps).length} roofs stamped as the screen says.`] : []),
     ...(sweep.stamped ? [`Suite sweep: ${sweep.right} of ${sweep.stamped} stamps match what the records support.`] : []),
     ...(verifiedN ? [`Records checked tonight: ${verifiedN} open case${verifiedN === 1 ? "" : "s"} from CoStar's queue${queueTotal ? ` of ${queueTotal}` : ""}. Your reports are evidence in them now.`] : []),
     ...(step === "dawn" && score.downed > 0 ? [`You went down ${score.downed}× (−${score.downed * 100} points). Your squad dragged you clear each time.`] : []),
@@ -1309,6 +1341,10 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
           ❚❚
         </button>
       )}
+      {solarOpen && (step === "office" || step === "approach") && (() => {
+        const r = solar.find((x) => x.pid === solarOpen);
+        return r ? <SolarSurvey roof={r} stamped={solarStamps[r.pid] ?? null} onStamp={(a) => setSolarStamps((m) => ({ ...m, [r.pid]: a }))} onClose={() => setSolarOpen(null)} /> : null;
+      })()}
       {paused && (
         <PauseMenu objectives={objectives} onResume={() => {
           setPaused(false);
