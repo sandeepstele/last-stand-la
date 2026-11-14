@@ -5,6 +5,7 @@
 
 import type { PanoFace } from "../types";
 import { InsidePano } from "./InsidePano";
+import { InsideWalk, type WalkProps } from "./InsideWalk";
 import { Keycap, footStyles as styles, splitKeyHint } from "./ui";
 
 export type InsideMode = "look" | "barricade" | "safe";
@@ -88,7 +89,7 @@ function ExitHint({ hint, inline = false }: { hint: string; inline?: boolean }) 
   );
 }
 
-export function InsideView({ faces, title, mode, question, note, exitHint, onChoose }: InsideProps) {
+export function InsideView({ faces, title, mode, question, note, exitHint, onChoose, walk }: InsideProps & { walk?: Omit<WalkProps, "className"> | null }) {
   const barricade = mode === "barricade";
   const real = !!note && /real interior/i.test(note);
   const [name, where] = title.split(" · ");
@@ -96,7 +97,7 @@ export function InsideView({ faces, title, mode, question, note, exitHint, onCho
     <div className={`${styles.root} ${styles.inside}`} role="dialog" aria-label={title}>
       <div className={barricade ? styles.barricade : undefined} style={{ position: "absolute", inset: 0 }}>
         {faces.length ? (
-          <InsidePano faces={faces} drift={!barricade} className={styles.panoBox} />
+          walk && walk.hops.length > 1 ? <InsideWalk {...walk} className={styles.panoBox} /> : <InsidePano faces={faces} drift={!barricade} className={styles.panoBox} />
         ) : (
           <div className={styles.emptyRoom}>
             <p>No scan of this interior</p>
