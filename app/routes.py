@@ -184,7 +184,8 @@ async def game_dossier(request: Request) -> JSONResponse:
     pid = request.path_params["pid"]
     if not PID.match(pid) or not await asyncio.to_thread(fortress.building, pid):
         return JSONResponse({"error": "not a building in the district"}, status_code=404)
-    d = fortress.with_feeds(await asyncio.to_thread(fortress.dossier, pid))  # display-only feed photos: HTTP only
+    # display-only feed photos (HTTP only); with_feeds globs the image cache, so it runs off the event loop too
+    d = await asyncio.to_thread(lambda: fortress.with_feeds(fortress.dossier(pid)))
     raw = request.query_params.get("checks")
     if raw is not None:
         # ?checks=a,b: walls re-weighed with the evidence so far plus any player report (same as commit_plan), so the
@@ -222,10 +223,11 @@ async def game_resolve(request: Request) -> JSONResponse:
 
 
 async def demo_reset(request: Request) -> JSONResponse:
-    """POST /demo/reset {"confirm": "reset"}: the one-click "Play again" at the table. Clears what one night leaves in the
-    Store (team notes and player reports, correction decisions, outbox drafts) so the next night starts clean and its
-    strict-replay keys match. Local callers only; the JSON body keeps a cross-site page from triggering it.
-    scripts/demo_reset.py does the same from a terminal (and also deletes paused threads)."""
+    # POST /demo/reset with JSON body confirm=reset: the one-click "Play again" at the table. Clears what one night
+    # leaves in the Store (team notes and player reports, correction decisions, outbox drafts) so the next night starts
+    # clean and its strict-replay keys match. Local callers only; the JSON body keeps a cross-site page from triggering
+    # it. scripts/demo_reset.py does the same from a terminal (and also deletes paused threads). (A comment, not a
+    # docstring: the server parses route docstrings as YAML for its schema.)
     host = request.client.host if request.client else ""
     if host not in ("127.0.0.1", "::1", "localhost", "testclient"):
         return JSONResponse({"error": "local only"}, status_code=403)
