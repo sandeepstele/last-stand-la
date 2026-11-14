@@ -1,0 +1,16 @@
+.wrap { position: absolute; inset: 0; overflow: hidden; background: #0b1020; }
+.canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+.labels { position: absolute; inset: 0; pointer-events: none; }
+.label {
+  position: absolute; left: 0; top: 0; white-space: nowrap; pointer-events: none;
+  font: 600 14px/1.2 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; letter-spacing: 0.04em; text-transform: uppercase;
+  color: #e6edf3; background: rgba(11, 16, 32, 0.78); border: 1px solid rgba(245, 165, 36, 0.45); border-radius: 4px; padding: 2px 6px;
+}
+.labelOn { border-color: #f5a524; color: #f5a524; }
+.tip {
+  display: none; position: absolute; left: 0; top: 0; pointer-events: none; max-width: 300px; z-index: 5;
+  font: 14px/1.4 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; color: #e6edf3;
+  background: rgba(11, 16, 32, 0.92); border: 1px solid #2a3756; border-radius: 6px; padding: 8px 10px;
+}
+.tip strong { font-size: 16px; display: block; margin-bottom: 2px; }
+.warn { color: #f5a524; }
