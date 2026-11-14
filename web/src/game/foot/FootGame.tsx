@@ -39,6 +39,7 @@ import { createMission } from "./mission";
 import { createAudio } from "./audio";
 import { createFlare } from "./flare";
 import { HqPanel } from "./HqPanel";
+import { HqMoments } from "./hqMoments";
 import { mulberry32 } from "../prng";
 import { IntroOverlay } from "./IntroOverlay";
 import { InsideView, type InsideMode } from "./InsideView";
@@ -1121,6 +1122,11 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
           <RadioLog lines={radio.slice(-4)} busy={game.isLoading} replay={replay} />
         </div>
       )}
+      {/* The AI's big moments (plan, case opened, the aerial it looked at, your report moving the odds, drafting).
+          Mounted once for the whole night (a remount would treat earlier moments as history); hidden, not unmounted. */}
+      <div style={{ position: "absolute", left: "50%", transform: "translateX(-50%)", bottom: 150, width: "min(560px, 60vw)", zIndex: 35, pointerEvents: "none", display: step === "intro" || step === "dawn" ? "none" : "block" }}>
+        <HqMoments messages={shownMessages} busy={game.isLoading} heroPid={hero?.pid ?? null} />
+      </div>
       {(showInside || step === "dawn") && (
         <div style={{ position: "absolute", top: 16, left: "50%", transform: "translateX(-50%)", zIndex: 40, pointerEvents: "none" }}>
           <Badges stub={game.stub} replay={replay} />
