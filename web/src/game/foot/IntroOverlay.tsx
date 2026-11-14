@@ -1,6 +1,11 @@
 "use client";
-// OWNER: builder D (intro, inside, HUD). PLACEHOLDER from the coding lead. Keep the props type.
-// The director flies the camera over the district while this shows; onStart hands control to the player.
+// OWNER: builder D (intro, inside, HUD). The director flies the camera over the real district while this shows;
+// onStart hands control to the player. Title card, then three briefing cards (auto-advance, click or arrow keys to skip).
+// Enter starts the game (the director listens for it); the Start button starts it from a real click (pointer lock).
+
+import { useEffect, useState, type ReactNode } from "react";
+import { DISCLAIMER } from "../types";
+import { Badges, Icon, Keycap, footStyles as styles } from "./ui";
 
 export type IntroProps = {
   heroLabel: string;
@@ -11,14 +16,201 @@ export type IntroProps = {
   onStart(): void; // must be called from a user gesture (click or Enter) so pointer lock can engage
 };
 
-export function IntroOverlay({ heroLabel, ready, onStart }: IntroProps) {
+const TITLE_MS = 3200;
+const CARD_MS = 5000;
+const CARDS = 3;
+
+const CONTROLS: { keys: string[]; what: string }[] = [
+  { keys: ["W", "A", "S", "D"], what: "move" },
+  { keys: ["Shift"], what: "sprint" },
+  { keys: ["Mouse"], what: "look (or drag)" },
+  { keys: ["Space"], what: "shove" },
+  { keys: ["E"], what: "enter · nail boards" },
+  { keys: ["Q"], what: "use a medkit" },
+  { keys: ["H", "R"], what: "hold or run" },
+  { keys: ["1", "2", "3"], what: "answer HQ" },
+];
+
+const SOURCES: { icon: "record" | "city" | "aerial" | "tour"; name: string; what: string }[] = [
+  { icon: "record", name: "CoStar record", what: "material, floors, people" },
+  { icon: "city", name: "City retrofit orders", what: "seismic retrofit lists" },
+  { icon: "aerial", name: "Vexcel aerials", what: "roofs from above" },
+  { icon: "tour", name: "Matterport 3D tours", what: "the real interiors" },
+];
+
+function Card({ n, heroLabel }: { n: number; heroLabel: string }) {
+  let body: ReactNode;
+  if (n === 1) {
+    body = (
+      <>
+        <h2>Downtown Los Angeles. <em>Every building here is real.</em></h2>
+        <p>Four real sources describe each one. Where they line up, you can trust the walls. Where they don&apos;t, nobody knows yet.</p>
+        <div className={styles.sources}>
+          {SOURCES.map((s) => (
+            <div key={s.name} className={styles.source}>
+              <Icon name={s.icon} size={24} />
+              <span>
+                <strong>{s.name}</strong>
+                <small>{s.what}</small>
+              </span>
+            </div>
+          ))}
+        </div>
+      </>
+    );
+  } else if (n === 2) {
+    body = (
+      <>
+        <h2>Your commander is <em>an AI agent.</em></h2>
+        <p>
+          Four squads read the records in parallel. When the records disagree, it opens a case, picks the evidence, and looks at the aerials itself.{" "}
+          <b>It proposes. You decide.</b>
+        </p>
+        <div className={styles.flow}>
+          <div className={styles.flowNode}>
+            <strong>4 squads</strong>records · aerial · interior · city
+          </div>
+          <span className={styles.flowArrow}>&rarr;</span>
+          <div className={styles.flowNode} data-tone="hq">
+            <strong>HQ agent</strong>opens a case, weighs evidence
+          </div>
+          <span className={styles.flowArrow}>&rarr;</span>
+          <div className={styles.flowNode}>
+            <strong>Proposal</strong>HOLD or RUN
+          </div>
+          <span className={styles.flowArrow}>&rarr;</span>
+          <div className={styles.flowNode} data-tone="you">
+            <strong>You</strong>the final call
+          </div>
+        </div>
+      </>
+    );
+  } else {
+    body = (
+      <>
+        <h2>Tonight&apos;s fortress: <em>{heroLabel || "the beacon building"}</em></h2>
+        <p>
+          The records disagree about its walls. <b>Go inside and look.</b> Your report counts: strong, capped, never final.
+        </p>
+        <div className={styles.pills}>
+          <span className={styles.pill}>Beat nightfall to the door</span>
+          <span className={styles.pill}>Bring survivors in</span>
+          <span className={styles.pill}>Hold or run</span>
+          <span className={styles.pill}>File the report at dawn</span>
+        </div>
+      </>
+    );
+  }
   return (
-    <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", background: "rgba(5,7,13,.6)", color: "#fff" }}>
-      <div style={{ textAlign: "center" }}>
-        <h1>LAST STAND LA</h1>
-        <p>The zombies are fake. The weak spots are real.</p>
-        <p>Reach {heroLabel || "the building"} before dark.</p>
-        <button type="button" disabled={!ready} onClick={onStart}>Start (Enter)</button>
+    <section className={styles.brief} key={n}>
+      <div className={styles.briefHead}>
+        <span>BRIEFING {n} / {CARDS}</span>
+        <span>{n === 1 ? "THE CITY" : n === 2 ? "THE COMMANDER" : "YOUR ORDERS"}</span>
+      </div>
+      {body}
+    </section>
+  );
+}
+
+export function IntroOverlay({ heroLabel, ready, stub, replay, attribution, onStart }: IntroProps) {
+  // 0 = the title card alone; 1..3 = briefing cards.
+  const [idx, setIdx] = useState(0);
+
+  useEffect(() => {
+    if (idx >= CARDS) return;
+    const t = setTimeout(() => setIdx((i) => Math.min(CARDS, i + 1)), idx === 0 ? TITLE_MS : CARD_MS);
+    return () => clearTimeout(t);
+  }, [idx]);
+
+  useEffect(() => {
+    const kd = (e: KeyboardEvent) => {
+      if (e.code === "ArrowRight" || e.code === "Space") setIdx((i) => Math.min(CARDS, i + 1));
+      else if (e.code === "ArrowLeft") setIdx((i) => Math.max(1, i - 1));
+    };
+    window.addEventListener("keydown", kd);
+    return () => window.removeEventListener("keydown", kd);
+  }, []);
+
+  const next = () => setIdx((i) => Math.min(CARDS, i + 1));
+  const card = Math.max(1, idx);
+
+  return (
+    <div className={`${styles.root} ${styles.intro}`} onClick={next} role="dialog" aria-label="Last Stand LA briefing">
+      <div className={styles.letterbox}>
+        <span className={styles.rec}>LIVE · DOWNTOWN LOS ANGELES · DUSK</span>
+        <Badges stub={stub} replay={replay} />
+      </div>
+
+      <div className={styles.stage}>
+        <header className={styles.titleBlock} data-big={idx === 0}>
+          <div className={styles.kicker}>One night · Real buildings · An AI commander</div>
+          <h1 className={styles.title}>
+            Last Stand <span>LA</span>
+          </h1>
+          <p className={styles.tagline}>
+            The zombies are fake. <b>The weak spots are real.</b>
+          </p>
+        </header>
+
+        <div className={styles.briefRow} data-show={idx > 0}>
+          <Card n={card} heroLabel={heroLabel} />
+          <aside className={styles.controls}>
+            <h3>CONTROLS</h3>
+            <ul className={styles.ctrlList}>
+              {CONTROLS.map((c) => (
+                <li key={c.what}>
+                  <span className={styles.ctrlKeys}>
+                    {c.keys.map((k) => (
+                      <Keycap key={k} k={k} />
+                    ))}
+                  </span>
+                  <span>{c.what}</span>
+                </li>
+              ))}
+            </ul>
+          </aside>
+        </div>
+
+        <div className={styles.startRow} data-show={idx > 0}>
+          <button
+            type="button"
+            className={styles.start}
+            disabled={!ready}
+            onClick={(e) => {
+              e.stopPropagation();
+              onStart();
+            }}
+          >
+            {ready ? "Start" : "Loading the district"} <Keycap k="Enter" />
+          </button>
+          <div className={styles.dots}>
+            {Array.from({ length: CARDS }, (_, i) => i + 1).map((n) => (
+              <button
+                key={n}
+                type="button"
+                aria-label={`Briefing ${n}`}
+                className={styles.dot}
+                data-state={n < card ? "done" : n === card && idx > 0 ? "now" : "todo"}
+                style={{ ["--dur" as string]: `${CARD_MS}ms` }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIdx(n);
+                }}
+              />
+            ))}
+          </div>
+          <span className={styles.skipHint}>
+            Click for the next briefing · <Keycap k="Enter" size="sm" /> to start now
+          </span>
+        </div>
+      </div>
+
+      <div className={styles.letterbox} data-pos="bottom">
+        <span className={styles.credits}>
+          <span>{DISCLAIMER}</span>
+          {attribution && <span>{attribution}</span>}
+        </span>
+        <span>HackPrinceton · Retrofit Radar</span>
       </div>
     </div>
   );
