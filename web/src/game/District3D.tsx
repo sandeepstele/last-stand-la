@@ -11,7 +11,8 @@ import type { Building, District, Material, Wave } from "./types";
 import styles from "./district.module.css";
 
 export type DistrictHandle = {
-  focus(pid: string): void;
+  /** Eased camera move (~1 s); distance = camera distance to keep (default: 200-380 m). */
+  focus(pid: string, distance?: number): void;
   shake(mmi: number): void;
   flash(pid: string, color: string | number): void;
   setTarget(pid: string | null): void;
@@ -190,12 +191,12 @@ export const District3D = forwardRef<DistrictHandle, Props>(function District3D(
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(BG);
     scene.fog = new THREE.Fog(BG, 500, 1900);
-    scene.add(new THREE.HemisphereLight(0x8fa6d8, 0x1a140f, 1.1));
-    const sun = new THREE.DirectionalLight(0xffa860, 1.9);
-    sun.position.set(-400, 140, 120); // low, from the west: dusk
+    scene.add(new THREE.HemisphereLight(0x9fb4e0, 0x1a1a24, 1.5));
+    const sun = new THREE.DirectionalLight(0xffa860, 2.3);
+    sun.position.set(-320, 150, 260); // low, from the west-southwest: dusk
     scene.add(sun);
 
-    const ground = new THREE.Mesh(new THREE.PlaneGeometry(4000, 4000), new THREE.MeshStandardMaterial({ color: 0x0f1628, roughness: 1 }));
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(4000, 4000), new THREE.MeshBasicMaterial({ color: 0x0c1428 }));
     ground.rotation.x = -Math.PI / 2;
     scene.add(ground);
     const grid = new THREE.GridHelper(4000, 200, 0x1d2a44, 0x16203a);
@@ -221,7 +222,7 @@ export const District3D = forwardRef<DistrictHandle, Props>(function District3D(
     const group = new THREE.Group();
     scene.add(group);
 
-    const ringGeo = new THREE.RingGeometry(0.86, 1, 64);
+    const ringGeo = new THREE.RingGeometry(0.9, 1, 64);
     ringGeo.rotateX(-Math.PI / 2);
     const ringMats = {
       amber: new THREE.MeshBasicMaterial({ color: AMBER, transparent: true, opacity: 0.6, depthWrite: false, side: THREE.DoubleSide }),
@@ -557,7 +558,7 @@ export const District3D = forwardRef<DistrictHandle, Props>(function District3D(
   }, [conflictMaterials, district]);
 
   useImperativeHandle(ref, () => ({
-    focus(pid) {
+    focus(pid, distance) {
       const ctx = ctxRef.current;
       const rec = ctx?.recs.get(pid);
       if (!ctx || !rec) return;
@@ -566,7 +567,7 @@ export const District3D = forwardRef<DistrictHandle, Props>(function District3D(
       f.to.set(rec.cx, 0, rec.cz);
       f.off0.copy(ctx.camera.position).sub(ctx.controls.target);
       const len = f.off0.length();
-      f.off1.copy(f.off0).setLength(Math.min(Math.max(len, 200), 380));
+      f.off1.copy(f.off0).setLength(distance ?? Math.min(Math.max(len, 200), 380));
       f.t0 = performance.now();
       f.active = true;
     },
