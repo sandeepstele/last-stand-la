@@ -46,6 +46,8 @@ export function createCameraRig(ctx: FootCtx): CameraRig {
   let swoopT = SWOOP;
   let shakeAmp = 0, shakeDur = 1, shakeT = 0;
   let near = 0;
+  let stepPh = 0;
+  let bobW = 0;
 
   /** Longest boom (<= want) whose ground segment from the player to the camera crosses no building edge. */
   const clearBoom = (px: number, pz: number, ox: number, oz: number, dx: number, dz: number, want: number) => {
@@ -109,6 +111,13 @@ export function createCameraRig(ctx: FootCtx): CameraRig {
       pos.z = cz;
       target.copy(pivot).addScaledVector(look, 12);
       target.y += 0.15;
+
+      // a little footfall bob: barely there at a walk, felt at a sprint
+      stepPh = (stepPh + (dt * p.speed * Math.PI * 4) / (1.7 + 0.22 * p.speed)) % (Math.PI * 4);
+      bobW += ((sprinting ? 1 : p.speed > 0.5 ? 0.3 : 0) - bobW) * (1 - Math.exp(-6 * dt));
+      pos.y += bobW * 0.04 * Math.sin(stepPh);
+      pos.x += rx * bobW * 0.025 * Math.cos(stepPh / 2);
+      pos.z += rz * bobW * 0.025 * Math.cos(stepPh / 2);
 
       // shake: smooth pseudo-noise from incommensurate sines, envelope decays quadratically
       let roll = 0;
