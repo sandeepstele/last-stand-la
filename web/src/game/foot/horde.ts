@@ -77,6 +77,15 @@ export function createHorde(ctx: FootCtx): System {
 
   const matCloth = new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: 0x151515 });
   const matSkin = new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: 0x223018 });
+  // a faint cool rim on the silhouettes, so a crowd reads against the dark street beyond the flashlight
+  for (const m of [matCloth, matSkin]) {
+    m.onBeforeCompile = (sh) => {
+      sh.fragmentShader = sh.fragmentShader.replace(
+        "#include <emissivemap_fragment>",
+        "#include <emissivemap_fragment>\n  float rimK = 1.0 - abs(dot(normal, normalize(vViewPosition)));\n  totalEmissiveRadiance += vec3(0.10, 0.15, 0.13) * rimK * rimK * rimK;",
+      );
+    };
+  }
   const matEyes = new THREE.MeshBasicMaterial({ color: 0xc8ff7a, fog: false });
   const matDisc = new THREE.MeshBasicMaterial({ color: 0xffffff, depthTest: false, depthWrite: false, fog: false });
 
