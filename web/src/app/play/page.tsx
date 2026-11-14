@@ -12,40 +12,34 @@ import { Pano } from "@/game/Pano";
 import { SECTOR_NAME, radioLines } from "@/game/radio";
 import type { Building } from "@/game/types";
 import { useGame } from "@/game/useGame";
+import { useReplayMode } from "@/game/useReplayMode";
+import { FootGame } from "@/game/foot/FootGame";
 import page from "./page.module.css";
 
 const GREEN = "#4cc38a";
 const RED = "#e5484d";
-// The one tip the backend's strict replay covers: sent verbatim (as "Tip: <this>"). The chip's label leaves the address out.
-const TIP_PRESET = "I'm standing at 737 Broadway, the walls are poured concrete with concrete columns";
+// A tip the backend's strict replay covers: sent verbatim (as "Tip: <this>"). No address in source code.
+const TIP_PRESET = "I'm inside the building. The walls and columns look like concrete.";
 
 export default function PlayPage() {
   return (
     <Suspense fallback={<main className={page.main} />}>
-      <Play />
+      <Mode />
     </Suspense>
   );
 }
 
-/** The agent server can be restarted into replay mid-demo; a replayed run must never show without its badge. */
-function useReplayMode(enabled: boolean, refreshKey: unknown): string | null {
-  const [replay, setReplay] = useState<string | null>(null);
-  useEffect(() => {
-    if (!enabled) return;
-    let alive = true;
-    const check = () =>
-      fetch("/api/backend/healthz")
-        .then((r) => r.json())
-        .then((h: { replay?: string | null }) => alive && setReplay(h.replay ?? null))
-        .catch(() => {});
-    check();
-    const id = setInterval(check, 15_000);
-    return () => {
-      alive = false;
-      clearInterval(id);
-    };
-  }, [enabled, refreshKey]);
-  return enabled ? replay : null;
+/** ?mode=foot: Last Stand on foot (third person). Default: the commander's map. Both take &stub=1. */
+function Mode() {
+  const params = useSearchParams();
+  return params.get("mode") === "foot" ? <Foot /> : <Play />;
+}
+
+function Foot() {
+  const params = useSearchParams();
+  const game = useGame(params.get("stub") === "1");
+  const replay = useReplayMode(!game.stub, game.isLoading);
+  return <FootGame game={game} replay={replay} />;
 }
 
 function Play() {

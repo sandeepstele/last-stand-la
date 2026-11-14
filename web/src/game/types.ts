@@ -1,4 +1,4 @@
-// Contract v1.1 (Last Stand LA). Mirrors the backend's /game/* routes and laststand tool results.
+// Contract v1.1 + v1.2/v1.3 optional fields (Last Stand LA). Mirrors the backend's /game/* routes and laststand tool results.
 // Shapes only: every number here is computed server-side; the frontend never invents one.
 
 export type Material = "concrete" | "steel" | "masonry" | "wood" | "unknown";
@@ -29,7 +29,16 @@ export type Building = {
   people?: number | null;
   /** An open record conflict on material: what the listing records vs what the city list implies. */
   conflict?: { costar: Material; city: Material } | null;
+  // ---- v1.2 optional: the one or two buildings the player can walk into
+  /** Door in ABSOLUTE district metres, 1 m outside the wall. facing = outward normal, degrees clockwise from north (-z). */
+  door?: { x: number; z: number; facing: number } | null;
 };
+
+/** v1.2: one aerial mosaic for the ground, north-up. Image top edge = z0, left edge = x0 (district metres). */
+export type Ground = { image: string; x0: number; z0: number; x1: number; z1: number };
+
+/** v1.3 (planned): a real building outline that is NOT a kit building (backdrop + collision). ABSOLUTE district metres. */
+export type Block = { ring: [number, number][]; height_m: number };
 
 export type Wave = { n: number; sector: Sector; arrive_s: number; size: number };
 
@@ -39,6 +48,12 @@ export type District = {
   seed: number;
   buildings: Building[];
   waves: Wave[];
+  /** v1.2 optional: null or absent when the mosaic could not be fetched. */
+  ground?: Ground | null;
+  /** v1.3 optional: other real buildings around the play area; [] or absent when unavailable. */
+  blocks?: Block[] | null;
+  /** v1.3: "© OpenStreetMap contributors" when blocks/outlines came from OSM. Show it in the footer and credits. */
+  attribution?: string | null;
 };
 
 export type ScoreKey = "walls" | "quake" | "roof" | "people" | "space";
@@ -58,7 +73,7 @@ export type Dossier = {
   scores: Record<ScoreKey, Score>;
   unknowns: string[];
   /** File names served by /evidence/image/{name}. */
-  images: { drone: string[]; cctv: string[]; pano?: PanoFace[] };
+  images: { drone: string[]; cctv: string[]; pano?: PanoFace[]; inside?: PanoFace[] };
   case: DossierCase | null;
   disclaimer: string;
 };
