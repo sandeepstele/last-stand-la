@@ -17,8 +17,28 @@ The user's decisions (1:50 pm): **Entertainment**; the deep agent is always visi
 | 0:35 | E: inside the building's real 3D tour. [1] Concrete; the odds move | "So I go in and look. My report is evidence: capped, never final." |
 | 0:55 | Step out; the horde; HQ proposes RUN or HOLD. Press the key; F | "The agent proposes; I decide. Code rolls the walls against the 1994 Northridge shaking at this block." |
 | 1:10 | Aftershock, dawn, "File the report" | "And the night produced something real." |
-| 1:15 | The auditor: the case file with your report as a person's report, the draft correction, the queue (#6 of 328; #7 already worked) | "Same agent, auditing CoStar's records: it worked case 7 from the data while I ran. The other 326 it works overnight." |
+| 1:15 | The auditor: the case file with your report as a person's report, the draft correction, the queue (#6 of 328; #7 already worked) | "Same agent, auditing CoStar's records: it worked case 7 from the data while I ran. **It checks CoStar's records against the city's lists, Vexcel aerials and Matterport tours together: 328 open cases in the queue. Tonight you saw two of them.** The other 326 it works overnight." |
 | 1:50 | Close | "Settle tonight's cases and make it to dawn: every night, real records get checked." |
+
+**Why 737 Broadway is the winning card:** it's the only address where all three sponsor layers meet:
+- the CoStar record;
+- the Vexcel aerial the agent reads (shown on screen as "HQ looked from above");
+- the Matterport tour you walk into.
+
+Your report from inside changes the real case. That's "Inside and Out". Case #7 uses two layers (the CoStar listing and the Matterport tour, also popped up on screen while the agent reads it).
+
+**If a CoStar judge asks "what else does it use?":** open one of these in the auditor (`/`). These cases already work there; nothing new to record.
+
+| Show | Case | What it proves |
+|---|---|---|
+| Before/after aerials | **11547997** (stale entry) | The agent compared the 2021 and 2026 Vexcel captures: a pitched roof became a new flat-roof building, matching a 2022 demolition permit: *likely replaced (0.98)* |
+| Car counts ("sharp enough to count parking spaces") | **362982** | Cars on the lot fell from 47 to 29 between aerial captures (−38%). The agent counts it only as weak evidence |
+| A ghost tenant + Matterport | **247386, suite 300** | CoStar records a 50-person office; the suite has been listed 15 months; the tour after the listing reads "furnished but unoccupied" |
+| Facade vision | **247337** | The city says concrete, CoStar steel; the agent saw concrete fins, and a second look confirmed it: *likely concrete (0.73)* |
+
+**Words to avoid:**
+- Never call the corner views "live feeds". They are **game camera views** (renders of the scene). The real imagery is the **ground** (the Vexcel mosaic) and the photos **HQ looked at** (marked "HQ evidence · real image").
+- The breadth claim "568 buildings screened across Houston and LA" comes from the earlier verifier screen (266 consistent, 247 worth a look, 55 refused). **Confirm what it covers before saying it.** The safe numbers are 328 open cases; 226 LA buildings on retrofit lists; 61 unfinished; 12 of 69 concrete records agree.
 
 **Acceptance:**
 - `?demo=1` on strict replay, with F at approach and escape.

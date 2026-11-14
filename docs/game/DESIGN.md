@@ -121,7 +121,7 @@ You're a survivor in downtown LA at nightfall. Your squad commander is an AI on 
   - Waves spawn 70-115 m out on the wave's compass side and come down the street grid.
   - Shoved zombies stagger. At dawn they shamble off and sink away.
 - **The city:** see "Real data → mechanics" below. Every building is at its real outline and height, on the real aerial photo.
-- **Two live feeds that follow you:**
+- **Two game camera views that follow you** (renders, not real feeds; never call them "live"):
   - **DRONE:** a camera 70 m above you, north-up, with red markers on zombies and amber on you. It works as tactical awareness: see what's behind the building. **When the agent runs its vision check, the drone slot shows the real aerial image it looked at, with its finding** ("HQ looked: concrete frame visible"). The agent's eyes become yours for 10 s.
   - **CCTV:** a fixed security camera on the nearest real building corner that can see you. It switches as you move ("CCTV · <building> · corner").
 - **HUD:**
