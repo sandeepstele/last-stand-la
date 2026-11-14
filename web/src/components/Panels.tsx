@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+
 import type { AnyStream } from "@langchain/react";
 import type { QuakeReplay, SeismicStatus, VerifyResult } from "@/lib/contracts";
 import styles from "@/app/page.module.css";
@@ -109,15 +111,21 @@ export function VerifierCard({ result }: { result: VerifyResult | null }) {
 
 /** deepagents HITL: one decision per pending action request. */
 export function ApprovalBar({ stream }: { stream: AnyStream }) {
+  const [sent, setSent] = useState<unknown>(null);
   const value = stream.interrupt?.value as { action_requests?: { name: string; args: Record<string, unknown> }[] } | undefined;
   const requests = value?.action_requests ?? [];
   if (!requests.length) return null;
-  const decide = (type: "approve" | "reject") => void stream.respond({ decisions: requests.map(() => ({ type })) });
+  const busy = sent === stream.interrupt; // one answer per interrupt, even on a double click
+  const decide = (type: "approve" | "reject") => {
+    if (busy) return;
+    setSent(stream.interrupt);
+    stream.respond({ decisions: requests.map(() => ({ type })) }).catch(() => setSent(null));
+  };
   return (
     <div className={styles.approval}>
       {requests.map((r, k) => <span key={k}>Approve <strong>{r.name}</strong> {JSON.stringify(r.args)}?</span>)}
-      <button onClick={() => decide("approve")}>Approve</button>
-      <button onClick={() => decide("reject")}>Reject</button>
+      <button disabled={busy} onClick={() => decide("approve")}>Approve</button>
+      <button disabled={busy} onClick={() => decide("reject")}>Reject</button>
     </div>
   );
 }

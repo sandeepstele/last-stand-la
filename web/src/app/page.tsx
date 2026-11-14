@@ -39,9 +39,15 @@ export default function LiveRun() {
     return () => clearInterval(id);
   }, [stream.isLoading]);
   const [replay, setReplay] = useState<string | null>(null);
+  // Re-check the replay mode on every run and every 15 s: the server can be restarted into replay mid-demo,
+  // and a replayed answer must never show without its badge.
   useEffect(() => {
-    fetch("/api/backend/healthz").then((r) => r.json()).then((h: { replay?: string | null }) => setReplay(h.replay ?? null)).catch(() => {});
-  }, []);
+    const check = () =>
+      fetch("/api/backend/healthz").then((r) => r.json()).then((h: { replay?: string | null }) => setReplay(h.replay ?? null)).catch(() => {});
+    check();
+    const id = setInterval(check, 15_000);
+    return () => clearInterval(id);
+  }, [stream.isLoading]);
   const open = (pid: string, suite?: string) => {
     const q = suite ? `Check suite ${suite} at building ${pid}: is the tenant on record still there?` : `Check building ${pid}.`;
     setQuestion(q);
@@ -74,7 +80,10 @@ export default function LiveRun() {
         {replay && !replay.startsWith("recording") && (
           <p className={styles.warning}><span className={styles.badge}>REPLAY</span> Model answers are replayed from a recorded run ({replay}); the data, tools and images are live.</p>
         )}
-        {elapsed !== null && (
+        {!!stream.error && !stream.isLoading && (
+          <p className={styles.warning}>The run stopped with an error ({String((stream.error as { message?: string })?.message ?? stream.error).slice(0, 200)}). Ask again, or use the replay.</p>
+        )}
+        {elapsed !== null && !stream.error && (
           <p className={styles.muted}>{stream.isLoading ? `Investigating… ${elapsed.toFixed(0)} s` : `Answered in ${elapsed.toFixed(0)} s`}</p>
         )}
         <CaseFile messages={stream.messages} loading={stream.isLoading} />
