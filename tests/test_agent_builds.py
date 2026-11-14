@@ -11,8 +11,9 @@ from langchain.tools import tool  # noqa: E402
 from langchain_core.language_models.fake_chat_models import GenericFakeChatModel  # noqa: E402
 from langchain_core.messages import AIMessage  # noqa: E402
 
-SCENE = {"show_building", "ghost_compare", "reveal_levels", "place_solar"}
-SHARED = {"verify_building", "retrofit", "field_check", "notify_me", "send_outreach", "watch_building", "task", "write_todos"}
+SCENE = {"show_building", "ghost_compare", "reveal_levels"}
+SHARED = {"verify_building", "field_check", "notify_me", "send_outreach", "watch_building", "task", "write_todos",
+          "seismic_status", "find_retrofit_targets", "quake_replay"}
 
 
 def _tools(graph):
@@ -24,17 +25,20 @@ def test_graphs_compile_with_the_intended_tools():
 
     live, worker = _tools(agent.live_agent), _tools(agent.worker_agent)
     assert SHARED <= live and SHARED <= worker
-    assert SCENE <= live and not SCENE & worker
+    assert SCENE <= live and not (SCENE | {"place_solar"}) & worker
     assert {"queue_next", "queue_done"} <= worker and not {"queue_next", "queue_done"} & live
+    # seismic lens: solar tools stay in the code (worker) but are not offered live
+    assert not {"retrofit", "place_solar", "find_buildings"} & live
+    assert {"retrofit", "find_buildings"} <= worker
 
 
 def test_subagents_are_scoped():
     from app import agent
 
     specs = {s["name"]: s for s in agent._specialists()}
-    assert set(specs) == {"records", "aerial", "interior", "general-purpose"}
+    assert set(specs) == {"records", "aerial", "interior", "civic", "general-purpose"}
     assert specs["general-purpose"]["tools"] == []  # overrides the default that inherits every tool
-    assert all(len(specs[n]["tools"]) == 1 for n in ("records", "aerial", "interior"))
+    assert all(len(specs[n]["tools"]) == 1 for n in ("records", "aerial", "interior", "civic"))
 
 
 def test_a_failing_tool_becomes_a_message_not_a_crash():

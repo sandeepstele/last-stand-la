@@ -118,7 +118,7 @@ def test_a_live_call_that_times_out_moves_to_the_next_model():
 
 
 def test_live_prompt_keeps_every_rule():
-    p = prompts.LIVE_PROMPT
+    p = prompts.LIVE_PROMPT_SOLAR
     for rule in ("check_link", "nothing\n  was compared or sized", "Never state a number that a tool did not return",
                  '"worth a look"', "(illustrative data)", "(placeholder inputs)", "notify_me", "send_outreach",
                  "approval", "ERROR", "Never describe what the screen shows"):

@@ -100,7 +100,8 @@ def replay(event_id: str = DEFAULT_EVENT, limit: int = 8) -> dict[str, Any]:
         hits.append({**a, "shaking": sh, "km_from_epicenter": round(km(ev["lat"], ev["lon"], rec["latitude"], rec["longitude"]), 1)})
     hits.sort(key=_rank_key)
     strong = [h for h in hits if (h["shaking"] or {}).get("mmi", 0) >= 7]
-    unfinished = [h for h in hits if h["status"] == "unfinished"]
+    # the 56 real ones: unfinished, minus stale entries (the listed building was probably replaced)
+    unfinished = [h for h in hits if h["status"] == "unfinished" and not any(x["key"] == "stale_entry" for x in h["hypotheses"])]
     return {
         "replay": True,
         "label": f"Replay of the {ev['time'][:4]} {ev['place']} (M{ev['magnitude']}), not a live event",

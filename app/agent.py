@@ -27,11 +27,13 @@ from app import prompts
 from app.scene import SCENE_TOOLS
 from app.tools import (
     QUEUE_TOOLS,
+    SEISMIC_TOOLS,
     SIDE_EFFECT_TOOLS,
     costar_record,
     field_check,
     find_buildings,
     retrofit,
+    seismic_status,
     twin_levels,
     verify_building,
     vexcel_attributes,
@@ -117,6 +119,7 @@ def models() -> Models:
 
 
 MODELS = models()
+LENS = os.environ.get("RADAR_LENS", "seismic").strip().lower()  # seismic (the pitch) or solar (kept, hidden)
 
 
 def _tool_error(exc: Exception, request) -> str:
@@ -188,6 +191,20 @@ class InteriorOut(BaseModel):
     notes: str = ""
 
 
+class CivicOut(BaseModel):
+    property_id: str
+    on_retrofit_list: str | None = None  # soft_story / non_ductile_concrete / none
+    status: str | None = None  # unfinished / finished / not_listed / not_applicable
+    order_date: str | None = None
+    overdue_steps: list[str] = []
+    next_deadline: str | None = None
+    costar_material: str | None = None
+    findings: list[str] = []
+    recent_permits: int | None = None
+    source: str | None = None
+    notes: str = ""
+
+
 def _specialists(live: bool = True, m: Models | None = None) -> list[dict]:
     """Live specialists run on the fast model, fetch once, and get the timeout-and-fallback chain;
     the worker's have no time limit (and are unchanged)."""
@@ -206,6 +223,8 @@ def _specialists(live: bool = True, m: Models | None = None) -> list[dict]:
          "system_prompt": prompts.AERIAL_PROMPT, "tools": [vexcel_attributes], "model": model, "response_format": AerialOut, "middleware": middleware()},
         {"name": "interior", "description": "Reads the Matterport twin for a property id: levels scanned, levels below the entrance, floor-to-floor height, coverage.",
          "system_prompt": prompts.INTERIOR_PROMPT, "tools": [twin_levels], "model": model, "response_format": InteriorOut, "middleware": middleware()},
+        {"name": "civic", "description": "Reads Los Angeles' own seismic retrofit records for a property id: which retrofit list, order date, step deadlines (with extensions), overdue steps, retrofit permits, and conflicts with CoStar's recorded material.",
+         "system_prompt": prompts.CIVIC_PROMPT, "tools": [seismic_status], "model": model, "response_format": CivicOut, "middleware": middleware()},
         # Replaces the auto-added general-purpose subagent, which would inherit every main tool
         # (scene verbs, send_outreach) and the approval gates.
         {"name": "general-purpose", "description": "Explains findings in plain language. Has no tools; never use it to fetch data.",
@@ -237,11 +256,18 @@ def build(mode: str, store=None, checkpointer=None, m: Models | None = None):
     For local runs pass an InMemoryStore and InMemorySaver."""
     live = mode == "live"
     m = m or MODELS
-    tools = [find_buildings, verify_building, retrofit, field_check, *SIDE_EFFECT_TOOLS, *(SCENE_TOOLS if live else QUEUE_TOOLS)]
+    solar = LENS == "solar"
+    if live and not solar:
+        # Seismic lens (the pitch): solar tools stay in the code but are not offered live.
+        tools = [*SEISMIC_TOOLS, verify_building, field_check, *SIDE_EFFECT_TOOLS, *(t for t in SCENE_TOOLS if t.name != "place_solar")]
+    elif live:
+        tools = [find_buildings, verify_building, retrofit, field_check, *SIDE_EFFECT_TOOLS, *SCENE_TOOLS]
+    else:
+        tools = [find_buildings, *SEISMIC_TOOLS, verify_building, retrofit, field_check, *SIDE_EFFECT_TOOLS, *QUEUE_TOOLS]
     return create_deep_agent(
         model=m.orch if live else m.worker,
         tools=tools,
-        system_prompt=prompts.LIVE_PROMPT if live else prompts.WORKER_PROMPT,
+        system_prompt=(prompts.LIVE_PROMPT_SOLAR if solar else prompts.LIVE_PROMPT) if live else prompts.WORKER_PROMPT,
         middleware=_middleware(live, m),
         subagents=_specialists(live, m),
         skills=["/skills/"],

@@ -26,7 +26,7 @@ from typing import Any
 
 from langchain.tools import ToolRuntime, tool
 
-from app import field, layers, photon, search
+from app import field, layers, photon, quake, retrofit_lists, search
 from app.verify import investigate
 
 FIELD_REQUEST = (
@@ -56,6 +56,66 @@ def find_buildings(city: str | None = None, property_type: str | None = None, re
     address, kW, MWh/yr, t CO2/yr and the readiness and deal reasons."""
     return search.find(city=city, property_type=property_type, readiness=readiness, deal_fit=deal_fit,
                        min_kw=min_kw, sort=sort, limit=limit)
+
+
+# ------------------------------------------------------------------ seismic lens (LA retrofit orders)
+
+RETROFIT_FILTERS = {
+    "unfinished": lambda a: a["status"] == "unfinished" and not _has(a, "stale_entry"),
+    "past_due": lambda a: any(h.get("past_due") for h in a["hypotheses"]),
+    "material_conflict": lambda a: _has(a, "material_conflict"),
+    "not_proven_safe": lambda a: _has(a, "not_proven_safe"),
+    "stale_entry": lambda a: _has(a, "stale_entry"),
+    "work_underway": lambda a: _has(a, "work_underway"),
+    "any": lambda a: True,
+}
+
+
+def _has(a: dict, key: str) -> bool:
+    return any(h["key"] == key for h in a["hypotheses"])
+
+
+@tool
+def seismic_status(property_id: str) -> dict:
+    """Los Angeles mandatory seismic retrofit status for one building, from the city's own lists and permits:
+    which list (soft-story or non-ductile concrete), the order date, each ordinance step with its deadline
+    (including city extensions) and whether it is done, overdue or not due yet, recent retrofit permits,
+    CoStar's recorded material and year built, and the hypotheses the code found: unfinished (past_due true
+    or false), stale_entry, material_conflict, not_proven_safe, work_underway."""
+    return retrofit_lists.status(property_id)
+
+
+@tool
+def find_retrofit_targets(finding: str = "unfinished", retrofit_list: str = "any", limit: int = 8) -> dict:
+    """Search every Los Angeles CoStar kit building against the city's seismic retrofit lists, for questions
+    that name no building. finding: unfinished (default; excludes stale entries), past_due, material_conflict,
+    not_proven_safe, stale_entry, work_underway or any. retrofit_list: soft_story, concrete or any.
+    Returns how many match and the top results (past-due first, then most units)."""
+    pick = RETROFIT_FILTERS.get((finding or "unfinished").strip().lower())
+    if pick is None:
+        return {"status": "bad_filter", "allowed": sorted(RETROFIT_FILTERS)}
+    lst = {"soft_story": "soft_story", "concrete": "non_ductile_concrete", "any": None}.get((retrofit_list or "any").strip().lower(), "?")
+    if lst == "?":
+        return {"status": "bad_filter", "allowed_lists": ["soft_story", "concrete", "any"]}
+    rows = [a for a in retrofit_lists.portfolio() if pick(a) and (lst is None or any(e["list"] == lst for e in a["lists"]))]
+    rows.sort(key=lambda a: (not any(h.get("past_due") for h in a["hypotheses"]), -(a["units"] or 0)))
+    return {"status": "ok", "matched": len(rows), "finding": finding, "retrofit_list": retrofit_list,
+            "results": [{"property_id": a["property_id"], "address": a["address"], "year_built": a["year_built"],
+                         "stories": a["stories"], "units": a["units"], "costar_material": a["costar_material"],
+                         "lists": [e["list"] for e in a["lists"]], "findings": [h["key"] for h in a["hypotheses"]],
+                         "past_due": any(h.get("past_due") for h in a["hypotheses"])} for a in rows[:max(1, min(limit, 15))]],
+            "source": "LA DBS retrofit lists + permits (data.lacity.org), matched locally"}
+
+
+@tool
+def quake_replay(event_id: str = "ci3144585", limit: int = 8) -> dict:
+    """LABELED REPLAY of a real past earthquake (default: 1994 Northridge, M6.7) against today's portfolio:
+    every LA kit building with a seismic finding, with the shaking it would get (USGS ShakeMap intensity, MMI),
+    ranked past-due first, then by shaking. Always say it is a replay of the 1994 earthquake, not a live event."""
+    return quake.replay(event_id, limit)
+
+
+SEISMIC_TOOLS = [seismic_status, find_retrofit_targets, quake_replay]
 
 
 # ------------------------------------------------------------------ data layers (specialists)
