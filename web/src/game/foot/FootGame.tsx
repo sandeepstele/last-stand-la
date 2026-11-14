@@ -39,6 +39,8 @@ import { createMission } from "./mission";
 import { createAudio } from "./audio";
 import { createFlare } from "./flare";
 import { createCityMap, type City } from "./cityMap";
+import { createRoofObjects, type RoofSystem } from "./roofObjects";
+import { SuiteSweep, type SweepScore } from "./SuiteSweep";
 import { HqPanel } from "./HqPanel";
 import { HqMoments } from "./hqMoments";
 import { mulberry32 } from "../prng";
@@ -167,6 +169,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
   const wrapRef = useRef<HTMLDivElement>(null);
   const ctxRef = useRef<FootCtx | null>(null);
   const feedsRef = useRef<Feeds | null>(null);
+  const roofRef = useRef<RoofSystem | null>(null);
   const gRef = useRef(game);
   useEffect(() => {
     gRef.current = game;
@@ -232,6 +235,11 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
   const [city, setCity] = useState<{ buildings: number; cases: number } | null>(null);
   const [visit, setVisit] = useState<string | null>(null);
   const [nearVisit, setNearVisit] = useState<string | null>(null);
+  const [sweep, setSweep] = useState<SweepScore>({ stamped: 0, right: 0 });
+  const sweepRef = useRef(sweep);
+  useEffect(() => {
+    sweepRef.current = sweep;
+  }, [sweep]);
   // Walk between the real scan spots inside a building (Matterport twin positions), when the dossier has them.
   const [hop, setHop] = useState(0);
   const hopCount = useRef(0);
@@ -301,7 +309,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
 
     const feeds = createFeeds(ctx);
     feedsRef.current = feeds;
-    const systems = [safely("world", createWorld(ctx)), safely("player", createPlayer(ctx)), safely("horde", createHorde(ctx)), safely("mission", createMission(ctx)), safely("flare", createFlare(ctx)), safely("city", createCityMap(ctx, (c: City) => setCity({ buildings: c.total_buildings ?? c.buildings.length, cases: c.total_cases ?? c.buildings.filter((b) => b.case).length }))), safely("audio", createAudio(ctx)), safely("feeds", feeds)];
+    const systems = [safely("world", createWorld(ctx)), safely("player", createPlayer(ctx)), safely("horde", createHorde(ctx)), safely("mission", createMission(ctx)), safely("flare", createFlare(ctx)), safely("roof", (roofRef.current = createRoofObjects(ctx))), safely("city", createCityMap(ctx, (c: City) => setCity({ buildings: c.total_buildings ?? c.buildings.length, cases: c.total_cases ?? c.buildings.filter((b) => b.case).length }))), safely("audio", createAudio(ctx)), safely("feeds", feeds)];
     ctx.bus.emit("world:beacon", { pid: hero.pid });
     const offDown = ctx.bus.on("player:downed", () => (downed.current = true));
     const offMission = [
@@ -520,7 +528,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
         return;
       }
       if ((s === "office" || s === "approach") && k.has("KeyE")) {
-        const other = ctx.district.buildings.find((b) => b.door && b.pid !== hero.pid && b.pid !== office?.pid && dist(here, [b.door.x, b.door.z]) < DOOR_R);
+        const other = ctx.district.buildings.find((b) => b.door && b.pid !== hero.pid && (s !== "office" || b.pid !== office?.pid) && dist(here, [b.door.x, b.door.z]) < DOOR_R);
         if (other) {
           g.loadDossier(other.pid);
           visitFrom.current = s;
@@ -788,7 +796,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
           const total = m.survivors.length;
           const secs = Math.round(ctx.time - startedAt.current);
           // Records verified (your reports logged as evidence on real cases) count most; then the people you brought in.
-          const verified = (tipRef.current.sentAt !== null ? 1 : 0) + (suiteTipRef.current.sentAt !== null ? 1 : 0);
+          const verified = (tipRef.current.sentAt !== null ? 1 : 0) + (suiteTipRef.current.sentAt !== null ? 1 : 0) + sweepRef.current.right;
           const points = Math.max(0, verified * 300 + saved * 150 + m.found * 40 + Math.round(p.health) * 2 + Math.max(0, 300 - secs) - downedCount.current * 100);
           const rank = points >= 900 ? "S" : points >= 700 ? "A" : points >= 450 ? "B" : "C";
           setScore({ saved, total, found: m.found, health: p.health, secs, points, rank, downed: downedCount.current });
@@ -816,7 +824,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
       const here: Pt = [p.x, p.z];
       const st0 = stepRef.current;
       const visitDoor = (st0 === "office" || st0 === "approach") && hero
-        ? ctx.district.buildings.find((b) => b.door && b.pid !== hero.pid && b.pid !== office?.pid && dist(here, [b.door.x, b.door.z]) < DOOR_R) ?? null
+        ? ctx.district.buildings.find((b) => b.door && b.pid !== hero.pid && (st0 !== "office" || b.pid !== office?.pid) && dist(here, [b.door.x, b.door.z]) < DOOR_R) ?? null
         : null;
       setNearVisit((v) => (v === (visitDoor?.label ?? null) ? v : visitDoor?.label ?? null));
       // Walking past a building with real aerial imagery on file: show it in the camera slot (labelled as such).
@@ -918,6 +926,11 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
     if (hero && heroWeighs > 0) refreshDossier(hero.pid, checksFor(game.messages, hero.pid));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [heroWeighs, hero, refreshDossier]);
+  const heroRoofD = hero ? game.dossiers[hero.pid] : undefined;
+  const heroRoof = heroRoofD && heroRoofD !== "loading" && heroRoofD !== "error" ? heroRoofD.roof ?? null : null;
+  useEffect(() => {
+    if (hero && heroRoof) roofRef.current?.setRoof(hero.pid, heroRoof);
+  }, [hero, heroRoof]);
   const lean = hero ? game.conflictMaterials[hero.pid] ?? null : null;
   useEffect(() => {
     if (hero) ctxRef.current?.bus.emit("world:lean", { pid: hero.pid, material: lean });
@@ -1032,6 +1045,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
     debriefAsked.current = false;
     debriefSent.current = false;
     setSuiteTip({ chosen: null, sentAt: null });
+    setSweep({ stamped: 0, right: 0 });
     setProg({ reached: false, checked: false, survived: false, filed: false });
     ctx.bus.emit("mission:reset", {});
     routeTo.current = null;
@@ -1111,6 +1125,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
     ...(mhud.survivors.length
       ? [{ id: "survivors", kind: "side" as const, text: "Bring the office on record to safety", done: saved === mhud.survivors.length, progress: `${saved + withYou}/${mhud.survivors.length}` }]
       : []),
+    ...(sweep.stamped ? [{ id: "sweep", kind: "side" as const, text: "Sweep the suites on record (records only)", done: false, progress: `${sweep.right} right of ${sweep.stamped}` }] : []),
     { id: "crates", kind: "side", text: "Scavenge boards for the barricade", done: mhud.crates > 0 && mhud.found >= mhud.crates, progress: `${mhud.found}/${mhud.crates}` },
   ];
 
@@ -1148,6 +1163,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
   const verifiedN = (tip.sentAt !== null ? 1 : 0) + (suiteTip.sentAt !== null ? 1 : 0);
   const outcomeLines = [
     ...(presenter && case7 && case7Weighed ? [`Case #${case7.n} was worked by HQ from the records while you ran: the lease, the listing and the suite's own tour.`] : []),
+    ...(sweep.stamped ? [`Suite sweep: ${sweep.right} of ${sweep.stamped} stamps match what the records support.`] : []),
     ...(verifiedN ? [`Records checked tonight: ${verifiedN} open case${verifiedN === 1 ? "" : "s"} from CoStar's queue${queueTotal ? ` of ${queueTotal}` : ""}. Your reports are evidence in them now.`] : []),
     ...(step === "dawn" && score.downed > 0 ? [`You went down ${score.downed}× (−${score.downed * 100} points). Your squad dragged you clear each time.`] : []),
     ...(game.outcome ? (game.outcome.why ?? "").split("; ").map((x) => x.replace(/\.\s*Game outcome.*$/, "")) : []),
@@ -1196,6 +1212,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
           onChoose={() => {}}
         />
       )}
+      {step === "visit" && visitB && <SuiteSweep pid={visitB.pid} onScore={setSweep} />}
       {step === "suite" && office && (
         <InsideView
           faces={officeFaces}

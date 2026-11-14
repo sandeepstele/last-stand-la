@@ -83,6 +83,8 @@ export type Dossier = {
   images: { drone: string[]; cctv: string[]; pano?: PanoFace[]; inside?: PanoFace[]; inside_hops?: InsideHop[] };
   case: DossierCase | null;
   disclaimer: string;
+  /** Vexcel roof counts (real) for the on-screen roof; positions drawn are illustrative. Null without an aerial. */
+  roof?: { shape?: string; material?: string; objects?: Record<string, number>; capture?: string; note?: string } | null;
 };
 
 export type PlanAction = "hold" | "run";
