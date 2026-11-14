@@ -64,18 +64,47 @@ function clear(g: Grid, colliders: readonly Collider[], a: Pt, b: Pt): boolean {
   return !blocked(a[0], a[1], b[0], b[1], colliders);
 }
 
-/** A* (8-connected, no corner cutting) then line-of-sight smoothing. null when there is no path. */
-export function findPath(g: Grid, colliders: readonly Collider[], from: Pt, to: Pt): Pt[] | null {
+/**
+ * A* (8-connected, no corner cutting) then line-of-sight smoothing. null when there is no path.
+ * With `goal` (a building), any walkable cell within `reach` m of its outline ends the search (the nearest side of
+ * the building as walked, not as the crow flies); the path then ends at that cell instead of `to`.
+ */
+export function findPath(g: Grid, colliders: readonly Collider[], from: Pt, to: Pt, goal?: Collider, reach = 3.5): Pt[] | null {
   const s = nearestWalkable(g, from[0], from[1]);
-  const t = nearestWalkable(g, to[0], to[1]);
+  let t = nearestWalkable(g, to[0], to[1]);
   if (s < 0 || t < 0) return null;
   const N = g.w * g.h;
   const gs = new Float32Array(N).fill(Infinity);
   const came = new Int32Array(N).fill(-1);
   const closed = new Uint8Array(N);
+  let isGoal: Uint8Array | null = null;
+  if (goal) {
+    isGoal = new Uint8Array(N);
+    let any = false;
+    const i0 = Math.max(0, Math.floor((goal.minX - reach - g.x0) / g.cell)), i1 = Math.min(g.w - 1, Math.floor((goal.maxX + reach - g.x0) / g.cell));
+    const j0 = Math.max(0, Math.floor((goal.minZ - reach - g.z0) / g.cell)), j1 = Math.min(g.h - 1, Math.floor((goal.maxZ + reach - g.z0) / g.cell));
+    for (let j = j0; j <= j1; j++)
+      for (let i = i0; i <= i1; i++) {
+        const k = j * g.w + i;
+        if (!g.walk[k]) continue;
+        const x = g.x0 + (i + 0.5) * g.cell, z = g.z0 + (j + 0.5) * g.cell;
+        if (closestOnPoly(x, z, goal.pts).d < reach) {
+          isGoal[k] = 1;
+          any = true;
+        }
+      }
+    if (!any) isGoal = null;
+  }
   const ti = t % g.w, tj = Math.floor(t / g.w);
+  const gb = goal ? { i0: (goal.minX - g.x0) / g.cell, i1: (goal.maxX - g.x0) / g.cell, j0: (goal.minZ - g.z0) / g.cell, j1: (goal.maxZ - g.z0) / g.cell, r: reach / g.cell } : null;
   const hf = (k: number) => {
-    const dx = Math.abs((k % g.w) - ti), dz = Math.abs(Math.floor(k / g.w) - tj);
+    const i = k % g.w, j = Math.floor(k / g.w);
+    if (isGoal && gb) {
+      // distance to the goal's bounding box, less the reach: never overestimates
+      const dx = Math.max(0, gb.i0 - i, i - gb.i1), dz = Math.max(0, gb.j0 - j, j - gb.j1);
+      return Math.max(0, Math.hypot(dx, dz) - gb.r - 1);
+    }
+    const dx = Math.abs(i - ti), dz = Math.abs(j - tj);
     return Math.max(dx, dz) + 0.4142 * Math.min(dx, dz);
   };
   // binary heap of (f, k)
@@ -129,7 +158,8 @@ export function findPath(g: Grid, colliders: readonly Collider[], from: Pt, to: 
   while (hk.length && iters++ < N) {
     const k = pop();
     if (closed[k]) continue;
-    if (k === t) {
+    if (isGoal ? isGoal[k] : k === t) {
+      t = k;
       found = true;
       break;
     }
@@ -153,7 +183,7 @@ export function findPath(g: Grid, colliders: readonly Collider[], from: Pt, to: 
   const cells: Pt[] = [];
   for (let k = t; k >= 0; k = came[k]) cells.push([g.x0 + ((k % g.w) + 0.5) * g.cell, g.z0 + (Math.floor(k / g.w) + 0.5) * g.cell]);
   cells.reverse();
-  const raw: Pt[] = [from, ...cells, to];
+  const raw: Pt[] = isGoal ? [from, ...cells] : [from, ...cells, to];
   // greedy line-of-sight shortcutting
   const out: Pt[] = [raw[0]];
   let a = 0;
@@ -175,25 +205,50 @@ void main() {
 const RIBBON_FS = /* glsl */ `
 uniform float uTime;
 uniform float uLen;
+uniform float uWidth;
 uniform vec3 uColor;
 uniform float uFade;
 varying vec2 vUv;
 void main() {
-  float across = 1.0 - abs(vUv.y * 2.0 - 1.0);
-  float edge = smoothstep(0.0, 0.55, across);
-  float core = smoothstep(0.55, 1.0, across);
-  float ph = fract((vUv.x - uTime * 7.0) / 5.0);
-  float dash = smoothstep(0.0, 0.08, ph) * (1.0 - smoothstep(0.42, 0.55, ph));
-  // chevron-ish head: brighter leading edge of each dash
-  float head = smoothstep(0.30, 0.48, ph) * (1.0 - smoothstep(0.48, 0.55, ph));
-  float endFade = smoothstep(0.0, 3.0, uLen - vUv.x) * smoothstep(0.0, 2.0, vUv.x);
-  float a = (edge * 0.35 + core * dash * 0.9 + head * core * 0.8) * endFade * uFade;
+  float y = abs(vUv.y * 2.0 - 1.0);            // 0 centre .. 1 edge
+  float m = y * uWidth * 0.5;                   // metres from the centre line
+  float s = vUv.x - uTime * 4.0;                // flows toward the target at 4 m/s
+  float ph = mod(s, 10.0);
+  // a chevron every 10 m, tip forward on the centre line, arms swept back
+  float arm = 7.0 - m * 1.15;
+  float chev = smoothstep(arm - 1.0, arm - 0.75, ph) * (1.0 - smoothstep(arm - 0.05, arm + 0.2, ph)) * (1.0 - smoothstep(uWidth * 0.40, uWidth * 0.44, m));
+  // short centre dashes between chevrons
+  float dph = mod(s, 2.5);
+  float dash = (1.0 - smoothstep(0.16, 0.24, m)) * smoothstep(0.0, 0.15, dph) * (1.0 - smoothstep(1.1, 1.25, dph)) * (1.0 - step(3.2, ph) * step(ph, 7.6));
+  float rail = smoothstep(0.62, 0.86, y) * (1.0 - smoothstep(0.9, 1.0, y));
+  float base = (1.0 - y) * 0.10;
+  float endFade = smoothstep(0.0, 3.0, uLen - vUv.x) * smoothstep(0.0, 1.5, vUv.x);
+  float a = (base + rail * 0.5 + chev * 1.1 + dash * 0.65) * endFade * uFade;
   gl_FragColor = vec4(uColor * a, a);
 }`;
 
+/** The kit building (without a door) a route target stands next to: any side of it will do. */
+function goalNear(ctx: FootCtx, to: Pt): Collider | undefined {
+  let best: Collider | undefined;
+  let bd = 2.5;
+  for (const c of ctx.colliders as Collider[]) {
+    if (!c.pid || ctx.byPid.get(c.pid)?.door) continue;
+    if (to[0] < c.minX - 3 || to[0] > c.maxX + 3 || to[1] < c.minZ - 3 || to[1] > c.maxZ + 3) continue;
+    const d = pointInPoly(to[0], to[1], c.pts) ? 0 : closestOnPoly(to[0], to[1], c.pts).d;
+    if (d < bd) {
+      bd = d;
+      best = c;
+    }
+  }
+  return best;
+}
+
+/** Route to the nearest walkable side of a door-less target building (shorter than the straight-line reach point). */
+export const MULTI_GOAL = true;
+
 /** The route ribbon. set(pts) on world:route; update() recomputes at most every 0.5 s unless the target moved. */
 export function createRoute(ctx: FootCtx, grid: Grid) {
-  const uniforms = { uTime: { value: 0 }, uLen: { value: 1 }, uColor: { value: new THREE.Color().setRGB(1.0, 0.66, 0.2) }, uFade: { value: 0 } };
+  const uniforms = { uTime: { value: 0 }, uLen: { value: 1 }, uWidth: { value: 3.2 }, uColor: { value: new THREE.Color().setRGB(1.0, 0.66, 0.2) }, uFade: { value: 0 } };
   const mat = new THREE.ShaderMaterial({
     uniforms, vertexShader: RIBBON_VS, fragmentShader: RIBBON_FS,
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false, side: THREE.DoubleSide,
@@ -211,7 +266,7 @@ export function createRoute(ctx: FootCtx, grid: Grid) {
   let dirty = false;
 
   const build = (path: Pt[]) => {
-    const W = 2.2, y = 0.09;
+    const W = uniforms.uWidth.value, y = 0.09;
     const pos: number[] = [], uv: number[] = [], idx: number[] = [];
     let dist = 0;
     for (let i = 0; i < path.length; i++) {
@@ -249,7 +304,7 @@ export function createRoute(ctx: FootCtx, grid: Grid) {
   const compute = () => {
     if (!want) return;
     const [from, to] = want;
-    const path = findPath(grid, ctx.colliders, from, to) ?? [from, to];
+    const path = findPath(grid, ctx.colliders, from, to, MULTI_GOAL ? goalNear(ctx, to) : undefined) ?? [from, to];
     if (path.length >= 2) build(path);
     mesh.visible = true;
     lastAt = ctx.time;

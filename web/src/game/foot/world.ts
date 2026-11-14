@@ -13,7 +13,6 @@ import { buildGrid, createRoute, walkableAt } from "./worldRoute";
 import { dustTexture, facadeTextures, glowTexture, labelSprite, questionSprite, rng, streetTexture, TILE } from "./worldTex";
 
 const AMBER = 0xf5a524;
-const RED = 0xe5484d;
 /** Backdrop blocks: neutral concrete and stone, darker than the kit's material colours. */
 const BLOCK_TONES = [0x8d8a84, 0x7d8188, 0x9a948a, 0x6f747b, 0x8a8278, 0xa19d96, 0x767069];
 
