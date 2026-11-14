@@ -52,6 +52,11 @@ WAVES = [{"n": 1, "sector": "W", "arrive_s": 20, "share": 0.04},
          {"n": 2, "sector": "N", "arrive_s": 45, "share": 0.07},
          {"n": 3, "sector": "E", "arrive_s": 70, "share": 0.11}]
 SECTORS = ("N", "NE", "E", "SE", "S", "SW", "W", "NW")
+# On foot (contract v1.2): the buildings you can walk into (each has a cached 360-degree interior), and one Vexcel
+# aerial mosaic under the playable area (fetched once into fixtures/vision, gitignored; the bounds are the box it was
+# extracted for, in district metres).
+ENTERABLE = ("6375735", "254167")
+GROUND = {"image": "laststand_ground.jpg", "x0": -420, "z0": -220, "x1": 60, "z1": 60}
 
 
 def _clamp(v: float, lo: int = 5, hi: int = 95) -> int:
@@ -149,6 +154,41 @@ def _mmi(rec: dict[str, Any]) -> float | None:
 # ------------------------------------------------------------------ the district
 
 
+def _outline(b: dict[str, Any]) -> list[tuple[float, float]]:
+    if b["footprint"]:
+        return [(b["x"] + px, b["z"] + pz) for px, pz in b["footprint"]]
+    hw, hd = b["w"] / 2, b["d"] / 2
+    return [(b["x"] - hw, b["z"] - hd), (b["x"] + hw, b["z"] - hd), (b["x"] + hw, b["z"] + hd), (b["x"] - hw, b["z"] + hd)]
+
+
+def _door(b: dict[str, Any], others: list[dict[str, Any]]) -> dict[str, Any]:
+    """A door on the outline edge with the most open street in front of it (we don't know the real entrance).
+    facing: the outward normal in degrees, 0 = north (-z), clockwise."""
+    ring = _outline(b)
+    cx, cz = sum(p[0] for p in ring) / len(ring), sum(p[1] for p in ring) / len(ring)
+    blockers = [(o["x"], o["z"], max(o["w"], o["d"]) / 2) for o in others if o["pid"] != b["pid"]]
+    best = None
+    for (ax, az), (bx, bz) in zip(ring, ring[1:] + ring[:1]):
+        length = math.hypot(bx - ax, bz - az)
+        if length < 4:
+            continue
+        mx, mz = (ax + bx) / 2, (az + bz) / 2
+        nx, nz = (bz - az) / length, -(bx - ax) / length
+        if (mx - cx) * nx + (mz - cz) * nz < 0:
+            nx, nz = -nx, -nz  # point away from the building
+        clear = next((d for d in range(5, 45, 5) if any(math.hypot(mx + nx * d - ox, mz + nz * d - oz) < r for ox, oz, r in blockers)), 45)
+        if best is None or (clear, length) > best[0]:
+            best = ((clear, length), mx + nx, mz + nz, nx, nz)
+    if best is None:
+        return {"x": b["x"], "z": b["z"], "facing": 0}
+    _, x, z, nx, nz = best
+    return {"x": round(x, 1), "z": round(z, 1), "facing": round(math.degrees(math.atan2(nx, -nz)) % 360)}
+
+
+def _ground() -> dict[str, Any] | None:
+    return dict(GROUND) if (VISION / GROUND["image"]).exists() else None
+
+
 @lru_cache(maxsize=1)
 def district() -> dict[str, Any]:
     c = costar.get(CENTER_PID)
@@ -176,10 +216,12 @@ def district() -> dict[str, Any]:
             "unfinished": city["unfinished"], "past_due": city["past_due"], "mmi": _mmi(rec), "hero": pid in HEROES,
             "year_built": rec.get("year_built"), "people": _employees().get(pid) or None, "conflict": conflict})
     buildings.sort(key=lambda b: (not b["hero"], b["pid"]))
+    for b in buildings:
+        b["door"] = _door(b, buildings) if b["pid"] in ENTERABLE else None
     waves = [{"n": w["n"], "sector": w["sector"], "arrive_s": w["arrive_s"], "size": max(50, round(units * w["share"] / 10) * 10)}
              for w in WAVES]
     return {"center": {"lat": round(lat0, 6), "lon": round(lon0, 6)}, "radius_m": RADIUS_M, "seed": SEED,
-            "buildings": buildings, "waves": waves}
+            "buildings": buildings, "waves": waves, "ground": _ground()}
 
 
 def building(pid: str) -> dict[str, Any] | None:
@@ -273,7 +315,9 @@ def _images(pid: str) -> dict[str, Any]:
             f = VISION / f"{p0[0]}_p0_f{k}.jpg"
             if f.exists():
                 pano.append({"face": f"f{k}", "name": f.name})
-    return {"drone": drone, "cctv": cctv, "pano": pano}
+    # Inside (v1.2): the building's own twin if cached (6375735's top-floor loft), else the suite tour's faces.
+    inside = [{"face": f"f{k}", "name": f.name} for k in range(6) if (f := VISION / f"{pid}_twin_p0_f{k}.jpg").exists()]
+    return {"drone": drone, "cctv": cctv, "pano": pano, "inside": inside or (pano if pid in ENTERABLE else [])}
 
 
 @lru_cache(maxsize=128)

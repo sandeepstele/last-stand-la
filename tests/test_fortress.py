@@ -88,3 +88,20 @@ def test_strict_replay_refuses_uncached_vision(monkeypatch, tmp_path):
     monkeypatch.setattr(vision, "_invoke", lambda *a, **k: pytest.fail("strict replay must not call the vision model"))
     with pytest.raises(vision.VisionUnavailable):
         vision.ask("TEST-A", "facade", [], "TEST question", ["a", "b"])
+
+
+def test_door_faces_open_street():
+    me = {"pid": "TEST-A", "x": 0.0, "z": 0.0, "footprint": None, "w": 20.0, "d": 20.0}
+    # neighbours hard against the west, north and south walls: only the east side is open street
+    west = {"pid": "TEST-W", "x": -22.0, "z": 0.0, "footprint": None, "w": 20.0, "d": 20.0}
+    north = {"pid": "TEST-N", "x": 0.0, "z": -22.0, "footprint": None, "w": 20.0, "d": 20.0}
+    south = {"pid": "TEST-S", "x": 0.0, "z": 22.0, "footprint": None, "w": 20.0, "d": 20.0}
+    door = fortress._door(me, [me, west, north, south])
+    assert door["facing"] == 90 and door["x"] > 10  # east, just outside the east wall
+
+
+def test_ground_is_null_without_the_cached_mosaic(monkeypatch, tmp_path):
+    monkeypatch.setattr(fortress, "VISION", tmp_path)
+    assert fortress._ground() is None
+    (tmp_path / fortress.GROUND["image"]).write_bytes(b"\xff\xd8fake")
+    assert fortress._ground()["x0"] == fortress.GROUND["x0"]
