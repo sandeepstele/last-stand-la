@@ -91,11 +91,11 @@ export function ThreatPips({ level }: { level: number }) {
   );
 }
 
-export function RadioLog({ lines, busy }: { lines: RadioLine[]; busy: boolean }) {
+export function RadioLog({ lines, busy, replay }: { lines: RadioLine[]; busy: boolean; replay?: string | null }) {
   const shown = lines.slice(-8);
   return (
     <section className={styles.card}>
-      <h2 className={styles.head}>Radio{busy && <span className={styles.badge}>LIVE</span>}</h2>
+      <h2 className={styles.head}>Radio{busy && <span className={styles.badge}>{replay && !replay.startsWith("recording") ? "REPLAY" : "LIVE"}</span>}</h2>
       {shown.length ? (
         <ol className={styles.radio}>
           {shown.map((l) => (

@@ -101,10 +101,12 @@ export function useGame(stub: boolean) {
 
   // A dossier recomputed by the server with the checks run so far (walls follow the evidence + people's reports).
   const [fresh, setFresh] = useState<Record<string, Dossier>>({});
+  const freshGen = useRef(0);
   const refreshDossier = useCallback((pid: string, checks: string[]) => {
     if (stub || !checks.length) return;
+    const gen = freshGen.current;
     getJson<Dossier>(`/api/game/dossier/${encodeURIComponent(pid)}?checks=${checks.join(",")}`)
-      .then((d) => d?.scores && setFresh((m) => ({ ...m, [pid]: d })))
+      .then((d) => d?.scores && gen === freshGen.current && setFresh((m) => ({ ...m, [pid]: d })))
       .catch(() => {});
   }, [stub]);
 
@@ -241,6 +243,7 @@ export function useGame(stub: boolean) {
   const reset = useCallback(() => {
     if (fallbackTimer.current) clearTimeout(fallbackTimer.current);
     agent.reset();
+    freshGen.current += 1;
     setFresh({});
     setPhase("dusk");
     setFortress(null);

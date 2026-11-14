@@ -137,7 +137,7 @@ export function IntroOverlay({ heroLabel, ready, stub, replay, attribution, onSt
   return (
     <div className={`${styles.root} ${styles.intro}`} onClick={next} role="dialog" aria-label="Last Stand LA briefing">
       <div className={styles.letterbox}>
-        <span className={styles.rec}>LIVE · DOWNTOWN LOS ANGELES · DUSK</span>
+        <span className={styles.rec}>DOWNTOWN LOS ANGELES · DUSK</span>
         <Badges stub={stub} replay={replay} />
       </div>
 

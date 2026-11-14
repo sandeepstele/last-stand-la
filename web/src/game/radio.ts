@@ -113,7 +113,14 @@ export function radioLines(messages: readonly unknown[]): RadioLine[] {
     if (k === "human") {
       const raw = text(m.content).trim();
       const wave = raw.match(/^Wave (\d+) is coming from the (\w+)/);
+      const suite = raw.match(/^Check suite (\S+) at building /);
+      if (suite) {
+        lines.push({ id, who: "HQ", text: `opening the case on suite ${suite[1]}: is the office on record still there?`, tone: "hq" });
+        return;
+      }
       const t = /^Scout property /.test(raw) ? "scout tonight's fortress"
+        : /^Brief the night shift/.test(raw) ? "brief me on tonight's cases"
+        : /^Debrief the night shift/.test(raw) ? "debrief: draft tonight's corrections"
         : wave ? `wave ${wave[1]} incoming from the ${SECTOR_NAME[wave[2] as Sector] ?? wave[2]}`
           : firstSentence(raw, 120);
       if (t) lines.push({ id, who: "You", text: t, tone: "you" });

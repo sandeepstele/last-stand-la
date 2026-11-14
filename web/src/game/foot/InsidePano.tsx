@@ -125,6 +125,7 @@ export function InsidePano({ faces, drift = true, className }: { faces: PanoFace
       mats.forEach((m) => m.dispose());
       loaded.forEach((t) => t.dispose());
       grad.dispose();
+      renderer.forceContextLoss();
       renderer.dispose();
       renderer.domElement.remove();
     };
