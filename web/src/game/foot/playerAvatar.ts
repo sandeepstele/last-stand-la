@@ -18,6 +18,8 @@ export type PoseIn = {
   aim: number;
   /** Seconds, for idle motion. */
   time: number;
+  /** 0..1, how out of breath (1 - stamina): heavier, faster breathing. */
+  tired: number;
 };
 
 export type Avatar = {
@@ -26,6 +28,8 @@ export type Avatar = {
   /** The tip of the flashlight (read its world position for the spotlight). */
   lens: THREE.Object3D;
   pose(dt: number, s: PoseIn): void;
+  /** 1 = solid .. lower = see-through (the camera is pressed against the avatar). */
+  setFade(alpha: number): void;
   dispose(): void;
 };
 
@@ -54,6 +58,8 @@ export function createAvatar(): Avatar {
   const blob = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.38, depthWrite: false });
   const mats: THREE.Material[] = [jacket, tape, pants, boots, skin, beanie, pack, glove, torch, lensMat, blob];
   const baseEmissive = jacket.emissive.clone();
+  const solid = [jacket, tape, pants, boots, skin, beanie, pack, glove, torch, lensMat];
+  let fade = 1;
 
   const part = (parent: THREE.Object3D, geo: THREE.BufferGeometry, mat: THREE.Material, sx: number, sy: number, sz: number, x: number, y: number, z: number) => {
     const m = new THREE.Mesh(geo, mat);
@@ -131,6 +137,7 @@ export function createAvatar(): Avatar {
   let gaitW = 0; // smoothed 0..1 "moving" weight
   let sprintW = 0;
   let lean = 0;
+  let breathPh = 0;
 
   return {
     root,
@@ -143,7 +150,8 @@ export function createAvatar(): Avatar {
       // one stride cycle (two steps) gets longer with speed: a jog at WALK, a dash at SPRINT
       phase = (phase + (dt * s.speed * Math.PI * 2) / (1.7 + s.speed * 0.22)) % (Math.PI * 2);
       const sn = Math.sin(phase), cs = Math.cos(phase);
-      const breath = Math.sin(s.time * 2.1);
+      breathPh += dt * (2.1 + 4.2 * s.tired);
+      const breath = Math.sin(breathPh) * (1 + 2.2 * s.tired);
       const idle = 1 - g;
 
       // legs: thighs swing, knees fold on the forward swing
@@ -187,6 +195,17 @@ export function createAvatar(): Avatar {
 
       // a red flush on the jacket when hit
       jacket.emissive.setRGB(baseEmissive.r + s.hit * 0.55, baseEmissive.g * (1 - s.hit), baseEmissive.b * (1 - s.hit));
+    },
+    setFade(alpha) {
+      const a = Math.round(Math.min(1, Math.max(0.05, alpha)) * 50) / 50;
+      if (a === fade) return;
+      fade = a;
+      for (const m of solid) {
+        m.transparent = a < 1;
+        m.opacity = a;
+        m.depthWrite = a >= 1;
+      }
+      blob.opacity = 0.38 * a;
     },
     dispose() {
       root.removeFromParent();

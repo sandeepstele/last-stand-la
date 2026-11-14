@@ -219,7 +219,7 @@ export function createPlayer(ctx: FootCtx): System {
       avatar.root.visible = !p.hidden;
       avatar.root.position.set(p.x, 0, p.z);
       avatar.root.rotation.y = -facing;
-      avatar.pose(dt, { speed: speedSm, turn, shove: shoveW, hit: hitFx, aim: p.pitch, time: t });
+      avatar.pose(dt, { speed: speedSm, turn, shove: shoveW, hit: hitFx, aim: p.pitch, time: t, tired: 1 - p.stamina });
 
       // ---- lights: the beam goes where the camera looks, from the hand
       const night = 1 - smooth(0, 1, ctx.dawn);
@@ -237,13 +237,17 @@ export function createPlayer(ctx: FootCtx): System {
       beamDir.set(fx * Math.cos(bp), Math.sin(bp), fz * Math.cos(bp));
       spot.target.position.copy(lensPos).addScaledVector(beamDir, 10);
       spot.intensity = SPOT_I * night * night * on;
-      beam.set(lensPos, beamDir, night * night * on * smooth(0.3, 0.8, ahead));
+      beam.set(lensPos, beamDir, night * night * on * smooth(0.3, 0.8, ahead) * (1 - rig.near()));
       arc.update(dt);
       warm.position.set(p.x - fx * 1.2, 2.3, p.z - fz * 1.2);
       warm.intensity = WARM_I * night * on;
 
       // ---- camera + screen flash
       rig.update(dt, p.sprinting);
+      // camera pressed against the avatar (wall behind): fade it, and drop it entirely when the lens is in its head
+      const near = rig.near();
+      avatar.setFade(1 - 0.8 * near);
+      if (near > 0.85) avatar.root.visible = false;
       const low = p.health > 0 && p.health < 35 ? (1 - p.health / 35) * (0.32 + 0.12 * Math.sin(t * 4.5)) : 0;
       const op = p.hidden ? 0 : Math.round(Math.max(flashV, low) * 100) / 100;
       if (op !== flashShown) {

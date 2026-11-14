@@ -17,6 +17,8 @@ const SWOOP = 1.7; // s, intro flyover -> shoulder
 
 export type CameraRig = {
   update(dt: number, sprinting: boolean): void;
+  /** 0 = normal boom .. 1 = camera pressed against the avatar (a wall behind): fade the avatar by this. */
+  near(): number;
   /** Teleport: skip smoothing on the next update. */
   snap(): void;
   /** Decaying shake (amp ~0.1..0.6). Stronger shakes replace weaker ones. */
@@ -43,6 +45,7 @@ export function createCameraRig(ctx: FootCtx): CameraRig {
   let fov = baseFov;
   let swoopT = SWOOP;
   let shakeAmp = 0, shakeDur = 1, shakeT = 0;
+  let near = 0;
 
   /** Longest boom (<= want) whose ground segment from the player to the camera crosses no building edge. */
   const clearBoom = (px: number, pz: number, ox: number, oz: number, dx: number, dz: number, want: number) => {
@@ -95,8 +98,11 @@ export function createCameraRig(ctx: FootCtx): CameraRig {
       if (snapNext) boom = want;
       else boom += (want - boom) * (1 - Math.exp((want < boom ? -25 : -3) * dt));
 
+      // a wall right behind: the camera tucks in at the shoulder, rises a little, and the avatar fades (see near())
+      const tight = Math.min(1, Math.max(0, (BOOM * 0.6 - boom) / (BOOM * 0.6 - MIN_BOOM)));
+      near = tight;
       pos.copy(pivot).addScaledVector(look, -boom);
-      pos.y += UP;
+      pos.y += UP + tight * 0.5;
       if (pos.y < 0.35) pos.y = 0.35;
       const [cx, cz] = ctx.collide(pos.x, pos.z, 0.15);
       pos.x = cx;
@@ -145,6 +151,7 @@ export function createCameraRig(ctx: FootCtx): CameraRig {
     snap() {
       snapNext = true;
     },
+    near: () => near,
     shake(amp, secs) {
       const now = shakeDur > 0 ? shakeAmp * (shakeT / shakeDur) ** 2 : 0;
       if (amp <= now || !(secs > 0)) return;
