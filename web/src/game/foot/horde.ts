@@ -23,13 +23,15 @@ const FREE = 0, PENDING = 1, WANDER = 2, MARCH = 3, CHASE = 4, ATTACK = 5, STAGG
 const AMBIENT = 0, WAVE = 1, PACK = 2;
 
 const HIT_R = 1.1, HIT_DAMAGE = 7, HIT_CD = 1;
+// Playability: however big the crowd, at most this many hits land on the player per second (the rest jostle).
+const PLAYER_HITS_PER_S = 3;
 const SHOVE_R = 2.8, SHOVE_COS = Math.cos((70 * Math.PI) / 180), SHOVE_DIST = 3, KB_TAU = 0.25, STAGGER_S = 1.2;
 const CLOSE_NOTICE = 6, SPRINT_NOTICE = 1.6, LOSE_R = NOTICE_R * 2.4;
 const CELL = 3, GRID_BITS = 6, GRID_MASK = (1 << GRID_BITS) - 1, NB = 1 << (GRID_BITS * 2);
 const SEP_D = ZOMBIE_R * 2.15, SEP_D2 = SEP_D * SEP_D;
 const RISE_S = 1.2, SINK_S = 4, SINK_DEPTH = 2.1;
 const WANDER_SPEED = ZOMBIE_WALK * 0.6;
-const MARCH_SPEED = ZOMBIE_WALK * 1.45;
+const MARCH_SPEED = ZOMBIE_WALK * 1.75; // ~2.5 m/s: the wave reaches the door in ~30-45 s
 const MOB_R = 7; // marchers this close to the target crowd and pound on it
 const AMBIENT_MIN = 45, AMBIENT_MAX = 100, AMBIENT_RECYCLE = 170;
 const TRICKLE_S = 8;
@@ -141,6 +143,8 @@ export function createHorde(ctx: FootCtx): System {
   let hasTarget = false, tx = 0, tz = 0;
   // who the horde can go after this frame: the player (when not hidden) + live, visible npcs
   const qX = new Float64Array(QMAX), qZ = new Float64Array(QMAX), qNpc = new Int16Array(QMAX);
+  const hitLog = new Float64Array(PLAYER_HITS_PER_S).fill(-99); // ring of the last player-hit times
+  let hitAt = 0;
 
   const col = new THREE.Color();
   const markColor = { calm: new THREE.Color(0xc21d1d), hot: new THREE.Color(0xff3b30) };
@@ -657,9 +661,15 @@ export function createHorde(ctx: FootCtx): System {
         }
         sp = s === ATTACK ? (d > 0.95 ? 0.9 : 0) : ZOMBIE_CHASE * (0.9 + (speedMul[i] - 0.85) * 0.6);
         if (d < HIT_R && hitCd[i] <= 0) {
-          hitCd[i] = HIT_CD;
-          if (onPlayer) bus.emit("player:hit", { damage: HIT_DAMAGE, fromX: zx, fromZ: zz });
-          else bus.emit("npc:hit", { id: npcs[qNpc[qk]].id, damage: HIT_DAMAGE, fromX: zx, fromZ: zz });
+          if (!onPlayer) {
+            hitCd[i] = HIT_CD;
+            bus.emit("npc:hit", { id: npcs[qNpc[qk]].id, damage: HIT_DAMAGE, fromX: zx, fromZ: zz });
+          } else if (now - hitLog[hitAt] >= 1) {
+            hitCd[i] = HIT_CD;
+            hitLog[hitAt] = now;
+            hitAt = (hitAt + 1) % PLAYER_HITS_PER_S;
+            bus.emit("player:hit", { damage: HIT_DAMAGE, fromX: zx, fromZ: zz });
+          }
         }
       } else if (s === STAGGER) {
         timer[i] -= dt;
