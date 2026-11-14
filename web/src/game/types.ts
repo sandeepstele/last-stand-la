@@ -69,6 +69,8 @@ export type Hypothesis = { key: string; claim: string; prior: number };
 export type DossierCase = { case: string; question: string; hypotheses: Hypothesis[] };
 
 /** v1.1 optional: one cube face of an interior panorama (f1-f4 sides, f0 top, f5 bottom). */
+/** One Matterport scan spot inside a building: x/y in metres of the twin's floor plan, its 6 cube faces. */
+export type InsideHop = { id: string; x: number; y: number; faces: PanoFace[] };
 export type PanoFace = { face: "f0" | "f1" | "f2" | "f3" | "f4" | "f5"; name: string };
 
 /** GET /game/dossier/{pid}, and the fortress_dossier tool result. */
@@ -78,7 +80,7 @@ export type Dossier = {
   scores: Record<ScoreKey, Score>;
   unknowns: string[];
   /** File names served by /evidence/image/{name}. */
-  images: { drone: string[]; cctv: string[]; pano?: PanoFace[]; inside?: PanoFace[] };
+  images: { drone: string[]; cctv: string[]; pano?: PanoFace[]; inside?: PanoFace[]; inside_hops?: InsideHop[] };
   case: DossierCase | null;
   disclaimer: string;
 };

@@ -232,6 +232,9 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
   const [city, setCity] = useState<{ buildings: number; cases: number } | null>(null);
   const [visit, setVisit] = useState<string | null>(null);
   const [nearVisit, setNearVisit] = useState<string | null>(null);
+  // Walk between the real scan spots inside a building (Matterport twin positions), when the dossier has them.
+  const [hop, setHop] = useState(0);
+  const hopCount = useRef(0);
   const visitFrom = useRef<Step>("approach");
   const [nearPhoto, setNearPhoto] = useState<{ src: string; caption: string } | null>(null);
   const nearPhotoOn = useRef(false);
@@ -496,6 +499,10 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
         }
         if (s === "hold") stepAt.current = ctx.time - DEFEND_MIN_S;
       }
+      if ((s === "visit" || s === "inside") && hopCount.current > 1) {
+        if (k.has("KeyD") || k.has("ArrowRight")) setHop((h) => (h + 1) % hopCount.current);
+        if (k.has("KeyA") || k.has("ArrowLeft")) setHop((h) => (h - 1 + hopCount.current) % hopCount.current);
+      }
       if (s === "visit") {
         if (k.has("KeyE") && visit) {
           const b = ctx.byPid.get(visit);
@@ -521,6 +528,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
           p.hidden = true;
           ctx.input.unlock();
           setVisit(other.pid);
+          setHop(0);
           setStep("visit");
           return;
         }
@@ -631,6 +639,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
         }
         if (dist(here, heroDoor) < DOOR_R && k.has("KeyE")) {
           ctx.bus.emit("mission:shelter", { pid: hero.pid, x: heroDoor[0], z: heroDoor[1] });
+          setHop(0);
           setProg((q) => ({ ...q, reached: true }));
           p.frozen = true;
           p.hidden = true;
@@ -1120,7 +1129,10 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
   const showInside = (step === "inside" && !!hero) || (step === "suite" && !!office) || (step === "visit" && !!visit);
   const visitB = visit ? district?.buildings.find((b) => b.pid === visit) ?? null : null;
   const visitD = visit ? game.dossiers[visit] : undefined;
-  const visitFaces = visitD && visitD !== "loading" && visitD !== "error" ? visitD.images.inside ?? visitD.images.pano ?? [] : [];
+  const visitBase = visitD && visitD !== "loading" && visitD !== "error" ? visitD : null;
+  const hops = (step === "visit" ? visitBase?.images.inside_hops : step === "inside" && heroDossier ? heroDossier.images.inside_hops : undefined) ?? [];
+  const hopNow = hops.length ? hops[Math.min(hop, hops.length - 1)] : null;
+  const visitFaces = hopNow && step === "visit" ? hopNow.faces : visitBase?.images.inside ?? visitBase?.images.pano ?? [];
   const officeDossier = office ? game.dossiers[office.pid] : undefined;
   const officeFaces = officeDossier && officeDossier !== "loading" && officeDossier !== "error" ? officeDossier.images.inside ?? officeDossier.images.pano ?? [] : [];
   const suiteStatus =
@@ -1141,6 +1153,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
     ...(game.outcome ? (game.outcome.why ?? "").split("; ").map((x) => x.replace(/\.\s*Game outcome.*$/, "")) : []),
   ];
 
+  hopCount.current = hops.length;
   return (
     <main style={{ position: "fixed", inset: 0, background: "#05070d", overflow: "hidden" }}>
       <div ref={wrapRef} style={{ position: "absolute", inset: 0 }} />
@@ -1196,7 +1209,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
       )}
       {step === "inside" && hero && (
         <InsideView
-          faces={insideFaces}
+          faces={hopNow && step === "inside" ? hopNow.faces : insideFaces}
           title={`${hero.label} · inside`}
           mode={insideMode}
           question={step === "inside" && hero.conflict ? { prompt: "What are the walls made of?", choices: TIP_CHOICES, chosen: tip.chosen, status: tipStatus } : null}
@@ -1204,6 +1217,9 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
           exitHint={exitAllowed ? "[E] step outside" : step === "inside" ? (hero.conflict && tip.chosen === null ? "Answer first: what do the walls look like?" : "Wait for HQ…") : null}
           onChoose={(i) => tip.chosen === null && setTip({ chosen: i, sentAt: null })}
         />
+      )}
+      {showInside && hops.length > 1 && (
+        <HopMap hops={hops} at={Math.min(hop, hops.length - 1)} onPick={setHop} />
       )}
       {showInside && (
         // The agent keeps talking while you're inside: the radio stays on screen (top-right is kept free by InsideView).
@@ -1244,5 +1260,26 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
         />
       )}
     </main>
+  );
+}
+
+/** A tiny floor plan of the real scan spots (Matterport twin positions). Click a dot, or A/D, to walk between them. */
+function HopMap({ hops, at, onPick }: { hops: { id: string; x: number; y: number }[]; at: number; onPick(i: number): void }) {
+  const xs = hops.map((h) => h.x), ys = hops.map((h) => h.y);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+  const W = 260, H = Math.max(90, Math.min(200, (W * (y1 - y0 + 2)) / (x1 - x0 + 2)));
+  const px = (x: number) => 14 + ((x - x0) / Math.max(1, x1 - x0)) * (W - 28);
+  const py = (y: number) => 14 + ((y - y0) / Math.max(1, y1 - y0)) * (H - 28);
+  return (
+    <div style={{ position: "absolute", left: 16, top: "38%", zIndex: 36, background: "rgba(5,7,13,.72)", border: "1px solid rgba(245,165,36,.5)", padding: 8, color: "#e2e8f0", font: "600 11px/1.3 ui-monospace, monospace" }}>
+      <div style={{ marginBottom: 4, color: "#f5a524" }}>WALK THE REAL SCAN · {at + 1}/{hops.length} · [A]/[D] or click</div>
+      <svg width={W} height={H} style={{ display: "block" }}>
+        <rect x={4} y={4} width={W - 8} height={H - 8} fill="none" stroke="rgba(226,232,240,.25)" />
+        {hops.map((h, i) => (
+          <circle key={h.id} cx={px(h.x)} cy={py(h.y)} r={i === at ? 7 : 5} fill={i === at ? "#f5a524" : "rgba(226,232,240,.55)"}
+            style={{ cursor: "pointer" }} onClick={() => onPick(i)} />
+        ))}
+      </svg>
+    </div>
   );
 }
