@@ -45,12 +45,17 @@ export function report(content: unknown): string {
 }
 
 export function parse<T>(m: Msg): T | null {
-  try {
-    const v = JSON.parse(text(m.content)) as unknown;
-    return v && typeof v === "object" ? (v as T) : null;
-  } catch {
-    return null;
-  }
+  const raw = text(m.content);
+  const tryParse = (s: string): T | null => {
+    try {
+      const v = JSON.parse(s) as unknown;
+      return v && typeof v === "object" ? (v as T) : null;
+    } catch {
+      return null;
+    }
+  };
+  // After an edited HOLD/RUN, the server prefixes the tool result with "Note: a human reviewer replaced this tool call…".
+  return tryParse(raw) ?? (raw.indexOf("{") > 0 ? tryParse(raw.slice(raw.indexOf("{"))) : null);
 }
 
 /** Index of the newest human message, or -1. */
@@ -95,7 +100,8 @@ const squad = (name: string) => SQUAD[name] ?? `${name.charAt(0).toUpperCase()}$
 
 /** First sentence, markdown stripped, capped. */
 export function firstSentence(s: string, max = 150): string {
-  const clean = s.replace(/[#*_`>]+/g, "").replace(/\s+/g, " ").trim();
+  // Underscores become spaces ("non_ductile_concrete" -> "non ductile concrete"), not deletions.
+  const clean = s.replace(/[#*`>]+/g, "").replace(/_+/g, " ").replace(/\s+/g, " ").trim();
   const m = clean.match(/^(.+?[.!?])(\s|$)/);
   const one = m ? m[1] : clean;
   return one.length > max ? `${one.slice(0, max - 1).trimEnd()}…` : one;
@@ -112,7 +118,23 @@ export function radioLines(messages: readonly unknown[]): RadioLine[] {
     if (k === "human") {
       const raw = text(m.content).trim();
       const wave = raw.match(/^Wave (\d+) is coming from the (\w+)/);
+      const suite = raw.match(/^Check suite (\S+) at building /);
+      if (suite) {
+        lines.push({ id, who: "HQ", text: `opening the case on suite ${suite[1]}: is the office on record still there?`, tone: "hq" });
+        return;
+      }
+      const tip = raw.match(/^Tip: I'm inside (?:the building|suite (\S+))\. (.*)$/);
+      if (tip) {
+        const said = tip[2].toLowerCase();
+        const what = tip[1]
+          ? (said.includes("empty") ? "suite empty, nobody working" : said.includes("people are working") ? "people are working in the suite" : "can't tell if anyone works there")
+          : (said.includes("concrete") ? "walls look like concrete" : said.includes("brick") ? "walls look like brick" : "can't tell what the walls are");
+        lines.push({ id, who: "You", text: `reported: ${what}`, tone: "you" });
+        return;
+      }
       const t = /^Scout property /.test(raw) ? "scout tonight's fortress"
+        : /^Brief the night shift/.test(raw) ? "brief me on tonight's cases"
+        : /^Debrief the night shift/.test(raw) ? "debrief: draft tonight's corrections"
         : wave ? `wave ${wave[1]} incoming from the ${SECTOR_NAME[wave[2] as Sector] ?? wave[2]}`
           : firstSentence(raw, 120);
       if (t) lines.push({ id, who: "You", text: t, tone: "you" });

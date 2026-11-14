@@ -15,6 +15,8 @@ function target(method: string, path: string[]): string | null {
   if (method === "GET" && seg.length === 1 && seg[0] === "district") return "game/district";
   if (method === "GET" && seg.length === 2 && seg[0] === "dossier" && PID.test(seg[1])) return `game/dossier/${encodeURIComponent(seg[1])}`;
   if (method === "POST" && seg.length === 1 && seg[0] === "resolve") return "game/resolve";
+  // Play again: clear people's notes so a fresh night replays exactly (the server only accepts {"confirm":"reset"}, locally).
+  if (method === "POST" && seg.length === 2 && seg[0] === "demo" && seg[1] === "reset") return "demo/reset";
   return null;
 }
 
@@ -23,7 +25,10 @@ async function forward(req: Request, path: string[]): Promise<Response> {
   if (!p) return Response.json({ error: "not allowed" }, { status: 404 });
   const init: RequestInit = { method: req.method, headers: { "content-type": req.headers.get("content-type") ?? "application/json" } };
   if (req.method === "POST") init.body = await req.text();
-  const r = await fetch(`${BACKEND}/${p}`, init).catch(() => null);
+  // The dossier may carry the checks run so far (the server recomputes walls with them + people's notes). Whitelisted shape.
+  const checks = new URL(req.url).searchParams.get("checks");
+  const q = p.startsWith("game/dossier/") && checks && /^[a-z_,]{1,300}$/.test(checks) ? `?checks=${checks}` : "";
+  const r = await fetch(`${BACKEND}/${p}${q}`, init).catch(() => null);
   if (!r) return Response.json({ error: "agent server unreachable" }, { status: 502 });
   return new Response(r.body, { status: r.status, headers: { "content-type": r.headers.get("content-type") ?? "application/json" } });
 }

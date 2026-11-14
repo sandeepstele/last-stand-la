@@ -43,8 +43,9 @@ function useLiveAgent(): AgentView {
   }, [stream]);
   const respond = useCallback((d: HitlDecision) => stream.respond({ decisions: [d] }), [stream]);
   const reset = useCallback(() => setStale(stream.threadId), [stream.threadId]);
+  const messages = useMemo(() => (hidden ? [] : normalizeTools(stream.messages as unknown[])), [hidden, stream.messages]);
   return {
-    messages: hidden ? [] : stream.messages,
+    messages,
     isLoading: stream.isLoading,
     interruptValue: hidden ? null : ((stream.interrupt?.value as HitlValue | undefined) ?? null),
     interruptKey: stream.interrupt,
@@ -52,6 +53,25 @@ function useLiveAgent(): AgentView {
     threadId: hidden ? null : stream.threadId,
     submit, respond, reset,
   };
+}
+
+// The game agent's evidence tool is `run_check` (it states why it chose the check); everything on the page reads
+// `check_evidence`. Present one name, keep every other field (incl. selection_reason).
+const TOOL_ALIAS: Record<string, string> = { run_check: "check_evidence" };
+function normalizeTools(ms: unknown[]): unknown[] {
+  return ms.map((raw) => {
+    const m = raw as Msg & { tool_calls?: { name?: string }[] };
+    const alias = (n?: string) => (n ? TOOL_ALIAS[n] : undefined);
+    const renameSelf = !!alias(m.name);
+    const renameCalls = !!m.tool_calls?.some((c) => alias(c.name));
+    if (!renameSelf && !renameCalls) return raw;
+    return {
+      ...m,
+      type: kind(m),
+      ...(renameSelf ? { name: alias(m.name) } : {}),
+      ...(renameCalls ? { tool_calls: m.tool_calls!.map((c) => (alias(c.name) ? { ...c, name: alias(c.name) } : c)) } : {}),
+    };
+  });
 }
 
 async function getJson<T>(url: string, init?: RequestInit): Promise<T> {
@@ -99,6 +119,17 @@ export function useGame(stub: boolean) {
       .catch(() => setDossiers((m) => ({ ...m, [pid]: "error" })));
   }, [stub]);
 
+  // A dossier recomputed by the server with the checks run so far (walls follow the evidence + people's reports).
+  const [fresh, setFresh] = useState<Record<string, Dossier>>({});
+  const freshGen = useRef(0);
+  const refreshDossier = useCallback((pid: string, checks: string[]) => {
+    if (stub || !checks.length) return;
+    const gen = freshGen.current;
+    getJson<Dossier>(`/api/game/dossier/${encodeURIComponent(pid)}?checks=${checks.join(",")}`)
+      .then((d) => d?.scores && gen === freshGen.current && setFresh((m) => ({ ...m, [pid]: d })))
+      .catch(() => {});
+  }, [stub]);
+
   // ------------------------------------------------------------ phase
   const [phase, setPhase] = useState<Phase>("dusk");
   const [fortress, setFortress] = useState<string | null>(null);
@@ -136,12 +167,20 @@ export function useGame(stub: boolean) {
     if (pid) loadDossier(pid);
   }, [loadDossier]);
 
-  const startScout = useCallback(() => {
+  /** fresh=false keeps the night's thread (on foot, the briefing and the suite case come first on the same thread). */
+  const startScout = useCallback((fresh = true) => {
     if (!selected || agent.isLoading) return;
     setFortress(selected);
     setPhase("scout");
-    agent.submit(`Scout property ${selected}`, true).catch(() => {});
+    agent.submit(`Scout property ${selected}`, fresh).catch(() => {});
   }, [selected, agent]);
+
+  /** Send an exact message to the laststand graph (on foot: "Brief the night shift", the suite check, suite tips). */
+  const say = useCallback((text: string, fresh = false): boolean => {
+    if (agent.isLoading) return false;
+    agent.submit(text, fresh).catch(() => {});
+    return true;
+  }, [agent]);
 
   /** Start wave n; returns the pid the horde comes for (null if it could not start). */
   const startNight = useCallback((n = 1): string | null => {
@@ -188,7 +227,7 @@ export function useGame(stub: boolean) {
       answered.current = agent.interruptKey;
       const d: HitlDecision = choice === "none" ? { type: "reject" }
         : choice === proposal.action ? { type: "approve" }
-        : { type: "edit", edited_action: { name: "commit_plan", args: choice === "run" ? { pid: proposal.pid, action: "run", to_pid: runTo } : { pid: proposal.pid, action: "hold" } } };
+        : { type: "edit", edited_action: { name: "commit_plan", args: choice === "run" ? { pid: proposal.pid, action: "run", to_pid: runTo } : { pid: proposal.pid, action: "hold", to_pid: null } } };
       setDecision({ action: choice, to_pid: choice === "run" ? runTo : undefined });
       setDecideError(null);
       agent.respond(d).catch((e: unknown) => {
@@ -224,6 +263,8 @@ export function useGame(stub: boolean) {
   const reset = useCallback(() => {
     if (fallbackTimer.current) clearTimeout(fallbackTimer.current);
     agent.reset();
+    freshGen.current += 1;
+    setFresh({});
     setPhase("dusk");
     setFortress(null);
     setSelected(null);
@@ -262,10 +303,13 @@ export function useGame(stub: boolean) {
     return d?.scores && d.pid === (fortress ?? selected) ? d : null;
   }, [messages, fortress, selected]);
   const focusPid = fortress ?? selected;
-  const dossier: DossierState | null = streamDossier ?? (focusPid ? dossiers[focusPid] ?? null : null);
+  const dossier: DossierState | null = (focusPid ? fresh[focusPid] : undefined) ?? streamDossier ?? (focusPid ? dossiers[focusPid] ?? null : null);
 
   // Done once the agent has answered the scout prompt (an AI message after the newest human one), or failed.
   const scoutDone = phase === "scout" && !agent.isLoading && lastHumanIndex(messages) >= 0
+    && (!!agent.error || messages.slice(lastHumanIndex(messages) + 1).some((m) => kind(m as Msg) === "ai"));
+  // Any run: finished once the agent has answered the newest human message (or failed).
+  const runDone = !agent.isLoading && lastHumanIndex(messages) >= 0
     && (!!agent.error || messages.slice(lastHumanIndex(messages) + 1).some((m) => kind(m as Msg) === "ai"));
   const wave = district?.waves.find((w) => w.n === waveN) ?? district?.waves[0] ?? null;
 
@@ -273,7 +317,7 @@ export function useGame(stub: boolean) {
     stub, district, districtError, retryDistrict,
     phase: shownPhase, selected, fortress, focusPid, dossier, wave, waveN,
     messages, isLoading: agent.isLoading, agentError: agent.error,
-    horde, fallback, proposal, decision, decideError, outcome, scoutDone,
+    horde, fallback, proposal, decision, decideError, outcome, scoutDone, runDone, say, dossiers, refreshDossier,
     conflictMaterials,
     select, startScout, startNight, decide, goDawn, sendTip, reset,
   };
