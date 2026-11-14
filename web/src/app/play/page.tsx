@@ -16,6 +16,8 @@ import page from "./page.module.css";
 
 const GREEN = "#4cc38a";
 const RED = "#e5484d";
+// The one tip the backend's strict replay covers: sent verbatim (as "Tip: <this>"). The chip's label leaves the address out.
+const TIP_PRESET = "I'm standing at 737 Broadway, the walls are poured concrete with concrete columns";
 
 export default function PlayPage() {
   return (
@@ -79,7 +81,7 @@ function Play() {
     w.shake(Number(mmi));
     w.flash(pid, held === "1" ? GREEN : RED);
     w.setTarget(pid);
-    w.focus(pid);
+    w.focus(pid, 420);
   }, [shockKey]);
 
   // ---------------------------------------------------------------- actions
@@ -101,7 +103,7 @@ function Play() {
     world.current?.clearHorde();
     world.current?.spawnWave(w, at);
     world.current?.setTarget(at);
-    world.current?.focus(at);
+    world.current?.focus(at, 620); // wide enough to see the horde come in
   };
 
   const playAgain = () => {
@@ -165,6 +167,30 @@ function Play() {
     );
   }
 
+  // ---------------------------------------------------------------- tips
+  // Strict replay covers exactly one tip text, so free text is hidden while the server replays.
+  const inReplay = !!replay && !replay.startsWith("recording");
+  const tipRow = (
+    <div className={styles.tipBox}>
+      <button type="button" className={styles.chip2} disabled={game.isLoading} onClick={() => game.sendTip(TIP_PRESET)}>
+        Tip: “the walls are poured concrete, with concrete columns”
+      </button>
+      {!inReplay && (
+        <form
+          className={styles.tip}
+          onSubmit={(e) => {
+            e.preventDefault();
+            game.sendTip(tip);
+            setTip("");
+          }}
+        >
+          <input value={tip} onChange={(e) => setTip(e.target.value)} placeholder="Or type your own tip about this building" aria-label="Tip" />
+          <button type="submit" className={styles.ghostBtn} disabled={!tip.trim() || game.isLoading}>Send tip</button>
+        </form>
+      )}
+    </div>
+  );
+
   // ---------------------------------------------------------------- action bar
   const runTo = fallback?.to_pid ?? proposal?.to_pid;
   const dossierObj = dossier && typeof dossier === "object" ? dossier : null;
@@ -221,6 +247,7 @@ function Play() {
           {labelOf(outcome.pid_final)} · walls {outcome.walls} vs roll {outcome.walls_roll} · quake {outcome.quake} vs roll {outcome.quake_roll}
         </p>
         {outcome.why && <p>{outcome.why}</p>}
+        {tipRow}
         <div className={styles.btnRow}>
           {next && <button type="button" className={`${styles.btn} ${styles.btnAlt}`} disabled={game.isLoading} onClick={() => night(next.n)}>Next wave</button>}
           <button type="button" className={styles.btn} onClick={game.goDawn}>Dawn</button>
@@ -230,17 +257,7 @@ function Play() {
   } else if (phase === "dawn") {
     actions = (
       <>
-        <form
-          className={styles.tip}
-          onSubmit={(e) => {
-            e.preventDefault();
-            game.sendTip(tip);
-            setTip("");
-          }}
-        >
-          <input value={tip} onChange={(e) => setTip(e.target.value)} placeholder="Got a tip about this building? (e.g. the manager says the frame is concrete)" aria-label="Tip" />
-          <button type="submit" className={styles.ghostBtn} disabled={!tip.trim() || game.isLoading}>Send tip</button>
-        </form>
+        {tipRow}
         <div className={styles.btnRow}>
           <button type="button" className={styles.btn} disabled={game.isLoading} onClick={playAgain}>Play again</button>
         </div>

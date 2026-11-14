@@ -264,7 +264,9 @@ export function useGame(stub: boolean) {
   const focusPid = fortress ?? selected;
   const dossier: DossierState | null = streamDossier ?? (focusPid ? dossiers[focusPid] ?? null : null);
 
-  const scoutDone = phase === "scout" && !agent.isLoading && lastHumanIndex(messages) >= 0;
+  // Done once the agent has answered the scout prompt (an AI message after the newest human one), or failed.
+  const scoutDone = phase === "scout" && !agent.isLoading && lastHumanIndex(messages) >= 0
+    && (!!agent.error || messages.slice(lastHumanIndex(messages) + 1).some((m) => kind(m as Msg) === "ai"));
   const wave = district?.waves.find((w) => w.n === waveN) ?? district?.waves[0] ?? null;
 
   return {
