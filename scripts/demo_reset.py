@@ -29,6 +29,7 @@ def main() -> None:
     load_dotenv(ROOT / ".env")
     p = argparse.ArgumentParser()
     p.add_argument("--dry-run", action="store_true")
+    p.add_argument("--keep-paused", action="store_true", help="leave runs waiting at an approval alone")
     p.add_argument("--url", default=os.environ.get("LANGGRAPH_URL", "http://127.0.0.1:2024"))
     a = p.parse_args()
     client = get_sync_client(url=a.url, api_key=None)
@@ -46,7 +47,7 @@ def main() -> None:
             if a.dry_run:
                 break
         cleared["/".join(prefix)] = n
-    paused = client.threads.search(metadata={"graph_id": "radar_worker"}, status="interrupted", limit=100)
+    paused = [] if a.keep_paused else client.threads.search(metadata={"graph_id": "radar_worker"}, status="interrupted", limit=100)
     for t in paused:
         if not a.dry_run:
             client.threads.delete(t["thread_id"])

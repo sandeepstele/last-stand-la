@@ -61,7 +61,7 @@ def main() -> None:
     client = get_sync_client(url=a.url, api_key=None)
     ok = True
     for i in range(a.runs):
-        subprocess.run([sys.executable, str(ROOT / "scripts" / "demo_reset.py"), "--url", a.url], check=True, capture_output=True)
+        subprocess.run([sys.executable, str(ROOT / "scripts" / "demo_reset.py"), "--url", a.url, "--keep-paused"], check=True, capture_output=True)
         rows = run_once(client)
         print(f"\n== pass {i + 1}")
         for r in rows:
@@ -69,7 +69,10 @@ def main() -> None:
                   + (f"  conflict={r['conflict']}" if r["conflict"] is not None else "") + (f"  ERRORS={r['tool_errors']}" if r["tool_errors"] else ""))
         before, after = rows[1]["verdict"], rows[3]["verdict"]
         moved = before != after and rows[3]["conflict"]
-        ok &= bool(moved) and all(not r["tool_errors"] for r in rows) and all(r["seconds"] < 60 for r in rows)
+        answered = all(r["verdict"] != "-" for r in rows)  # every step must end in a verdict or a saved note
+        ok &= bool(moved) and answered and all(not r["tool_errors"] for r in rows) and all(r["seconds"] < 60 for r in rows)
+        if not answered:
+            print("  a step ended without a verdict")
         print(f"  correction moved the case: {bool(moved)} ({before} -> {after})")
     print("\nALL CLEAN" if ok else "\nNOT CLEAN")
 
