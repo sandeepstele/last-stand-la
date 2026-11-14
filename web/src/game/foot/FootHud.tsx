@@ -363,7 +363,7 @@ function Decision({ d, busy, extra }: { d: DecisionView; busy: boolean; extra: H
     >
       {d.proposed === which && <span className={styles.hqCall}>HQ&apos;S CALL</span>}
       <Keycap k={key} size="lg" tone={d.proposed === which ? "amber" : undefined} />
-      <span>{text}</span>
+      <span className={styles.orderText}>{text}</span>
     </div>
   );
   // A slim strip at the bottom: the horde stays visible while you decide.
@@ -503,7 +503,7 @@ export function FootHud(p: HudProps) {
       {/* One action slot, bottom centre between the vitals and the feeds; the lower-third band above it stays free. */}
       <div className={styles.actionSlot}>
         {p.decision ? (
-          <Decision d={p.decision} busy={p.busy} extra={rest} />
+          <Decision d={p.decision} busy={p.busy} extra={rest.filter((h) => h.key !== "WASD" && h.key !== "Shift")} />
         ) : p.barricade ? (
           <BarricadeBar b={p.barricade} nail={nail} />
         ) : interact ? (

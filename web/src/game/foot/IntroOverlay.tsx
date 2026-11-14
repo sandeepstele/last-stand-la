@@ -20,15 +20,12 @@ const TITLE_MS = 3200;
 const CARD_MS = 5000;
 const CARDS = 3;
 
+// Four controls up front; G, Q, Space and V are taught in play by the hint chips.
 const CONTROLS: { keys: string[]; what: string }[] = [
   { keys: ["W", "A", "S", "D"], what: "move" },
   { keys: ["Shift"], what: "sprint" },
-  { keys: ["Mouse"], what: "look · your light stuns" },
-  { keys: ["Space"], what: "shove" },
-  { keys: ["E"], what: "enter · nail boards" },
-  { keys: ["Q", "G"], what: "medkit · throw a flare" },
+  { keys: ["E"], what: "go inside" },
   { keys: ["H", "R"], what: "hold or run" },
-  { keys: ["1", "2", "3"], what: "answer HQ" },
 ];
 
 const SOURCES: { icon: "record" | "city" | "aerial" | "tour"; name: string; what: string }[] = [
@@ -38,13 +35,41 @@ const SOURCES: { icon: "record" | "city" | "aerial" | "tour"; name: string; what
   { icon: "tour", name: "Matterport 3D tours", what: "the real interiors" },
 ];
 
+// Card 1 carries the point (judges press Enter early): the AI agent is the commander.
 function Card({ n, heroLabel }: { n: number; heroLabel: string }) {
   let body: ReactNode;
   if (n === 1) {
     body = (
       <>
-        <h2>Downtown Los Angeles. <em>Every building here is real.</em></h2>
-        <p>Four real sources describe each one. Where they line up, you can trust the walls. Where they don&apos;t, nobody knows yet.</p>
+        <h2>Your commander is <em>an AI agent.</em></h2>
+        <p>
+          It reads CoStar&apos;s real case queue, picks tonight&apos;s cases, checks the evidence and looks at the aerials itself.{" "}
+          <b>It proposes. You decide.</b>
+        </p>
+        <div className={styles.flow}>
+          <div className={styles.flowNode}>
+            <strong>Case queue</strong>real open cases
+          </div>
+          <span className={styles.flowArrow}>&rarr;</span>
+          <div className={styles.flowNode} data-tone="hq">
+            <strong>HQ agent</strong>checks the evidence
+          </div>
+          <span className={styles.flowArrow}>&rarr;</span>
+          <div className={styles.flowNode}>
+            <strong>Proposal</strong>HOLD or RUN
+          </div>
+          <span className={styles.flowArrow}>&rarr;</span>
+          <div className={styles.flowNode} data-tone="you">
+            <strong>You</strong>the final call
+          </div>
+        </div>
+      </>
+    );
+  } else if (n === 2) {
+    body = (
+      <>
+        <h2>Downtown Los Angeles. <em>Every building is real.</em></h2>
+        <p>Up to four real sources describe each one. Where they disagree, nobody knows yet.</p>
         <div className={styles.sources}>
           {SOURCES.map((s) => (
             <div key={s.name} className={styles.source}>
@@ -58,46 +83,27 @@ function Card({ n, heroLabel }: { n: number; heroLabel: string }) {
         </div>
       </>
     );
-  } else if (n === 2) {
-    body = (
-      <>
-        <h2>Your commander is <em>an AI agent.</em></h2>
-        <p>
-          Four squads read the records in parallel. When the records disagree, it opens a case, picks the evidence, and looks at the aerials itself.{" "}
-          <b>It proposes. You decide.</b>
-        </p>
-        <div className={styles.flow}>
-          <div className={styles.flowNode}>
-            <strong>4 squads</strong>records · aerial · interior · city
-          </div>
-          <span className={styles.flowArrow}>&rarr;</span>
-          <div className={styles.flowNode} data-tone="hq">
-            <strong>HQ agent</strong>opens a case, weighs evidence
-          </div>
-          <span className={styles.flowArrow}>&rarr;</span>
-          <div className={styles.flowNode}>
-            <strong>Proposal</strong>HOLD or RUN
-          </div>
-          <span className={styles.flowArrow}>&rarr;</span>
-          <div className={styles.flowNode} data-tone="you">
-            <strong>You</strong>the final call
-          </div>
-        </div>
-      </>
-    );
   } else {
     body = (
       <>
-        <h2>Tonight&apos;s fortress: <em>{heroLabel || "the beacon building"}</em></h2>
+        <h2>
+          Settle tonight&apos;s cases <em>and make it to dawn.</em>
+        </h2>
         <p>
-          The records disagree about its walls. <b>Go inside and look.</b> Your report counts: strong, capped, never final.
+          First stop: <b>{heroLabel || "the beacon building"}</b>. The records disagree about its walls. Go inside and look.
         </p>
-        <div className={styles.pills}>
-          <span className={styles.pill}>Beat nightfall to the door</span>
-          <span className={styles.pill}>Bring survivors in</span>
-          <span className={styles.pill}>Hold or run</span>
-          <span className={styles.pill}>File the report at dawn</span>
-        </div>
+        <ul className={styles.ctrlGrid}>
+          {CONTROLS.map((c) => (
+            <li key={c.what}>
+              <span className={styles.ctrlKeys}>
+                {c.keys.map((k) => (
+                  <Keycap key={k} k={k} size="lg" />
+                ))}
+              </span>
+              <span>{c.what}</span>
+            </li>
+          ))}
+        </ul>
       </>
     );
   }
@@ -105,7 +111,7 @@ function Card({ n, heroLabel }: { n: number; heroLabel: string }) {
     <section className={styles.brief} key={n}>
       <div className={styles.briefHead}>
         <span>BRIEFING {n} / {CARDS}</span>
-        <span>{n === 1 ? "THE CITY" : n === 2 ? "THE COMMANDER" : "YOUR ORDERS"}</span>
+        <span>{n === 1 ? "THE COMMANDER" : n === 2 ? "THE CITY" : "YOUR NIGHT"}</span>
       </div>
       {body}
     </section>
@@ -154,21 +160,6 @@ export function IntroOverlay({ heroLabel, ready, stub, replay, attribution, onSt
 
         <div className={styles.briefRow} data-show={idx > 0}>
           <Card n={card} heroLabel={heroLabel} />
-          <aside className={styles.controls}>
-            <h3>CONTROLS</h3>
-            <ul className={styles.ctrlList}>
-              {CONTROLS.map((c) => (
-                <li key={c.what}>
-                  <span className={styles.ctrlKeys}>
-                    {c.keys.map((k) => (
-                      <Keycap key={k} k={k} />
-                    ))}
-                  </span>
-                  <span>{c.what}</span>
-                </li>
-              ))}
-            </ul>
-          </aside>
         </div>
 
         <div className={styles.startRow} data-show={idx > 0}>

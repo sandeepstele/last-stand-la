@@ -26,32 +26,35 @@ export type InsideProps = {
 
 const swatchOf = (label: string) => (/concrete/i.test(label) ? "concrete" : /brick|masonry/i.test(label) ? "brick" : "unknown");
 
+// A bar along the bottom: the walls the question is about stay in view above it.
 function Question({ q, onChoose }: { q: InsideQuestion; onChoose(i: number): void }) {
   return (
     <div className={styles.question}>
-      <h3>
-        <small>HQ asks · your report is testimony</small>
-        {q.prompt}
-      </h3>
+      <div className={styles.qText}>
+        <h3>
+          <small>HQ asks · your report is testimony</small>
+          {q.prompt}
+        </h3>
+        <p className={styles.status}>{q.status}</p>
+      </div>
       <div className={styles.answerRow}>
         {q.choices.map((c, i) => {
           const state = q.chosen === null ? "open" : q.chosen === i ? "chosen" : "dim";
           const m = swatchOf(c);
           return (
             <button key={c} type="button" className={styles.answer} data-state={state} disabled={q.chosen !== null} onClick={() => onChoose(i)}>
+              {state === "chosen" && <span className={styles.chosenTag}>YOUR REPORT</span>}
               <span className={styles.swatch} data-m={m}>
                 {m === "unknown" ? "?" : null}
               </span>
               <span className={styles.answerTop}>
-                <Keycap k={String(i + 1)} size="lg" tone={state === "chosen" ? "amber" : undefined} />
+                <Keycap k={String(i + 1)} tone={state === "chosen" ? "amber" : undefined} />
                 <strong>{c}</strong>
               </span>
-              {state === "chosen" && <span className={styles.chosenTag}>YOUR REPORT</span>}
             </button>
           );
         })}
       </div>
-      <p className={styles.status}>{q.status}</p>
     </div>
   );
 }

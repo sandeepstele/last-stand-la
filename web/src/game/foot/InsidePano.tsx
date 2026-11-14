@@ -84,8 +84,15 @@ export function InsidePano({ faces, drift = true, className }: { faces: PanoFace
             return;
           }
           tex.colorSpace = THREE.SRGBColorSpace;
-          tex.wrapS = THREE.RepeatWrapping;
-          tex.repeat.x = -1; // seen from inside the box: un-mirror
+          // Seen from inside the box: un-mirror with repeat -1 / offset 1, clamped to the edge, and inset by half a
+          // texel so filtering never samples the opposite edge (that was the thin seam line between faces).
+          const img = tex.image as { width?: number; height?: number } | undefined;
+          const eu = 0.5 / Math.max(1, img?.width ?? 1024);
+          const ev = 0.5 / Math.max(1, img?.height ?? 1024);
+          tex.wrapS = THREE.ClampToEdgeWrapping;
+          tex.wrapT = THREE.ClampToEdgeWrapping;
+          tex.repeat.set(-(1 - 2 * eu), 1 - 2 * ev);
+          tex.offset.set(1 - eu, ev);
           loaded.push(tex);
           mats[slot].map = tex;
           mats[slot].color.set(0xffffff);
