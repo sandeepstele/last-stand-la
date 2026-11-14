@@ -288,6 +288,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
           2600,
         ),
       ),
+      ctx.bus.on("mission:barricade-broken", () => ctx.bus.emit("world:barricade", { pid: null })),
       ctx.bus.on("mission:barricade-broken", () => setBanner({ title: "The barricade is down!", sub: "Shove them back. [E] with boards to rebuild.", tone: "bad" }, 3000)),
       ctx.bus.on("mission:medkit", () => setBanner({ title: "Patched up", tone: "good" }, 1500)),
     ];
@@ -372,7 +373,8 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
 
   const startDefend = (ctx: FootCtx, door: Pt) => {
     const f = dirOf(hero?.door?.facing ?? 180);
-    [ctx.player.x, ctx.player.z] = ctx.collide(door[0] + f[0] * 1.5, door[1] + f[1] * 1.5, 0.5);
+    // 3 m out: the over-the-shoulder camera then stays outside the door's planks (Builder E's measurement).
+    [ctx.player.x, ctx.player.z] = ctx.collide(door[0] + f[0] * 3, door[1] + f[1] * 3, 0.5);
     ctx.player.yaw = ((hero?.door?.facing ?? 180) * Math.PI) / 180; // face the horde
     ctx.player.frozen = false;
     ctx.player.hidden = false;
@@ -380,7 +382,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
     defendEnded.current = false;
     ctx.bus.emit("world:barricade", { pid: hero?.pid ?? null });
     ctx.bus.emit("mission:defend", { pid: hero?.pid ?? "", x: door[0], z: door[1], facing: hero?.door?.facing ?? 180 });
-    ctx.bus.emit("horde:target", { x: door[0] + f[0] * 2.5, z: door[1] + f[1] * 2.5 });
+    ctx.bus.emit("horde:target", { x: door[0] + f[0] * 1.2, z: door[1] + f[1] * 1.2 });
     ctx.input.lock();
     setStep("hold");
     setBanner({ title: "Hold the door", sub: "[Space] shove · hold [E] to nail boards · keep them off until the roll comes in", tone: "warn" }, 4500);
