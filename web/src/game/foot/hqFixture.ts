@@ -168,6 +168,16 @@ const SUITE = "1100";
 // A planted company name: the panel must never show it (it says "a tenant").
 const TENANT = "Synthetic Widgets LLC";
 
+/** A SYNTHETIC "aerial" (an SVG drawing, not a real capture) so previews show a thumbnail without the backend. */
+const SYN_AERIAL = `data:image/svg+xml;utf8,${encodeURIComponent(
+  `<svg xmlns="http://www.w3.org/2000/svg" width="320" height="200" viewBox="0 0 320 200">
+    <rect width="320" height="200" fill="#5d6166"/><rect x="0" y="150" width="320" height="50" fill="#3b3f44"/>
+    <rect x="60" y="20" width="200" height="140" fill="#9a9488"/><rect x="70" y="30" width="180" height="120" fill="#b3ab9c"/>
+    ${Array.from({ length: 6 }, (_, i) => `<rect x="${78 + i * 30}" y="38" width="14" height="104" fill="#8b8478"/>`).join("")}
+    ${Array.from({ length: 4 }, (_, i) => `<rect x="70" y="${48 + i * 26}" width="180" height="5" fill="#7d776c"/>`).join("")}
+    <rect x="200" y="40" width="34" height="22" fill="#cfd3d6"/><circle cx="30" cy="175" r="12" fill="#2f5d3a"/></svg>`,
+)}`;
+
 export function nightFixture(): { name: string; busy: boolean; messages: Msg[] }[] {
   n = 0;
   const out: { name: string; busy: boolean; messages: Msg[] }[] = [];
@@ -211,8 +221,11 @@ export function nightFixture(): { name: string; busy: boolean; messages: Msg[] }
   ms.push(tool("check_evidence", "n-c1", walls("compliance_filings", "filed: screening checklist (2019-06-12); structural plans not yet filed",
     [{ hypothesis: "city_list_current", delta: 0.12 }, { hypothesis: "costar_current", delta: -0.05 }])));
   snap("checking the walls", true);
-  ms.push(tool("check_evidence", "n-c2", walls("look_from_above", "concrete frame: regular column grid and cast spandrels; a second pass agreed",
-    [{ hypothesis: "city_list_current", delta: 0.08 }])));
+  ms.push(tool("check_evidence", "n-c2", {
+    ...walls("look_from_above", "concrete frame: regular column grid and cast spandrels; a second pass agreed",
+      [{ hypothesis: "city_list_current", delta: 0.08 }]),
+    images: [SYN_AERIAL], callout: "Concrete frame: a regular column grid on the street face",
+  }));
   ms.push(ai("", [{ id: "n-w1", name: "weigh_case", args: { property_id: PID, case: "material_conflict", checks: ["compliance_filings", "look_from_above"] } }]));
   ms.push(tool("weigh_case", "n-w1", {
     property_id: PID, case: "material_conflict", checks_used: ["compliance_filings", "look_from_above"], trail: [],
