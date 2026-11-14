@@ -42,6 +42,7 @@ import { createCityMap, type City } from "./cityMap";
 import { createRoofObjects, type RoofSystem } from "./roofObjects";
 import { SuiteSweep, type SweepScore } from "./SuiteSweep";
 import { InsideMesh3D } from "./InsideMesh3D";
+import { PauseMenu } from "./PauseMenu";
 import { HqPanel } from "./HqPanel";
 import { HqMoments } from "./hqMoments";
 import { mulberry32 } from "../prng";
@@ -243,6 +244,13 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
   }, [sweep]);
   // Walk between the real scan spots inside a building (Matterport twin positions), when the dossier has them.
   const [hop, setHop] = useState(0);
+  // Pause (P / Esc / the button): the sim freezes; agent runs in flight keep streaming.
+  const [paused, setPausedState] = useState(false);
+  const pausedRef = useRef(false);
+  const setPaused = (v: boolean) => {
+    pausedRef.current = v;
+    setPausedState(v);
+  };
   const [hopHeading, setHopHeading] = useState(0);
   const hopCount = useRef(0);
   const visitFrom = useRef<Step>("approach");
@@ -345,9 +353,11 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
     const frame = (now: number) => {
       const dt = Math.max(0, Math.min(0.05, (now - last) / 1000)); // the first rAF timestamp can precede `last`
       last = now;
-      ctx.time += dt;
-      tickRef.current(dt);
-      for (const s of systems) s.update(dt);
+      if (!pausedRef.current) {
+        ctx.time += dt;
+        tickRef.current(dt);
+        for (const s of systems) s.update(dt);
+      }
       const size = renderer.getSize(new THREE.Vector2());
       renderer.setScissorTest(false);
       renderer.setViewport(0, 0, size.x, size.y);
@@ -437,6 +447,39 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
     setStep("hold");
     setBanner({ title: "Hold the door", sub: "[Space] shove · hold [E] to nail boards · keep them off until the roll comes in", tone: "warn" }, 4500);
   };
+
+  useEffect(() => {
+    const playing = () => !["intro", "dawn", "inside", "suite", "visit", "result"].includes(stepRef.current);
+    let progUnlockAt = 0;
+    const ctx0 = ctxRef.current;
+    if (ctx0) {
+      const orig = ctx0.input.unlock.bind(ctx0.input);
+      ctx0.input.unlock = () => {
+        progUnlockAt = performance.now();
+        orig();
+      };
+    }
+    const kd = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA")) return;
+      if (e.code === "KeyP" || (e.code === "Escape" && !document.pointerLockElement)) {
+        if (pausedRef.current) setPaused(false);
+        else if (playing()) {
+          ctxRef.current?.input.unlock();
+          setPaused(true);
+        }
+      }
+    };
+    const plc = () => {
+      if (!document.pointerLockElement && playing() && !pausedRef.current && performance.now() - progUnlockAt > 300) setPaused(true);
+    };
+    window.addEventListener("keydown", kd);
+    document.addEventListener("pointerlockchange", plc);
+    return () => {
+      window.removeEventListener("keydown", kd);
+      document.removeEventListener("pointerlockchange", plc);
+    };
+  }, [district, hero]);
 
   // The director tick: runs every frame inside the loop. Reads game state through gRef, never closes over stale state.
   const tickRef = useRef<(dt: number) => void>(() => {});
@@ -1081,14 +1124,15 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
   const runLabel = fallbackPid ? labelOf(fallbackPid) : null;
 
   const hints: Hint[] = [];
-  if (step === "office" || step === "approach" || step === "escape" || step === "night") hints.push({ key: "WASD", label: "move" }, { key: "Shift", label: "sprint" }, { key: "Space", label: "shove" });
+  // Movement and the full controls live in the pause menu; the HUD only shows what matters right now.
+  if (step !== "intro" && step !== "dawn") hints.push({ key: "P", label: "menu" });
   if (step === "approach" && hud.nearDoor) hints.push({ key: "E", label: `go inside ${heroLabel}` });
   if ((step === "office" || step === "approach") && nearVisit) hints.push({ key: "E", label: `look inside ${nearVisit}` });
   if (step === "office" && hud.nearDoor && office) hints.push({ key: "E", label: `go up to suite ${case7?.suite ?? ""} at ${office.label}` });
   if (step === "night" && !game.decision) hints.push({ key: "H", label: "hold" }, { key: "R", label: runLabel ? `run to ${runLabel}` : "run", disabled: !runLabel });
   if (step === "hold") hints.push({ key: "E", label: mhud.boards > 0 ? `nail boards (${mhud.boards})` : "no boards left", disabled: mhud.boards === 0 });
-  if ((step === "approach" || step === "escape" || step === "hold" || step === "night") && mhud.medkits > 0) hints.push({ key: "Q", label: `medkit (${mhud.medkits})` });
-  if ((step === "approach" || step === "office" || step === "escape" || step === "hold" || step === "night") && mhud.flares > 0) hints.push({ key: "G", label: `flare (${mhud.flares})` });
+
+
   if (step === "dawn") hints.push({ key: "Enter", label: "play again" });
 
   const objective =
@@ -1192,7 +1236,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
           badges={{ stub: game.stub, replay }}
           disclaimer={DISCLAIMER}
           attribution={district.attribution ?? null}
-          objectives={objectives}
+          objectives={objectives.filter((o) => o.kind === "main" && !o.done).slice(0, 1)}
           timer={mhud.timer}
           supplies={{ boards: mhud.boards, medkits: mhud.medkits, flares: mhud.flares }}
           survivors={mhud.survivors}
@@ -1249,13 +1293,30 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
       )}
       {/* The AI's big moments (plan, case opened, the aerial it looked at, your report moving the odds, drafting).
           Mounted once for the whole night (a remount would treat earlier moments as history); hidden, not unmounted. */}
-      <div style={{ position: "absolute", left: "50%", transform: "translateX(-50%)", bottom: 150, width: "min(560px, 60vw)", zIndex: 35, pointerEvents: "none", display: step === "intro" || step === "dawn" ? "none" : "block" }}>
+      <div style={{ position: "absolute", left: "50%", transform: "translateX(-50%)", bottom: 230, width: "min(520px, 56vw)", zIndex: 35, pointerEvents: "none", display: step === "intro" || step === "dawn" ? "none" : "block" }}>
         <HqMoments messages={shownMessages} busy={game.isLoading} heroPid={hero?.pid ?? null} />
       </div>
       {(showInside || step === "dawn") && (
         <div style={{ position: "absolute", top: 16, left: "50%", transform: "translateX(-50%)", zIndex: 40, pointerEvents: "none" }}>
           <Badges stub={game.stub} replay={replay} />
         </div>
+      )}
+      {step !== "intro" && step !== "dawn" && !paused && (
+        <button type="button" aria-label="Pause" onClick={() => {
+          ctxRef.current?.input.unlock();
+          setPaused(true);
+        }} style={{ position: "absolute", top: 14, left: "calc(50% + 250px)", zIndex: 41, width: 34, height: 34, border: "1px solid rgba(226,232,240,.35)", background: "rgba(5,7,13,.6)", color: "#e2e8f0", font: "700 14px/1 system-ui", cursor: "pointer" }}>
+          ❚❚
+        </button>
+      )}
+      {paused && (
+        <PauseMenu objectives={objectives} onResume={() => {
+          setPaused(false);
+          if (!showInside) ctxRef.current?.input.lock();
+        }} onRestart={() => {
+          setPaused(false);
+          playAgain();
+        }} />
       )}
       {step === "intro" && city && (
         <div style={{ position: "absolute", left: 24, bottom: 72, zIndex: 45, pointerEvents: "none", color: "#e2e8f0", font: "600 13px/1.4 ui-monospace, monospace", background: "rgba(5,7,13,.6)", padding: "8px 12px", borderLeft: "3px solid #f5a524" }}>
