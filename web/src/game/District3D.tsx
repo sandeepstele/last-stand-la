@@ -515,6 +515,7 @@ export const District3D = forwardRef<DistrictHandle, Props>(function District3D(
         const el = document.createElement("div");
         el.className = styles.label;
         el.textContent = b.label;
+        el.dataset.pid = b.pid;
         labels.appendChild(el);
         rec.label = el;
       }
