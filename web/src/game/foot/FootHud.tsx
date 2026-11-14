@@ -552,7 +552,7 @@ export function FootHud(p: HudProps) {
         </div>
       </section>
 
-      {rest.length > 0 && !p.decision && (
+      {rest.length > 0 && !p.decision && !interact && (
         <div className={styles.hints}>
           {rest.map((h) => (
             <span key={`${h.key}-${h.label}`} className={styles.hint} data-disabled={!!h.disabled} data-key={h.key}>

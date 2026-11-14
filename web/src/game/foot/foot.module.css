@@ -191,7 +191,7 @@
 .hint { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600; white-space: nowrap; }
 .hint[data-disabled="true"] { opacity: 0.4; }
 .hint[data-key="E"] { color: var(--amber); }
-.actionSlot { position: absolute; left: 336px; right: var(--feedsW); bottom: 64px; display: flex; justify-content: center; align-items: flex-end; }
+.actionSlot { position: absolute; left: 336px; right: var(--feedsW); bottom: 64px; z-index: 1; display: flex; justify-content: center; align-items: flex-end; }
 .hud[data-deciding="true"] .actionSlot { bottom: 28px; }
 .interact { display: flex; align-items: center; gap: 12px; padding: 10px 18px 10px 12px; border-radius: 10px;
   background: var(--panel-solid); border: 2px solid var(--amber); font-family: var(--display); font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; font-size: 24px;
@@ -498,5 +498,11 @@
 .decision .order { font-size: clamp(16px, 1.35vw, 20px); }
 .ctrlGrid { list-style: none; margin: 6px 0 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 10px 18px; }
 .ctrlGrid li { display: flex; align-items: center; gap: 12px; font-size: 16px; font-weight: 600; color: #e6ebf2; }
-.question + .exit { bottom: auto; top: calc(100% - 196px); }
+.qFoot { display: flex; align-items: center; gap: 8px 14px; flex-wrap: wrap; margin-top: 8px; }
+.qFoot .status { margin: 0; }
+.exitInline { position: static; transform: none; z-index: auto; padding: 5px 11px; font-size: 15px; }
+.exitInline[data-kind="locked"] { font-size: 17px; }
+.exitInline .keycap { min-width: 26px; height: 26px; font-size: 13px; }
 .answer[data-state="chosen"] { transform: none; }
+/* The door prompt is the one thing to do: it takes the hints' place, low and centred in the slot. */
+.hud:not([data-compact="true"]) .actionSlot:has(.interact) { bottom: 30px; }
