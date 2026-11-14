@@ -201,3 +201,15 @@ def test_demo_reset_clears_one_nights_traces():
     r = c.post("/demo/reset", json={"confirm": "reset"})
     assert r.status_code == 200 and r.json()["cleared"] == {"notes": 2, "corrections": 1, "outbox": 0}
     assert not store.search(("notes",)) and store.search(("keep",))
+
+
+def test_feed_photos_reach_the_screen_but_never_the_agent(monkeypatch, tmp_path):
+    monkeypatch.setattr(fortress, "VISION", tmp_path)
+    (tmp_path / "feed_TEST-A_oblique_south.jpg").write_bytes(b"\xff\xd8")
+    for k in range(6):
+        (tmp_path / f"feed_TEST-A_twin_p0_f{k}.jpg").write_bytes(b"\xff\xd8")
+    base = {"pid": "TEST-A", "images": fortress._images("TEST-A")}
+    assert base["images"]["drone"] == [] and base["images"]["inside"] == []  # the agent's dossier tool: unchanged
+    shown = fortress.with_feeds(base)
+    assert shown["images"]["drone"] == ["feed_TEST-A_oblique_south.jpg"] and len(shown["images"]["inside"]) == 6
+    assert shown["images"]["inside"][0] == {"face": "f0", "name": "feed_TEST-A_twin_p0_f0.jpg"}

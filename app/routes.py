@@ -170,6 +170,12 @@ async def game_district(request: Request) -> JSONResponse:
     return JSONResponse(await asyncio.to_thread(fortress.district))
 
 
+async def game_city(request: Request) -> JSONResponse:
+    from app import fortress
+
+    return JSONResponse(await asyncio.to_thread(fortress.city))
+
+
 async def game_dossier(request: Request) -> JSONResponse:
     from app import fortress
 
@@ -178,7 +184,7 @@ async def game_dossier(request: Request) -> JSONResponse:
     pid = request.path_params["pid"]
     if not PID.match(pid) or not await asyncio.to_thread(fortress.building, pid):
         return JSONResponse({"error": "not a building in the district"}, status_code=404)
-    d = await asyncio.to_thread(fortress.dossier, pid)
+    d = fortress.with_feeds(await asyncio.to_thread(fortress.dossier, pid))  # display-only feed photos: HTTP only
     raw = request.query_params.get("checks")
     if raw is not None:
         # ?checks=a,b: walls re-weighed with the evidence so far plus any player report (same as commit_plan), so the
@@ -244,6 +250,7 @@ app = Starlette(
     routes=[
         Route("/demo/reset", demo_reset, methods=["POST"]),
         Route("/game/district", game_district, methods=["GET"]),
+        Route("/game/city", game_city, methods=["GET"]),
         Route("/game/dossier/{pid}", game_dossier, methods=["GET"]),
         Route("/game/resolve", game_resolve, methods=["POST"]),
         Route("/cases/queue", cases_queue, methods=["GET"]),

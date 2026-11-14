@@ -402,6 +402,19 @@ def _images(pid: str) -> dict[str, Any]:
     return {"drone": drone, "cctv": cctv, "pano": pano, "inside": inside or (pano if pid in ENTERABLE else [])}
 
 
+def with_feeds(d: dict[str, Any]) -> dict[str, Any]:
+    """The HTTP dossier only: adds the display-only feed_* images. Never used by the agent's fortress_dossier tool,
+    whose output is part of the replay keys (a newly cached feed photo must not change a recorded night)."""
+    if "pid" not in d or "images" not in d:
+        return d
+    pid, images = d["pid"], dict(d["images"])
+    f = _feeds(pid)
+    images["drone"] = images["drone"] + [n for n in f["drone"] if n not in images["drone"]]
+    if not images.get("inside") and f["inside"]:
+        images["inside"] = [{"face": n.rsplit("_", 1)[-1].split(".")[0], "name": n} for n in f["inside"]]
+    return d | {"images": images}
+
+
 @lru_cache(maxsize=128)
 def _dossier(pid: str) -> str:
     rec = costar.get(pid)
@@ -556,4 +569,46 @@ def draft(pid: str, suite: str | None, checks: list[str], notes: list[dict]) -> 
     return {"n": n, "case": case, "property_id": pid, "suite": suite, "label": f"suite {suite}, {where}" if suite else where,
             "hypothesis": v["hypothesis"], "label_verdict": v["label"], "confidence": v["confidence"], "text": text,
             "evidence": [{"check": t["check"], "finding": t["finding"]} for t in w["trail"]], "your_report": report}
+
+
+# ------------------------------------------------------------------ the whole city (map view)
+
+
+def _feeds(pid: str) -> dict[str, list[str]]:
+    """Display-only images fetched for the game's feeds (fixtures/vision/feed_*). The agent and the case queue never
+    read these names, so caching more of them can't change the evidence, the queue order or the replay."""
+    drone = sorted(p.name for p in VISION.glob(f"feed_{pid}_o*.jpg"))
+    inside = sorted(p.name for p in VISION.glob(f"feed_{pid}_twin_p0_f*.jpg"))
+    return {"drone": drone, "inside": inside}
+
+
+@lru_cache(maxsize=1)
+def city() -> dict[str, Any]:
+    """Every LA kit building at its real position (metres from the district center, same frame as /game/district),
+    with height, CoStar material, the city's retrofit status and its open case (if any) in queue order. No addresses."""
+    from app import cases
+
+    c = costar.get(CENTER_PID)
+    lat0, lon0 = c["latitude"], c["longitude"]
+    first: dict[str, tuple[int, str]] = {}
+    for n, row in enumerate(cases.ordered(), 1):
+        first.setdefault(str(row["property_id"]), (n, row["case"]))
+    out = []
+    for pid, rec in costar._index().items():
+        if (rec.get("city") or "").strip().lower() != "los angeles" or not rec.get("latitude") or rec.get("synthetic"):
+            continue
+        x, z = _xz(rec["latitude"], rec["longitude"], lat0, lon0)
+        aer = _aerial(pid)
+        stories = rec.get("stories") or None
+        h = aer.get("height_m") if aer and aer.get("height_m") and stories and 2.4 <= aer["height_m"] / stories <= 6.5 else (stories or 2) * FLOOR_M
+        city_rec = _city(rec)
+        n_case = first.get(pid)
+        feeds = _feeds(pid)
+        out.append({"pid": pid, "x": x, "z": z, "height_m": round(h, 1), "stories": stories, "material": _material(rec),
+                    "list": city_rec["list"], "unfinished": city_rec["unfinished"],
+                    "case": n_case[1] if n_case else None, "queue_n": n_case[0] if n_case else None,
+                    "has_aerial": bool(feeds["drone"] or list(VISION.glob(f"{pid}_o*.jpg"))),
+                    "has_tour": bool(feeds["inside"] or list(VISION.glob(f"{pid}_s*_p0_f*.jpg")) or list(VISION.glob(f"{pid}_twin_p0_f*.jpg")))})
+    return {"center": {"lat": round(lat0, 6), "lon": round(lon0, 6)}, "count": len(out), "total_buildings": len(out),
+            "total_cases": len(cases.ordered()), "buildings": out}
 
