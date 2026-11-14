@@ -35,7 +35,7 @@ def test_game_hints_are_sorted_and_availability_comes_from_local_cache(monkeypat
     assert hints[0]["check"] == evidence.CASES["material_conflict"]["checks"][-1]
     assert all(not hint["available"] for hint in hints if hint["check"] in {
         "site_structures", "look_from_above", "compare_captures"})
-    assert hints[0]["moved_odds_in"] == "70% of 10 cases"
+    assert hints[0]["moved_odds_in"] == "70% of the 10 cases where it could run"
 
 
 def test_run_check_echoes_a_single_line_selection_reason(monkeypatch):

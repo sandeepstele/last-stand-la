@@ -452,6 +452,9 @@ CHECKS: dict[str, Callable[..., dict[str, Any]]] = {
 }
 
 
+NOT_APPLICABLE = {"no images", "no data", "nothing to compare", "nothing to look at"}  # a check's inputs were missing
+
+
 @lru_cache(maxsize=1)
 def check_stats() -> dict[str, dict[str, dict[str, Any]]]:
     """Measure check movement over the local queue using cached inputs only.
@@ -474,6 +477,11 @@ def check_stats() -> dict[str, dict[str, dict[str, Any]]]:
                 except Exception:
                     group["errors"] += 1
                     continue
+                if result.get("why") in NOT_APPLICABLE:
+                    # its inputs (images, a tour, a second capture) aren't there for this case: not evidence that the
+                    # check rarely moves the odds. Rates count only cases where the check could actually run.
+                    group["unavailable"] = group.get("unavailable", 0) + 1
+                    continue
                 group["cases"] += 1
                 move = max((abs(float(effect.get("delta", 0))) for effect in result.get("effects", [])), default=0.0)
                 if move > 0:
@@ -494,6 +502,7 @@ def check_stats() -> dict[str, dict[str, dict[str, Any]]]:
                 "typical_move": round(typical, 2),
                 "expected_move": round(rate * typical, 3),
                 "errors": group["errors"],
+                "unavailable": group.get("unavailable", 0),
             }
     return out
 

@@ -130,8 +130,8 @@ def _check_available(pid: str, check: str, suite: str | None, case_data: dict) -
                 for capture in (history[0], history[-1]))
         except (OSError, ValueError, KeyError, TypeError):
             return False
-    if check == "suite_tour":
-        if not suite or not case_data.get("tour", {}).get("available"):
+    if check == "suite_tour":  # available when the suite's tour panoramas are cached (open_case carries no tour field)
+        if not suite:
             return False
         from app.tenants import norm_suite
 
@@ -154,7 +154,7 @@ def _hints(pid: str, case_data: dict, suite: str | None, stats: dict,
                         "typical_move": evidence.HUMAN_CAP, "expected_move": 0.0}
             moved = "team report; not included in queue statistics"
         else:
-            moved = (f"{round(measured['move_rate'] * 100)}% of {measured['cases']} cases"
+            moved = (f"{round(measured['move_rate'] * 100)}% of the {measured['cases']} cases where it could run"
                      if measured["cases"] else "no cached examples")
         out.append({"check": check, "looks_at": evidence.CHECK_WHAT[check], "moved_odds_in": moved,
                     "typical_move": measured["typical_move"], "expected_move": measured["expected_move"],
@@ -194,8 +194,11 @@ async def open_case(property_id: str, runtime: ToolRuntime, suite: str | None = 
                 case_data["checks"].append({"check": "human_report", "looks_at": evidence.CHECK_WHAT["human_report"]})
     stats = await asyncio.to_thread(evidence.check_stats)
     worked = await _worked_before(runtime, property_id) if _flag("RADAR_NIGHT_LOG") else None
-    for case_data in out.get("cases", []):
-        case_data["check_hints"] = _hints(property_id, case_data, suite, stats, worked)
+
+    def attach() -> None:  # _hints globs the image cache: off the event loop (langgraph dev rejects blocking I/O there)
+        for case_data in out.get("cases", []):
+            case_data["check_hints"] = _hints(property_id, case_data, suite, stats, worked)
+    await asyncio.to_thread(attach)
     return out
 
 
@@ -205,6 +208,9 @@ async def run_check(property_id: str, case: str, check: str, why: str, runtime: 
     """Run one advertised check; why is one radio line quoting its code-measured hint."""
     if bad := await _outside(property_id):
         return bad
+    if check not in evidence.CHECKS:  # never run (or let the model narrate) a check that doesn't exist
+        return {"error": f"'{check}' is not a check. Choose one from this case's check_hints in open_case.",
+                "valid_checks": sorted(evidence.CHECKS)}
     notes = await _notes(runtime, property_id, suite)
     result = await asyncio.to_thread(evidence.run_check, property_id, check, case, suite, notes)
     result["selection_reason"] = " ".join(why.split())[:240]
