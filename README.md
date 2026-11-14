@@ -40,11 +40,11 @@ cd web && cp .env.local.example .env.local && npm install && npm run dev   # htt
 ```
 
 Models are set in `.env`:
-- **Live answers:** `gemini-3.8-flash` (`RADAR_ORCH_MODEL`).
-- **Background worker:** `gemini-4-argon` (`RADAR_WORKER_MODEL`).
-- **Specialists:** `gemini-3.8-flash`.
+- **Live answers:** `gemini-3.8-flash` (`RADAR_ORCH_MODEL`), thinking low.
+- **Live specialists:** `gemini-3.5-flash-lite` (`RADAR_FAST_MODEL`), thinking minimal.
+- **Background worker:** `gemini-4-argon` (`RADAR_WORKER_MODEL`) with `gemini-3.8-flash` specialists (`RADAR_SPEC_MODEL`), thinking low.
 
-All three run at `thinking_level=low` on Vertex AI.
+All run on Vertex AI. Live calls get 8 s per attempt and then move to the other model; the worker has no timeout ([docs/ENGINEERING.md](docs/ENGINEERING.md) §4).
 
 ## What's real and what isn't (yet)
 

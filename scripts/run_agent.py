@@ -3,7 +3,8 @@
   python scripts/run_agent.py "Is TEST-A worth a solar and roof retrofit? City: houston."  (TEST-A is synthetic)
   python scripts/run_agent.py --graph worker "Screen TEST-A."
 
-Scene verbs run in dispatch mode here (no frontend), so they send and return immediately. Traces go to the LangSmith project in .env.
+Scene verbs run in dispatch mode here (no frontend), so they send and return immediately, whatever .env says
+(RADAR_SCENE_MODE_RUN=ack overrides, e.g. with a scripted frontend). Traces go to the LangSmith project in .env.
 """
 
 from __future__ import annotations
@@ -22,7 +23,9 @@ sys.path.insert(0, str(ROOT))
 from dotenv import load_dotenv  # noqa: E402
 
 load_dotenv(ROOT / ".env")
-os.environ.setdefault("RADAR_SCENE_MODE", "dispatch")  # no browser here: send scene actions, do not wait
+# No browser here: send scene actions, do not wait. Set outright, because .env sets RADAR_SCENE_MODE=ack for
+# langgraph dev (a setdefault would keep it, and each scene verb would wait out RADAR_ACK_TIMEOUT_S).
+os.environ["RADAR_SCENE_MODE"] = os.environ.get("RADAR_SCENE_MODE_RUN", "dispatch")
 os.environ["RADAR_MATTERPORT"] = os.environ.get("RADAR_MATTERPORT_RUN", os.environ.get("RADAR_MATTERPORT", "auto"))
 
 from langgraph.checkpoint.memory import InMemorySaver  # noqa: E402

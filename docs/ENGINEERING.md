@@ -35,7 +35,7 @@ Judging is at your table. Special-track judges come only in round 1 (9:30–12:3
  iPhone: ios/RadarField ── POST /field/scan ▶│ http.app (app/routes.py): /field/scan /healthz   │
                                              └───────┬──────────────────────────────────────────┘
  app/layers.py: CoStar records · Vexcel attributes · Matterport twin (CoStar data kit + live Vexcel, cached after the first fetch; synthetic TEST-* fixtures)
- Models: live gemini-3.8-flash · worker gemini-4-argon · specialists gemini-3.8-flash (Vertex AI, thinking=low)
+ Models: live gemini-3.8-flash · live specialists gemini-3.5-flash-lite · worker gemini-4-argon (Vertex AI; live calls capped at 8 s, then the other model)
 ```
 
 | Component | Path | Owner | State (verified tonight) |
@@ -52,13 +52,16 @@ Judging is at your table. Special-track judges come only in round 1 (9:30–12:3
 
 ## 4. Flows
 
-**Live question** (target under 60 s; latency measured per model in §9):
+**Live question** (three model turns; target under 60 s, measured in §9):
 1. The user types "Is <PID> worth a solar and roof retrofit?" (PID = a CoStar property id; the city comes from the record).
-2. Turn 1: `write_todos`, plus `show_building(pid)`, plus `task` × 3 in parallel (records, aerial, interior).
-3. `verify_building(pid)` loads all layers itself, then reconciles, tests hypotheses and returns the verdict, provenance and assumption status.
-4. `ghost_compare(pid)`; `reveal_levels(pid)` if levels were found below the entrance; `retrofit(pid)`; `place_solar(pid)` (both run app/solar.py: Vexcel roof, PVWatts, CBECS, eGRID, CoStar leases).
-5. A three-sentence answer ending on kWh/yr and t CO2/yr, with "(illustrative data)" and "(placeholder inputs)" labels when they apply.
-6. Approvals (`send_outreach`, `watch_building`) appear as the approve/reject bar. `respond({decisions:[…]})` needs one decision per action request.
+2. Turn 1: `write_todos` (four items), plus `show_building(pid)`, plus `task` × 3 in parallel (records, aerial, interior).
+3. Turn 2, one message: `write_todos` (all items completed), `verify_building`, `ghost_compare`, `reveal_levels`, `retrofit`, `place_solar`. Every one loads its own layers by property id, so none waits for another. `verify_building` reconciles, tests hypotheses and returns the verdict, provenance and assumption status. `retrofit` and `place_solar` run app/solar.py (Vexcel roof, PVWatts, CBECS, eGRID, CoStar leases).
+   - The scene verbs run concurrently, but each sends its action only after the verbs ahead of it in that turn, so the screen always builds show → ghost → levels → solar (`app/scene.py`; the browser applies actions in arrival order, and `show_building` clears the scene). In ack mode they wait for their confirmations concurrently.
+   - `reveal_levels` draws only the below-grade levels the verifier counts. `ghost_compare`, `reveal_levels` and `place_solar` draw nothing on a link-check failure. `show_building` still shows the structure the aerial measured.
+4. Turn 3: a three-sentence answer ending on kWh/yr and t CO2/yr, with "(illustrative data)" and "(placeholder inputs)" labels when they apply. Todo updates ride along with real tool calls, so no turn only updates the plan.
+5. Approvals (`send_outreach`, `watch_building`) appear as the approve/reject bar. `respond({decisions:[…]})` needs one decision per action request.
+
+Live model calls (`app/agent.py` `models()`): the orchestrator is gemini-3.8-flash and the specialists gemini-3.5-flash-lite (thinking "minimal"). Each call gets one attempt of at most `RADAR_MODEL_TIMEOUT_S` (8 s), then the same request on the other model, then a last try with no limit (`ModelFallbackMiddleware`). Vertex sometimes holds a request 10–55 s before the first token, and a same-model retry usually lands in the same stall. When streaming (`langgraph dev`), the 8 s bounds the time to the first token. The worker graph keeps no timeout.
 
 **Worker tick** (hourly cron, plus `scripts/heartbeat.py tick` as the demo button):
 1. `queue_next()` returns up to 3 buildings.

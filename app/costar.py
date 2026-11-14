@@ -16,10 +16,11 @@ Facts from the kit's own docs (index.md, concepts/property-types-and-building-me
 from __future__ import annotations
 
 import csv
+import functools
 import json
 import os
+import threading
 from datetime import UTC, datetime
-from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -30,6 +31,22 @@ class CoStarError(RuntimeError):
     pass
 
 
+def _once(fn):
+    """lru_cache whose fill runs once: tools load buildings in parallel threads, and a plain lru_cache let
+    each of them parse the kit at the same time (8 concurrent cold loads took 8 s each under the GIL,
+    against 1 s for one). Later callers wait for the first fill. cache_clear() still works."""
+    cached = functools.lru_cache(maxsize=1)(fn)
+    lock = threading.RLock()
+
+    @functools.wraps(fn)
+    def wrapper():
+        with lock:
+            return cached()
+
+    wrapper.cache_clear = cached.cache_clear
+    return wrapper
+
+
 def kit_dir() -> Path:
     d = Path(os.environ.get("COSTAR_KIT_DIR", Path.home() / "Downloads" / "costar-hackathon-kit"))
     if not (d / "data" / "commercial-property.jsonl").exists():
@@ -37,7 +54,7 @@ def kit_dir() -> Path:
     return d
 
 
-@lru_cache(maxsize=1)
+@_once
 def _enums() -> dict[str, dict[int, str]]:
     raw = json.loads((kit_dir() / "schemas" / "enums.json").read_text())
     return {name: {int(k): v for k, v in table.items()} for name, table in raw.items() if isinstance(table, dict)}
@@ -87,7 +104,7 @@ def normalize(r: dict[str, Any], models: list[str] | None = None) -> dict[str, A
     }
 
 
-@lru_cache(maxsize=1)
+@_once
 def _index() -> dict[str, dict[str, Any]]:
     models: dict[str, list[str]] = {}
     with open(kit_dir() / "commercial-properties.csv", newline="") as f:
@@ -113,7 +130,7 @@ def candidates(types: tuple[str, ...] = ("Office", "Industrial", "GeneralRetail"
     return [dict(r) for r in _index().values() if r["property_type"] in types and r["latitude"] and r["gba_sqft"]]
 
 
-@lru_cache(maxsize=1)
+@_once
 def _tenancies() -> dict[str, list[dict[str, Any]]]:
     """Current tenancies per property: occupied sq ft and lease expiration."""
     out: dict[str, list[dict[str, Any]]] = {}
