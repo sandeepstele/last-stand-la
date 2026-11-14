@@ -31,9 +31,15 @@ def main() -> None:
     p.add_argument("pid")
     p.add_argument("--spots", type=int, default=10)
     p.add_argument("--neighbors", type=int, default=3, help="walk-graph links per spot (nearest scan spots)")
+    p.add_argument("--model", help="a specific Matterport model (e.g. a suite's tour) instead of the building's twin")
+    p.add_argument("--mesh", action="store_true", help="also cache the model's 50k interior mesh (untextured OBJ)")
     a = p.parse_args()
-    model = (costar.get(a.pid).get("matterport_model_ids") or [None])[0]
-    layout = json.loads((ROOT / "fixtures" / "matterport" / f"{model}.json").read_text())
+    model = a.model or (costar.get(a.pid).get("matterport_model_ids") or [None])[0]
+    lp = ROOT / "fixtures" / "matterport" / f"{model}.json"
+    if lp.exists():
+        layout = json.loads(lp.read_text())
+    else:  # not in the cached layouts: one read-only query for the scan spots
+        layout = matterport._post('{ model(id: "%s") { locations { id position { x y z } } } }' % model)["model"]
     pos = {l["id"]: l["position"] for l in layout.get("locations") or [] if l.get("position")}
     q = '{ model(id: "%s") { panoLocations { id skybox(resolution: "2k") { status children } } } }' % model
     panos = {x["id"]: (x.get("skybox") or {}).get("children") or [] for x in matterport._post(q)["model"]["panoLocations"]}
@@ -67,6 +73,16 @@ def main() -> None:
                 faces.append({"face": f"f{k}", "name": name})
         hops.append({"id": i, "x": round(pos[i]["x"], 2), "y": round(pos[i]["y"], 2), "faces": faces})
         print(f"hop {n}: ({pos[i]['x']:.1f}, {pos[i]['y']:.1f}) {len(faces)} faces")
+    for h in hops:
+        h["model"] = model
+    if a.mesh:
+        mesh = matterport._post('{ model(id: "%s") { assets { meshes { resolution url } } } }' % model)["model"]["assets"]["meshes"]
+        m50 = next((m for m in mesh if m["resolution"] == "50k"), None)
+        if m50:
+            r = httpx.get(m50["url"], timeout=120)
+            (ROOT / "fixtures" / "matterport" / "mesh").mkdir(parents=True, exist_ok=True)
+            (ROOT / "fixtures" / "matterport" / "mesh" / f"{model}_50k.obj").write_bytes(r.content)
+            print(f"mesh {model}: {len(r.content)} bytes")
     for h in hops:  # walk graph: each spot links to its nearest spots (real scans are 3-5 m apart, not a 2 m chain)
         near = sorted((math.dist((h["x"], h["y"]), (o["x"], o["y"])), o["id"]) for o in hops if o is not h)
         h["neighbors"] = [{"id": j, "m": round(d, 1)} for d, j in near[: a.neighbors]]

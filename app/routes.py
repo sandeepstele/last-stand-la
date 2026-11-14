@@ -187,7 +187,16 @@ async def game_mesh(request: Request) -> Response:
     pid = request.path_params["pid"]
     if not PID.match(pid):
         return JSONResponse({"error": "bad id"}, status_code=404)
-    models = (await asyncio.to_thread(costar.get, pid)).get("matterport_model_ids") or []
+    from app import vision
+
+    def hop_model() -> str | None:  # the walk's own model (e.g. a suite tour) wins over the building's twin
+        f = vision.CACHE / f"feed_{pid}_hops.json"
+        try:
+            return next((h.get("model") for h in json.loads(f.read_text()) if h.get("model")), None) if f.is_file() else None
+        except ValueError:
+            return None
+    m = await asyncio.to_thread(hop_model)
+    models = [m] if m else (await asyncio.to_thread(costar.get, pid)).get("matterport_model_ids") or []
     path = MESH_DIR / f"{models[0]}_50k.obj" if models else None
     if not path or not await asyncio.to_thread(path.is_file):
         return JSONResponse({"error": "no interior mesh cached"}, status_code=404)
