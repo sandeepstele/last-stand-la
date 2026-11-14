@@ -55,6 +55,7 @@ const suiteTips = (suite: string) => [
   `I'm inside suite ${suite}. People are working here.`,
   `I'm inside suite ${suite}. I can't tell if anyone works here.`,
 ];
+// night_cases() (laststand graph): the open queue cases inside the play area, in queue order. Only those with imagery gathered.
 type NightCase = { n: number; case: string; property_id: string; suite: string | null; label: string; question?: string; stakes?: string };
 // Exact strings: the backend's replay recording covers these three (sent as "Tip: <text>"). No address in source code.
 const TIP_TEXTS = [
@@ -173,7 +174,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
   // The Night Shift needs the live agent (the briefing comes from the real queue). Stub / agent-off play case #6 only.
   const nightShift = !!safeRoom && !game.stub && !agentOff;
   const office = nightShift ? safeRoom : null;
-  const brief = useMemo(() => latestResult<{ total?: number; cases?: NightCase[] }>(game.messages, "night_cases"), [game.messages]);
+  const brief = useMemo(() => latestResult<{ total?: number; in_area?: number; cases?: NightCase[] }>(game.messages, "night_cases"), [game.messages]);
   const case7 = useMemo(() => (office ? brief?.cases?.find((c) => c.case === "ghost_tenant" && String(c.property_id) === office.pid && c.suite) ?? null : null), [brief, office]);
   const case6 = useMemo(() => (hero ? brief?.cases?.find((c) => c.case === "material_conflict" && String(c.property_id) === hero.pid) ?? null : null), [brief, hero]);
   const queueTotal = brief?.total ?? null;
@@ -948,7 +949,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
           faces={officeFaces}
           title={`${office.label} · suite ${case7?.suite ?? ""}`}
           mode="look"
-          question={{ prompt: `CoStar records ${case7?.stakes ?? "an office"} here, and the suite is listed for lease. Is anyone still working here?`, choices: SUITE_CHOICES, chosen: suiteTip.chosen, status: suiteStatus }}
+          question={{ prompt: case7?.question ?? "CoStar records a tenant in this suite, and the suite is listed for lease right now. Is the tenant still there?", choices: SUITE_CHOICES, chosen: suiteTip.chosen, status: suiteStatus }}
           note={officeFaces.length ? "Real interior: this suite's own 3D tour." : null}
           exitHint={suiteTip.sentAt !== null && game.runDone ? "[E] step outside" : suiteTip.chosen === null ? "Answer first: is anyone working here?" : "Wait for HQ…"}
           onChoose={(i) => suiteTip.chosen === null && setSuiteTip({ chosen: i, sentAt: null })}
