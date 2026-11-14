@@ -2,6 +2,43 @@
 
 **An AI auditor for CoStar's building records.** Retrofit Radar is a LangChain deep agent. It finds places where a CoStar building record disagrees with the city's own records, the aerial imagery (Vexcel) or the inside of the building (Matterport). It investigates each disagreement the way a researcher would, looking at the images itself, and hands back a draft correction with its evidence for a person to approve. Built at HackPrinceton Fall 2026.
 
+## Status and branches (Sat Nov 14)
+
+The project has one engine (the auditor below) and a game being built on top of it:
+
+| Branch / tag | What it is | State |
+|---|---|---|
+| `main` | **The auditor**: the engine, the web app, docs | Working and tested; the demo fallback |
+| tag `auditor-v1` | A frozen copy of the working auditor | Restore with `git checkout auditor-v1` |
+| `game` | **Last Stand LA**, the game front end on the same engine (see below) | In progress; nothing in this branch yet |
+| `agent-plus` (to create) | Reasoning and vision improvements ("Plan B") | See [docs/AGENT_IMPROVEMENT_PLAN.md](docs/AGENT_IMPROVEMENT_PLAN.md) |
+
+Before committing, read [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) for the branch, commit and data rules.
+
+## Last Stand LA (in progress on `game`)
+
+**"The zombies are fake. The weak spots are real."** A zombie-survival night on real downtown LA buildings, driven by the same deep agent:
+- **The district:** 62 real kit buildings. Heroes are extruded from Vexcel outlines and the rest are boxes, coloured by the material CoStar records. 11 of them have a record conflict (CoStar's material vs the city's concrete list), drawn half-and-half with a "?".
+- **The scout:** pick a fortress and four scout subagents report in parallel as radio chatter. The agent opens a case, chooses its checks and looks at the building from above; the conflict settles live.
+- **Night:** scripted horde waves arrive. The agent proposes hold or fall back, and the player approves or overrides it (a human-in-the-loop interrupt, in the app or by text). An aftershock uses the 1994 Northridge shaking at that block.
+- **Tips:** a player's tip ("the walls are poured concrete") becomes capped evidence and moves the odds.
+- **Dawn:** the case file shows a draft correction for a CoStar researcher to approve.
+- **Code, not the model, computes every score, roll and wave.** Every result is labelled "game outcome, not an engineering assessment".
+- **Interface:** `GET /game/district`, `GET /game/dossier/{pid}`, `POST /game/resolve` and the `laststand` graph. See [contracts/README.md](contracts/README.md).
+
+## Tech stack
+
+| Layer | Tech |
+|---|---|
+| Agent | LangChain **deepagents** (Python): graphs `radar` (live), `radar_worker` (background), `laststand` (game, in progress) |
+| Models | **Gemini** on Vertex AI (3.8 Flash orchestrates, 3.5 Flash-Lite specialists, vision); Claude Opus 5.5 on Vertex AI optional for vision |
+| Server | `langgraph dev` (LangGraph agent server) plus custom routes (`app/routes.py`) |
+| Web | **Next.js 16**, **React 19**, TypeScript; `@langchain/react` `useStream` for live runs |
+| 3D | **three.js 0.187** (WebGL): extruded footprints, an `InstancedMesh` horde, Matterport panorama cube for "step inside" |
+| Messaging | Photon Spectrum (iMessage) bridge in `photon/` (TypeScript) |
+| Data | CoStar hackathon kit, Vexcel API, Matterport Model API, LA open data (retrofit lists, permits), USGS ShakeMap |
+| Tests | pytest (offline), `tsc`, eslint |
+
 ## The problem
 
 Decisions about buildings rest on their records: what a building is made of, who occupies it, whether ordered work was done. Records go stale quietly. Checking them means a researcher pulling permits, photos and tours one building at a time.
@@ -67,7 +104,7 @@ overnight sweep (cron) ─▶ top case ─▶ investigate ─▶ dossier ─▶ 
 ## The web app
 
 - **Left:** the overnight case queue, plus an **Inbox** with the case of the day and any correction **waiting for you** (Approve or Reject resumes the paused background run).
-- **Center:** the building in 3D.
+- **Center:** the building in 3D (three.js).
 - **Right:** the live case file. Confidence bars move as each piece of evidence lands, vision checks show the image and the agent's callout, and the draft correction has Approve/Reject.
 - **Isolation and safety:** every question runs on a fresh thread, so no case's results bleed into the next. The dev server listens on 127.0.0.1 only. Approvals are recorded, never sent.
 
@@ -124,7 +161,7 @@ Optional:
 - [docs/FRONTEND.md](docs/FRONTEND.md): the web app.
 - [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md): iMessage, Vexcel, Matterport, the CoStar kit and LA open data.
 - [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md): setup, tests, branch, commit and data rules, troubleshooting.
-- [docs/AGENT_IMPROVEMENT_PLAN.md](docs/AGENT_IMPROVEMENT_PLAN.md): known limitations of the deep agent (reasoning, vision, models, data) and the plan to improve them.
+- [docs/AGENT_IMPROVEMENT_PLAN.md](docs/AGENT_IMPROVEMENT_PLAN.md) (**Plan B, start here if you are improving the agent**): known limitations of the deep agent (reasoning, vision, models, data) and the plan to improve them.
 
 ## Team
 
