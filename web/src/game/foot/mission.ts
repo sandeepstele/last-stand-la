@@ -541,7 +541,10 @@ export function createMission(ctx: FootCtx): System {
     wall.group.rotation.y = -f;
     root.add(wall.group);
     wallLabel = makeLabel(0.75);
-    wallLabel.sprite.position.set(x - door.fx * 0.2, 3.45, z - door.fz * 0.2);
+    wallLabel.sprite.position.set(x + door.fx * 0.3, 4.1, z + door.fz * 0.3);
+    // never clipped by the door frame (it only exists while you're standing at this door)
+    (wallLabel.sprite.material as THREE.SpriteMaterial).depthTest = false;
+    wallLabel.sprite.renderOrder = 20;
     root.add(wallLabel.sprite);
     plankState.fill(0);
     plankT.fill(0);
