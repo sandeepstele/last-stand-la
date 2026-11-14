@@ -1,131 +1,234 @@
-# Retrofit Radar
+# Last Stand LA
 
-**An AI auditor for CoStar's building records.** Retrofit Radar is a LangChain deep agent. It finds places where a CoStar building record disagrees with the city's own records, the aerial imagery (Vexcel) or the inside of the building (Matterport). It investigates each disagreement the way a researcher would, looking at the images itself, and hands back a draft correction with its evidence for a person to approve. Built at HackPrinceton Fall 2026.
+**Settle tonight's cases and make it to dawn.**
 
-## The problem
+Last Stand LA is a survival game set on real downtown Los Angeles buildings. Its main character is a **LangChain deep agent**: an AI auditor that works CoStar's real queue of 328 open cases, where a building's records disagree with each other.
 
-Decisions about buildings rest on their records: what a building is made of, who occupies it, whether ordered work was done. Records go stale quietly. Checking them means a researcher pulling permits, photos and tours one building at a time.
+- At nightfall the agent **briefs the night shift**. It picks the open cases inside your blocks and sends you, its eyes on the ground, to look.
+- You walk into the buildings' **real Matterport 3D tours** and report what you see. Your report becomes capped evidence in the **real case**.
+- When the horde comes, the agent proposes **HOLD or RUN** and waits for your call. Code rolls every number against the evidence and the city's 1994 Northridge shaking data.
+- At dawn the agent **drafts tonight's corrections live**, citing your words. "File tonight's reports" opens the same agent as the auditor, on that case.
 
-## What it does
+**Track:** Entertainment. **Sponsor data:** CoStar records, Vexcel aerials, Matterport tours, plus LA open data and USGS. Built at HackPrinceton Fall 2026 (Nov 13-15).
 
-The agent opens **cases** wherever independent sources disagree. An overnight sweep works the queue on its own, and each morning it delivers a "case of the day", already investigated, with its correction draft waiting for approval:
+> **For AI agents and new contributors:** this README is the full context. Read it top to bottom, then the linked docs. Section 9 lists the rules you must follow before changing anything.
 
-| Case | The disagreement | Found in the CoStar kit (Houston + Los Angeles) |
+---
+
+## 0. Where the code is
+
+| Branch | What | State (Sat Nov 14, afternoon) |
 |---|---|---|
-| **Material conflict** | LA's non-ductile concrete retrofit list names the building; CoStar records another material | Only 12 of the 69 buildings matched to the city's concrete list are recorded as concrete by CoStar |
-| **Stale entry** | A city retrofit list still names a building that was replaced | 18 found (including newer buildings that replaced a listed concrete one); some backed by demolition permits |
-| **Ghost tenant** | CoStar records a company in a suite that is listed for lease right now | 316 suites, about 5,050 employees on record; 273 of them become cases (the other 43 are sublet listings, where the tenant itself offers the space) |
+| `foot-lead` | **The game on foot** (everything below), merged from seven builder branches | Playable; the strict-replay runs and the 4:30 check are next |
+| `game` | Backend (`app/fortress.py`, `app/game_agent.py`, `/game/*`), the earlier map mode (`/play`) | `foot-lead` merges into it after the check |
+| `main` | The engine and the auditor app (`/`) | `game` merges into it after the check |
+| tag `auditor-v1` | A frozen copy of the working auditor | The last-resort fallback |
+| `agent-plus` | The teammate's deep-agent improvements ([docs/AGENT_IMPROVEMENT_PLAN.md](docs/AGENT_IMPROVEMENT_PLAN.md)) | **Merge cutoff 6:00 pm**, then everything is re-recorded |
 
-**By the numbers** (LA, recomputed from the kit and the city's lists on Sat Nov 14):
-- **226** kit buildings are on an LA earthquake-retrofit list.
-- **61** of them haven't finished the ordered work (**2,091 apartments**). Only **14** are past a deadline, even after the city's extensions; the rest are on schedule.
-- **42 of the 61** felt very strong shaking (MMI 7+) in a replay of the 1994 Northridge earthquake.
+Everything about the game is in **[docs/game/](docs/game/README.md)**:
+- [DESIGN](docs/game/DESIGN.md), with the user's decision log;
+- [AUDIT](docs/game/AUDIT.md), on why the game exists;
+- [CONTRACT](docs/game/CONTRACT.md), with the exact agent messages;
+- [CRITIQUE](docs/game/CRITIQUE.md);
+- [DEMO](docs/game/DEMO.md), the 2-minute cut and judge Q&A;
+- [BUILD_PLAN](docs/game/BUILD_PLAN.md).
 
-For each case the agent:
-1. **Opens the case:** competing hypotheses, each with a prior confidence.
-2. **Chooses the evidence** most likely to separate them:
-   - city retrofit filings, permit wording, and demolition or new-building permits;
-   - year built and floor height against the materials used in that era;
-   - lease terms and the company's trail to newer locations;
-   - car counts across aerial captures;
-   - **vision reads** of Vexcel aerial and oblique imagery and Matterport 360° tours, each confirmed by a skeptical second pass.
-3. **Weighs the evidence in code**, not in the model. It returns a verdict (*likely*, *leaning* or *unresolved*), the next check, and a **draft correction** that a person approves or rejects. Nothing is sent to anyone.
-4. **Learns from people.** A correction texted in (for example, "the property manager says the tenant is still there") becomes evidence with a source and a date. It moves the case, capped so it never settles the case on its own, and the agent says where the person and the records disagree.
+---
 
-**Examples (live runs):**
-- **247337, Los Angeles.** The city lists non-ductile concrete; CoStar records steel. The agent looked at the facade, saw "closely spaced vertical concrete fins running the full height", and a second look confirmed it. With the retrofit plans filed with the city's concrete program, the verdict is *likely concrete, as the city lists it; CoStar's material is worth a look (0.73)*, with a correction draft for a CoStar researcher.
-- **11547997.** The agent compared the 2021 and 2026 aerial captures: a pitched-roof building was replaced by a new flat-roof one. That matches a 2022 demolition permit: *likely replaced (0.98)*.
-- **247386, suite 300.** CoStar records a 50-person office there, and the suite has been listed for 15 months. A leasing tour taken after the listing reads "furnished but unoccupied": *worth a look, leaning gone (0.42)*. A texted "the property manager says they're still there" moves it to *unresolved*, flags the conflict, and makes the next check a site visit.
+## 1. The night (about 3 minutes; `/play?mode=foot`)
 
-## How it works
+| Beat | You | The deep agent (graph `laststand`) | Code |
+|---|---|---|---|
+| **Briefing** | Press Start | `Brief the night shift`: it calls `night_cases()` (the open queue cases inside the play area) and `write_todos` (its plan). Tonight that's **#7** and **#6** of 328 | — |
+| **Case #7** | Walk into **suite 1100** at 122 7th St (its real tour). Answer: is anyone working here? | `Check suite 1100 at building 254167: is the tenant on record still there?`: it opens the ghost-tenant case and **chooses** checks (listing timeline, lease terms, tenancy trail, the suite's tour), then weighs them. Your `Tip: I'm inside suite 1100. …` becomes a capped human report | Odds per hypothesis. The 3-person office on record comes with you only if the evidence leans "present" and you didn't report the suite empty |
+| **The cross** | About 370 m through the horde to 737 Broadway (sprint never runs dry; the route is drawn) | — | Real streets: OSM outlines on the Vexcel mosaic |
+| **Case #6, the fortress** | Walk into **737 Broadway's own tour**. Answer: concrete, brick or can't tell? | `Scout property 6375735`: four squads in parallel (records, aerial, interior, city), `open_case` (CoStar masonry vs the city's concrete list), its checks, including **a vision read of the aerial** (shown on screen), then `weigh_case`. Your tip is weighed in | **Walls** = the case's odds × wall strength per material |
+| **Night** | The horde comes from the west. **HOLD** (defend the door: boards, shoves, flares, the flashlight stun) or **RUN** (about 290 m to the fallback) | `Wave 1 is coming from the W`: `horde_status`, `find_fallback`, then `commit_plan`, which **pauses for your decision** (approve or edit) | A seeded roll (seed 2026). **Your report decides HOLD:** "concrete" holds (76 vs 75), "brick" or "can't tell" break in. RUN holds. Then the aftershock roll |
+| **Dawn** | Score and rank; **File tonight's reports → open the auditor** | `Debrief the night shift`: `draft_correction` for each case it worked, citing your report | The drafts are hedged; a person approves them |
 
-```
-live question ─▶ orchestrator (deepagents: todos, parallel specialists)
-                   ├─ records · aerial · interior · civic specialists (parallel task)
-                   ├─ open_case ─▶ check_evidence (the agent chooses) ─▶ weigh_case (pure Python)
-                   │      checks: filings · permits · era & height · tenancy trail · lot activity · vision (2-pass)
-                   ├─ scene verbs ─▶ 3D view (three.js)
-                   └─ draft correction ─▶ a person approves or rejects (recorded, never sent)
-texts (iMessage via Photon) ─▶ background worker ─▶ record_note ─▶ next investigation weighs it
-overnight sweep (cron) ─▶ top case ─▶ investigate ─▶ dossier ─▶ "case of the day" ─▶ file_correction waits for YES/NO
-```
+- **2-minute stage cut** (`?demo=1`): right after the briefing the agent works case #7 from the records, while you go straight to case #6. [F] fast-forwards the walk, the defence and the escape. See [docs/game/DEMO.md](docs/game/DEMO.md).
+- **Controls:** WASD and the mouse; Shift sprint; Space shove; G flare (3 per night); hold the flashlight on a zombie to stun it; E enter or nail boards; Q medkit; H/R decide; V mute.
+- **No game over:** if you go down, your squad drags you clear (−100 points). Difficulty is forgiving.
 
-- **Code holds the rules; the model holds the judgment.** Matching, deadlines, priors and evidence weights are deterministic and tested. The model chooses what to check, reads the images and explains. It never types a number a tool didn't return.
-- **deepagents features in use:**
-  - planning with todos;
-  - parallel subagents;
-  - a filesystem for dossiers;
-  - Store-backed team notes;
-  - human-in-the-loop approvals;
-  - a scheduled background worker;
-  - LangSmith traces.
-- **Speed:** a live case takes about 10-30 s. Model calls that stall on Vertex fall over to a faster model after 8 s.
-- **Models:**
-  - Gemini 3.8 Flash on Vertex AI orchestrates; Gemini 3.5 Flash-Lite runs the specialists;
-  - vision reads run on Gemini 3.8 Flash, or on Claude Opus 5.5 on Vertex AI with `RADAR_VISION_MODEL=claude-opus-5-5`.
+---
 
-## The web app
+## 2. The deep agent (the main character)
 
-- **Left:** the overnight case queue, plus an **Inbox** with the case of the day and any correction **waiting for you** (Approve or Reject resumes the paused background run).
-- **Center:** the building in 3D.
-- **Right:** the live case file. Confidence bars move as each piece of evidence lands, vision checks show the image and the agent's callout, and the draft correction has Approve/Reject.
-- **Isolation and safety:** every question runs on a fresh thread, so no case's results bleed into the next. The dev server listens on 127.0.0.1 only. Approvals are recorded, never sent.
+### 2.1 What it is
+- **The framework:** a LangChain **`deepagents`** agent (`create_deep_agent`), served by `langgraph dev`.
+- **Its parts:**
+  - an orchestrator that **plans with todos**;
+  - **four specialist subagents** run in parallel via `task`;
+  - **evidence tools it chooses between**;
+  - a **Store** for people's notes;
+  - **human-in-the-loop interrupts**.
+- **Rule: the agent makes the calls, code does the maths, the engine runs the night.** The model picks the cases, the evidence, what to ask you, HOLD or RUN, and the fallback, and it drafts the corrections. Odds, scores, rolls, routes and wave sizes are deterministic Python; the prompt forbids typing a number a tool didn't return.
 
-## Honesty and limits
+### 2.2 Graphs (`langgraph.json`)
 
-- **We never say a record or an owner is wrong.** Either source can be out of date, so verdicts are drafts for a person to review.
-- **"Unfinished" is not non-compliance.** Most retrofit orders are on schedule, with deadlines running to the 2040s. Only 14 of the 61 unfinished orders are past a deadline, even after the city's extensions.
-- **Vision is evidence, not a verdict.** Its weight is capped at 0.2, it needs a confirming second look, and "can't tell" is a valid answer.
-- **Car counts are lot-level** and count only as weak evidence. Tours are dated, and older tours count for less.
-- **An aerial outline bigger than its own parcel** usually includes a neighbor, so the agent refuses to compare areas there.
-- **Earthquake mode is a labeled replay** of the 1994 Northridge earthquake (USGS ShakeMap). It is an optional trigger, not live data; the UI and texts mark replays.
-- **Company names are never shown.** Tenants appear as "a 50-person office".
+| Graph | Entry | Used by |
+|---|---|---|
+| **`laststand`** | `app/game_agent.py:game_agent` | The game: the night-shift commander |
+| `radar` | `app/agent.py:live_agent` | The auditor app (`/`) |
+| `radar_worker` | `app/agent.py:worker_agent` | The auditor's overnight sweep and the iMessage worker |
 
-## Data
+Custom routes (`/game/*`, `/cases/*`, `/evidence/*`, `/healthz`) live in `app/routes.py` on the same server.
 
-- **CoStar hackathon kit:** properties, tenancies, companies, listings, attachments.
-- **Vexcel:** property attributes, ortho and oblique imagery, open-vocabulary detection, capture history.
-- **Matterport (team token, read-only queries):** layouts and 360° panoramas.
-- **Free public data:**
-  - LA's soft-story and non-ductile concrete retrofit lists;
-  - LADBS permits since 2020 (retrofit, demolition and new building);
-  - the USGS Northridge ShakeMap.
+### 2.3 The `laststand` tools
+- **Game tools:**
+  - `night_cases()`: the open queue cases inside the play area;
+  - `fortress_dossier(pid)`: walls, quake, roof, people and space scores;
+  - `horde_status(wave)`;
+  - `find_fallback(pid, away_from?)`;
+  - `commit_plan(pid, action, to_pid?)`: **interrupts** for approve or edit; its result is the seeded roll;
+  - `draft_correction(pid, suite?)`.
+- **Case engine tools:** `open_case`, `check_evidence`, `weigh_case`, `record_note`. Specialists: `records`, `aerial`, `interior` and `civic`, each with one tool and structured output.
+- **Guards:**
+  - every game tool refuses a pid outside the district;
+  - the prompt pins the fortress to the thread's latest `Scout property <pid>`;
+  - the game graph has its own backend, with no shared auditor memories;
+  - hedged wording only ("the records disagree"); no company names.
 
-**Licensed CoStar, Vexcel and Matterport data is not in this repository.** It is matched only on the machine that runs the agent, and nothing from the kit is sent to outside services. Synthetic `TEST-*` fixtures let the tests run without it.
+### 2.4 The case engine (`app/evidence.py`, pure Python)
 
-## Run it
+A case is a question with competing hypotheses and priors:
+- **`material_conflict`:** concrete as the city lists it, 0.45; the material CoStar records, 0.35; a different structure, 0.20.
+- **`ghost_tenant`:** still there, gone, subleasing, moved within, the listing is stale.
+- **`stale_entry`.**
+
+Each check returns `{finding, effects, why}`. `weigh_case` combines them into a posterior and a hedged verdict (likely, leaning or unresolved). Two caps apply:
+- **vision effects are capped at 0.2** and need a skeptical **second look**;
+- **a person's report is capped at 0.35:** strong, never final.
+
+### 2.5 Vision, models, replay
+- **Vision:** Gemini on Vertex AI reads the Vexcel oblique and top-down images and the Matterport suite faces. Answers are cached in `fixtures/vision/`.
+- **Models:** Gemini 3.8 Flash orchestrates, with 3.5 Flash-Lite specialists. `ModelFallbackMiddleware` switches models after an 8 s stall.
+- **Replay** (`app/replay.py`):
+  - `RADAR_REPLAY=record:<name>`, `=<name>` and `=fill:<name>` (records misses only), plus `RADAR_REPLAY_STRICT=1` (no live calls; a miss is an error).
+  - Keys are the system prompt, the latest human message and the tool results since.
+  - **Any prompt or tool change means re-recording** (`scripts/game_nights.py`).
+- More: [docs/AGENT.md](docs/AGENT.md), [docs/game/CONTRACT.md](docs/game/CONTRACT.md).
+
+---
+
+## 3. Real data → the game
+
+| Source | In the game |
+|---|---|
+| **CoStar** | Material (wall strength), floors, people on record (wave sizes), the conflict at 737 Broadway, the 3-person office in suite 1100, **the 328-case queue the agent briefs from** |
+| **Vexcel** | The ground you walk on (an aerial mosaic at about 12 cm/px); **the aerial the agent reads** for 737 Broadway (it pops up as "HQ evidence · real image"); the roof score |
+| **Matterport** | **737 Broadway's own tour** and **suite 1100's tour**: the rooms you walk into. The agent also reads suite 1100's tour (it pops up on screen) |
+| **LA open data** | Seismic-retrofit orders (amber danger rings, the quake score, aftershock debris zones); permits as evidence |
+| **USGS ShakeMap** | The 1994 Northridge shaking (MMI) per building: the aftershock strength |
+| **OpenStreetMap** | About 190 surrounding buildings at real height (the LA County survey import) |
+
+- **Game items, not data:** crates (boards, medkit), flares, zombies, fictional names.
+- **The corner views are game camera renders, not live feeds.**
+- **Licensed CoStar, Vexcel and Matterport data is never committed;** it is matched locally. Synthetic `TEST-*` fixtures and `?stub=1` run without it.
+
+---
+
+## 4. The auditor: where the agent's work lands (`/`)
+
+The same agent, as **Retrofit Radar**, works the whole queue:
+- an overnight sweep opens cases where CoStar disagrees with the city, the aerials or a suite tour: 273 ghost tenants, 37 material conflicts, 18 stale entries;
+- it investigates each case, choosing evidence (including before/after aerials and car counts);
+- it drafts corrections for a person to approve;
+- it learns from texted corrections (iMessage via Photon).
+
+The game's dawn deep link `/?check=<pid>&from=laststand` opens the case with your report in it.
+
+**Verified numbers:** 226 LA kit buildings on a retrofit list; 61 unfinished (2,091 apartments); only 14 past a deadline; only 12 of 69 concrete-list matches recorded as concrete by CoStar; 328 open cases.
+
+---
+
+## 5. Frontend (`web/`, Next.js 16, React 19, three.js 0.187)
+
+`web/src/game/foot/`:
+
+| Owner | Files |
+|---|---|
+| Director (lead) | `FootGame.tsx` (the story steps, the agent calls through `useGame`, the HUD state) |
+| Shared contract | `engine.ts` (ctx, the typed bus, constants), `collide.ts`, `input.ts` |
+| A | `player*.ts`: survivor, camera, flashlight |
+| B | `horde*.ts`, `feeds.ts`, `flare.ts`: zombies (flow fields, lure, stun), drone and camera views |
+| C | `world*.ts`: aerial ground, OSM outlines, facades, lights, route A* |
+| D | `IntroOverlay`, `InsideView`/`InsidePano`, `FootHud`, `DawnView`, `ui.tsx`, `foot.module.css` |
+| E | `mission*.ts`: crates, the office escort, door defence, debris |
+| F | `HqPanel`, `hqModel`, `hqDrafts`: the agent on screen (briefing, plan, squads, evidence, odds, drafts) |
+| G | `audio*.ts`: procedural sound plus a spoken radio |
+
+Systems never import each other; they share `ctx` and bus events. The earlier map mode is `/play`; the auditor is `/`. More: [docs/game/BUILD_PLAN.md](docs/game/BUILD_PLAN.md), [docs/FRONTEND.md](docs/FRONTEND.md).
+
+---
+
+## 6. Run it
 
 ```bash
-uv sync                                                   # Python 3.11+, dependencies + dev tools
-cp .env.example .env                                      # fill in keys; never commit .env
-uv run pytest -q                                          # offline tests, no network
-uv run python scripts/fetch_public.py                     # LA lists, permits, USGS (cached in fixtures/public)
-uv run langgraph dev --host 127.0.0.1 --port 2024 --no-browser --n-jobs-per-worker 4
-cd web && npm install && npm run dev   # http://127.0.0.1:3000; defaults to the agent server on 127.0.0.1:2024
+uv sync && cp .env.example .env                 # keys only in .env
+uv run pytest -q                                # offline tests
+uv run python scripts/fetch_public.py           # LA lists, permits, ShakeMap (cached)
+uv run langgraph dev --host 127.0.0.1 --port 2024 --no-browser --no-reload --n-jobs-per-worker 4
+cd web && npm install && npm run dev            # http://127.0.0.1:3000/play?mode=foot
 ```
 
-Optional:
-- **iMessage:** `cd photon && npm install && npm start`. This is the Photon Spectrum bridge; it needs `SPECTRUM_PROJECT_ID`, `SPECTRUM_PROJECT_SECRET`, `PHOTON_OWNER_PHONE` and `PHOTON_BRIDGE_TOKEN`, and each phone number must be added as a Photon project user.
-- **Demo helpers:**
-  - `scripts/demo_reset.py` clears team notes, decisions, drafts and paused worker runs between demos;
-  - `scripts/demo_flow.py --runs 5` runs the scripted demo and prints a timing table;
-  - `scripts/quake_alert.py` fires the labeled Northridge replay.
-- **Offline fallback:**
-  - record a good run with `RADAR_REPLAY=record:demo`;
-  - replay it with `RADAR_REPLAY=demo` (add `RADAR_REPLAY_STRICT=1` to forbid live model calls).
+**Modes:**
+- `?mode=foot`: the live Night Shift.
+- `&demo=1`: the 2-minute stage cut with [F] fast-forward.
+- `&stub=1`: synthetic data, no backend.
+- `&agent=off`: the real district with no agent calls (visual testing).
 
-  The tools, images and 3D view stay real, and the UI shows a REPLAY badge.
+**Demo:**
+- Start the server with `RADAR_REPLAY=game RADAR_REPLAY_STRICT=1` (never put `RADAR_REPLAY` in `.env`).
+- Use `npm run build && npm start`.
+- Run `uv run python scripts/demo_reset.py` between judges.
+- In git worktrees, run `next dev --webpack`.
 
-## For contributors
+---
 
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): the system map and how the parts connect.
-- [docs/AGENT.md](docs/AGENT.md): the deep agent (graphs, prompts, specialists, approvals, models, replay).
-- [docs/BACKEND.md](docs/BACKEND.md): Python and data (data layers, evidence engine, vision, routes, Store, scripts, tests).
-- [docs/FRONTEND.md](docs/FRONTEND.md): the web app.
-- [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md): iMessage, Vexcel, Matterport, the CoStar kit and LA open data.
-- [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md): setup, tests, branch, commit and data rules, troubleshooting.
-- [docs/AGENT_IMPROVEMENT_PLAN.md](docs/AGENT_IMPROVEMENT_PLAN.md): known limitations of the deep agent (reasoning, vision, models, data) and the plan to improve them.
+## 7. Known limitations
+
+- **Vision** is weak on fine detail; it is capped and double-checked.
+- **Evidence weights** are hand-set; there is no evaluation set yet. See [AGENT_IMPROVEMENT_PLAN](docs/AGENT_IMPROVEMENT_PLAN.md).
+- **One night, one district:** two cases have the imagery gathered.
+- **Live odds vary** with the checks the agent chooses. Replay is deterministic.
+
+---
+
+## 8. Docs index
+
+| Doc | For |
+|---|---|
+| [docs/game/](docs/game/README.md) | Everything about the game |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | The system map |
+| [docs/AGENT.md](docs/AGENT.md) | The deep agent in depth |
+| [docs/AGENT_IMPROVEMENT_PLAN.md](docs/AGENT_IMPROVEMENT_PLAN.md) | Limitations and the improvement plan |
+| [docs/BACKEND.md](docs/BACKEND.md) | Python, data, evidence engine, routes, Store, tests |
+| [docs/FRONTEND.md](docs/FRONTEND.md) | The web app |
+| [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md) | Vexcel, Matterport, the CoStar kit, LA open data, Photon |
+| [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) | Setup, tests, branch, commit and data rules |
+
+---
+
+## 9. Rules (people and AI agents)
+
+1. **Secrets** live only in `.env`. Run `scripts/check_secrets.sh` before committing.
+2. **Licensed data never enters git** (`fixtures/*/` except `TEST-*`). Never send kit data to outside services. Matterport is read-only.
+3. **Numbers stay in Python;** add a tool rather than letting a prompt compute.
+4. **The exact agent messages are a contract** ([CONTRACT.md](docs/game/CONTRACT.md)). Changing a prompt, a tool output or a message string means re-recording and strict replay ×3. After the 6:00 pm cutoff, no agent changes go into the demo build.
+5. **Honesty:**
+   - "the records disagree", never "wrong";
+   - "unfinished" ≠ non-compliant;
+   - no company names, and no street addresses in source code;
+   - "Game outcome, not an engineering assessment" on screen;
+   - never call the corner views "live".
+6. **Git:**
+   - work on a branch;
+   - run `uv run pytest -q` and `cd web && npx tsc --noEmit && npx eslint src` before you push;
+   - commit as the noreply identity with plain messages and no AI trailers;
+   - ask before pushing shared branches.
+7. **No paid services.**
 
 ## Team
 
-[TEAM: names, Discord usernames]. Built at HackPrinceton Fall 2026 (Nov 13-15).
+[TEAM: names, Discord usernames]. Built at HackPrinceton Fall 2026.
