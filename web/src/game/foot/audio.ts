@@ -413,8 +413,11 @@ export function createAudio(ctx: FootCtx): System {
   })));
   on(bus.on("mission:medkit", () => live((a) => a.sfx.chime(a.fx, 0.14, [523.25, 659.25, 783.99, 1046.5], 0.12, 0.7))));
   on(bus.on("mission:reset", () => {
+    // Play again: a fresh night, and last night's radio stops talking.
     resetAt = ctx.time;
     defending = false;
+    lastWave = -99;
+    radio.cancel();
   }));
   on(bus.on("horde:clear", () => {
     // Also fired by "play again" (right after mission:reset) and possibly on consecutive frames: one sting per dawn.
