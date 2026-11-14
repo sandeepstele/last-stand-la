@@ -64,3 +64,13 @@ def test_implausible_floor_height_is_not_material_evidence(monkeypatch):
     monkeypatch.setattr(layers, "get_aerial", lambda pid: {"height_m": 20.0})  # 1.33 m per floor for 15 stories
     r = ev.run_check("X1", "era_and_height", "material_conflict")
     assert [e["hypothesis"] for e in r["effects"]] == ["different_structure"]
+
+
+def test_vision_shifts_are_capped_and_unconfirmed_reads_count_for_nothing():
+    confirmed = {"answer": "exposed_concrete_frame", "first_answer": "exposed_concrete_frame", "observed": "fins",
+                 "second_look": "yes", "images": ["a.jpg"]}
+    r = ev._vision_result(confirmed, [{"hypothesis": "city_list_current", "delta": 0.9}], "why", "Concrete frame visible")
+    assert r["effects"] == [{"hypothesis": "city_list_current", "delta": ev.VISION_CAP}] and r["images"] == ["a.jpg"]
+    doubted = dict(confirmed, answer="cant_tell", second_look="too dark to tell")
+    r = ev._vision_result(doubted, [{"hypothesis": "city_list_current", "delta": 0.2}], "why", "x")
+    assert r["effects"] == [] and "too dark" in r["finding"] and r["callout"] == "Can't tell from the air"

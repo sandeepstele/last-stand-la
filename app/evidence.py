@@ -27,7 +27,8 @@ CASES: dict[str, dict[str, Any]] = {
             "costar_current": ("It is the material CoStar records: the list entry is a screening false positive", 0.35),
             "different_structure": ("The two sources describe different structures at the same address", 0.20),
         },
-        "checks": ["compliance_filings", "permit_text", "replacement_permits", "era_and_height", "site_structures"],
+        "checks": ["compliance_filings", "permit_text", "replacement_permits", "era_and_height", "site_structures",
+                   "look_from_above", "compare_captures"],
     },
     "stale_entry": {
         "question": "The building is on a retrofit list but CoStar says it was built after the ordinance's cutoff. Was it replaced?",
@@ -35,7 +36,7 @@ CASES: dict[str, dict[str, Any]] = {
             "replaced": ("The listed building was demolished and replaced; the list entry is stale", 0.55),
             "year_is_renovation": ("Same building; CoStar's year built reflects a renovation, so the retrofit is still owed", 0.45),
         },
-        "checks": ["replacement_permits", "compliance_filings", "era_and_height"],
+        "checks": ["replacement_permits", "compliance_filings", "era_and_height", "compare_captures"],
     },
 }
 
@@ -45,7 +46,11 @@ CHECK_WHAT = {
     "replacement_permits": "Demolition or new-building permits at the address since 2020",
     "era_and_height": "Year built, stories and measured height per floor vs typical framing for each material",
     "site_structures": "How many structures Vexcel sees on the parcel",
+    "look_from_above": "A vision read of the Vexcel oblique (side) and top-down images, double-checked by a skeptical second pass",
+    "compare_captures": "The oldest vs newest Vexcel capture of the site: same building, or replaced?",
 }
+
+VISION_CAP = 0.2  # vision is evidence, never a verdict on its own
 
 
 def _effects(**d: float) -> list[dict[str, Any]]:
@@ -179,7 +184,82 @@ def site_structures(pid: str, case: str) -> dict[str, Any]:
             "why": "one structure leaves little room for a mix-up"}
 
 
+def _vision_result(r: dict[str, Any], effects: list[dict[str, Any]], why: str, callout: str) -> dict[str, Any]:
+    for e in effects:
+        e["delta"] = max(-VISION_CAP, min(VISION_CAP, e["delta"]))
+    if r["answer"] == "cant_tell":
+        second = f" (second look: {r['second_look']})" if r.get("first_answer") != "cant_tell" else ""
+        return {"finding": f"can't tell from the images{second}", "effects": [], "why": "an unconfirmed read is not evidence",
+                "images": r["images"], "callout": "Can't tell from the air", "vision": r}
+    return {"finding": f"{r['answer'].replace('_', ' ')}: {r['observed']}", "effects": effects, "why": why,
+            "images": r["images"], "callout": callout, "vision": r}
+
+
+def look_from_above(pid: str, case: str) -> dict[str, Any]:
+    from app import layers, vision
+
+    rec, _ = _ctx(pid)
+    try:
+        aer = layers.get_aerial(pid)
+        imgs = [p for p in (vision.oblique(pid, aer), vision.ortho(pid, aer)) if p]
+        mat = (rec.get("construction_material") or "unknown").lower()
+        r = vision.ask(pid, "facade", imgs, (
+            "These are aerial images (an oblique side view if present, and a top-down view) of the building at the center. "
+            "From its facade, what is its structural system most likely? exposed_concrete_frame = a visible grid of concrete "
+            "columns and spandrels or concrete fins; precast_panels = repeated concrete cladding panels; curtain_wall = a "
+            "continuous glass and metal skin typical of steel frames; masonry = brick or stone bearing walls. Also judge whether "
+            f"more than one distinct building sits inside the center. (Records disagree: the city says concrete, CoStar says {mat}.)"),
+            ["exposed_concrete_frame", "precast_panels", "curtain_wall", "masonry"])
+    except Exception as e:
+        return {"finding": f"images unavailable ({type(e).__name__}: {str(e)[:120]})", "effects": [], "why": "no images"}
+    a = r["answer"]
+    if a == "exposed_concrete_frame":
+        return _vision_result(r, _effects(city_list_current=+0.2, costar_current=-0.1), "a concrete frame visible on the facade supports the city's list", "Concrete frame visible")
+    if a == "precast_panels":
+        return _vision_result(r, _effects(city_list_current=+0.08), "precast concrete cladding hangs on either a concrete or a steel frame, so it is weak", "Concrete panels (weak)")
+    if a == "curtain_wall":
+        return _vision_result(r, _effects(costar_current=+0.15, city_list_current=-0.05), "a glass curtain wall is typical of a steel frame", "Glass curtain wall")
+    if a == "masonry":
+        eff = _effects(costar_current=+0.15) if mat == "masonry" else _effects(different_structure=+0.05)
+        return _vision_result(r, eff, "brick or stone walls fit a masonry record", "Masonry walls")
+    return _vision_result(r, [], "", "")
+
+
+def compare_captures(pid: str, case: str) -> dict[str, Any]:
+    from app import layers, vision
+
+    try:
+        aer = layers.get_aerial(pid)
+        hist = sorted(aer.get("footprint_history") or [], key=lambda h: h.get("date") or "")
+        if len(hist) < 2:
+            return {"finding": "only one capture on record", "effects": [], "why": "nothing to compare"}
+        old, new = hist[0], hist[-1]
+        imgs = [vision.ortho(pid, aer, old["collection"]), vision.ortho(pid, aer, new["collection"])]
+        r = vision.ask(pid, "captures", imgs, (
+            f"Two top-down aerial images of the same site: the first from {old['date']}, the second from {new['date']}. "
+            "Is the building at the center the same building in both, or was it demolished and replaced by a different one "
+            "(different roof shape, size or footprint), or is the site under construction in the later image?"),
+            ["same_building", "replaced", "under_construction"])
+    except Exception as e:
+        return {"finding": f"captures unavailable ({type(e).__name__}: {str(e)[:120]})", "effects": [], "why": "no images"}
+    a = r["answer"]
+    dates = f" ({old['date'][:4]} vs {new['date'][:4]})"
+    if case == "stale_entry":
+        if a in ("replaced", "under_construction"):
+            return _vision_result(r, _effects(replaced=+0.2, year_is_renovation=-0.15), "the site's building changed between captures", "Replaced" + dates)
+        if a == "same_building":
+            return _vision_result(r, _effects(year_is_renovation=+0.15, replaced=-0.1), "the same building stands in both captures", "Same building" + dates)
+    else:
+        if a in ("replaced", "under_construction"):
+            return _vision_result(r, _effects(different_structure=+0.15), "the building changed, so the sources may describe different ones", "Changed" + dates)
+        if a == "same_building":
+            return _vision_result(r, _effects(different_structure=-0.05), "the same building stands throughout", "Same building" + dates)
+    return _vision_result(r, [], "", "")
+
+
 CHECKS: dict[str, Callable[[str, str], dict[str, Any]]] = {
+    "look_from_above": look_from_above,
+    "compare_captures": compare_captures,
     "compliance_filings": compliance_filings,
     "permit_text": permit_text,
     "replacement_permits": replacement_permits,
@@ -228,7 +308,8 @@ def weigh_case(pid: str, case: str, checks: list[str]) -> dict[str, Any]:
         r = CHECKS[c](pid, case)
         for e in r["effects"]:
             p[e["hypothesis"]] = p.get(e["hypothesis"], 0) + e["delta"]
-        trail.append({"check": c, "finding": r["finding"], "effects": r["effects"], "why": r["why"]})
+        trail.append({"check": c, "finding": r["finding"], "effects": r["effects"], "why": r["why"],
+                      **({"images": r["images"], "callout": r.get("callout")} if r.get("images") else {})})
     p = {k: max(v, 0.02) for k, v in p.items()}
     total = sum(p.values())
     post = {k: round(v / total, 2) for k, v in p.items()}
