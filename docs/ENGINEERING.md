@@ -18,6 +18,21 @@ a draft correction for a person to approve. Case types and their code:
 - **UI:** queue (`GET /cases/queue`), 3D view, case file with live confidence bars, evidence images
   (`GET /evidence/image/{name}`) and Approve/Reject (`POST /cases/decision`, recorded only).
 - **Demo:** `scripts/demo_reset.py`, `scripts/demo_flow.py`, and the labelled replay fallback (`app/replay.py`).
+- **Verified numbers (Sat ~10:30 am, after the review fixes):**
+  - 226 LA kit buildings are on a retrofit list; 61 are unfinished (2,091 apartments); 14 are past a deadline.
+  - Only 12 of 69 concrete-list matches are recorded as concrete by CoStar.
+  - In the Northridge replay, 42 of 61 felt MMI 7+.
+  - Queue: 37 material_conflict, 18 stale_entry, 273 ghost_tenant (316 suites minus 43 sublets).
+- **Approvals:** a paused background run (the sweep's `file_correction`) appears in the web Inbox through `web/src/app/api/approvals`. That route resumes only `radar_worker` threads. iMessage YES/NO resumes the same interrupt.
+- **Review log (Sat, three independent code reviewers plus runtime probing; every item verified with a probe script, then fixed):**
+  - Replay: reused message ids and date-dependent keys.
+  - Hedged verdict text everywhere.
+  - ShakeMap cell spacing.
+  - Replaced concrete buildings now open stale_entry.
+  - Accessory permits ignored; tenant-trail double counting fixed; address ranges matched.
+  - Finaled permits; float label margins.
+  - Duplicate ghost cases.
+  - UI: a fresh thread per question, case-scoped verdicts, no double submits, the replay badge re-polls, localhost-only dev server.
 - Sections below are the original Friday plan (solar headline). The engineering rules still hold: the model never types a
   number, the data layers load by property ID, and licensed data stays local.
 
@@ -67,7 +82,7 @@ Judging is at your table. Special-track judges come only in round 1 (9:30–12:3
 | Graphs, prompts, models | `app/agent.py`, `app/prompts.py` | A | Both graphs run through `langgraph dev`. Live run 39.7 s with no tool errors. Worker tick finished, wrote a dossier and marked the queue item done. |
 | Tools | `app/tools.py` | A | Numbers loaded by property ID; tool errors become messages (ToolErrorMiddleware) |
 | Data layers | `app/layers.py`, `app/matterport.py` | **C** | CoStar data kit + live Vexcel (cached) + Matterport twins via the team token (read-only, best linked twin within 250 m), all with provenance. |
-| Verifier | `app/verify.py`, `app/interior.py`, `app/field.py` | C | Covered by the test suite (142 tests), including a regression test for every reviewer finding |
+| Verifier | `app/verify.py`, `app/interior.py`, `app/field.py` | C | Covered by the test suite (143 tests), including a regression test for every reviewer finding |
 | Scene verbs + confirmations | `app/scene.py`, `web/src/lib/useSceneActions.ts`, `web/src/app/api/ack/route.ts` | B | Backend loop verified with a scripted frontend: 3 of 3 actions confirmed. Browser rendering not yet run. |
 | Web app | `web/` | B | Builds and type-checks. One page. |
 | HTTP routes | `app/routes.py` | D | Upload, token gate and Store writes verified through `langgraph dev` |
@@ -127,7 +142,7 @@ Schemas live in `contracts/`. Store namespaces:
 .venv/bin/python scripts/seed_store.py --queue TEST-A              # standing orders, skills, worker queue
 cd web && cp .env.local.example .env.local && npm run dev          # http://localhost:3000
 .venv/bin/python scripts/heartbeat.py tick                         # one worker tick now
-.venv/bin/python -m pytest -q                                      # 142 tests, offline
+.venv/bin/python -m pytest -q                                      # 143 tests, offline
 ```
 
 `langgraph dev` runs one job at a time locally, so a worker tick and a live question queue behind each other. Don't tick during a demo.
@@ -180,7 +195,7 @@ Decision: live = flash, worker = argon (`RADAR_ORCH_MODEL`, `RADAR_WORKER_MODEL`
 - **Deployment:** the public repo has no real fixtures, so deploy from a private mirror or seed the Store. Custom routes skip platform auth; the field token is their only gate.
 - **Photon:** built on Spectrum (`spectrum-ts` 12.16, cloud iMessage) as the `photon/` bridge, outbound and inbound with text approvals. On the free plan every number must be a project user in the Photon dashboard (`Target not allowed for this project` otherwise).
 - **iOS:** `NSAllowsArbitraryLoads` is on for LAN http during the hackathon. Use a throwaway token and rotate it after the event.
-- **Keys to rotate after judging:** Matterport (personal and team), LangSmith, Google, Vexcel, NREL and the Spectrum project secret (all were pasted into chat).
+- **After judging:** rotate all event keys.
 
 ## 12. Review log
 

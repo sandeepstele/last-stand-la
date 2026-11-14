@@ -1,5 +1,7 @@
 # Radar Field (iOS)
 
+> **Not part of the current demo.** This is a stretch tool from the Friday plan: a LiDAR field check that can feed a case. The auditor demo runs entirely on the web app, the agent server and iMessage.
+
 Scan a room with iPhone LiDAR (Apple RoomPlan) and send it to Retrofit Radar as a **field check**. SwiftUI app for iOS 17+. It compiles for a device with Xcode 27.2 and the iOS 27.2 SDK; it has not yet been run on a phone.
 
 ## What it does

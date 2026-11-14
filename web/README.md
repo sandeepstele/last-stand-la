@@ -1,36 +1,31 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Retrofit Radar web app
 
-## Getting Started
+Next.js 16 + three.js. A single page talks to the agent server (`langgraph dev` on 127.0.0.1:2024).
 
-First, run the development server:
+## What's on the page
+
+- **Case queue** (left): `GET /cases/queue`, in the order "imagery gathered first, then by stakes". Clicking a row asks the agent to investigate that building or suite.
+- **Inbox** (left):
+  - the case of the day (`GET /cases/inbox`);
+  - corrections **waiting for you**, listed from paused background runs by `src/app/api/approvals/route.ts`. Approve or Reject resumes that run.
+- **3D view** (center): the agent drives it with scene verbs over the LangGraph `custom` stream channel (`src/lib/useSceneActions.ts`, `src/components/WorldPane.tsx`). The browser confirms each action through `/api/ack`.
+- **Case file** (right, `src/components/Cases.tsx`):
+  - hypotheses with live confidence bars;
+  - the evidence steps, with images and callouts for vision checks;
+  - the verdict, worded as a lead to check, never as a fact;
+  - a draft correction with Approve/Reject (`POST /cases/decision`, recorded only).
+- **REPLAY badge:** shown whenever the agent server runs a recorded replay. It re-checks `/healthz` on every run and every 15 s.
+
+## How it talks to the backend
+
+- **`useStream`** (`@langchain/react`) streams runs straight from the agent server. Every question starts a **fresh thread** (`submit(..., { threadId: null })`).
+- **`src/app/api/backend/[...path]`** is a same-origin proxy to the agent server's custom routes. Only an allowlist passes: `healthz`, `cases/queue`, `cases/inbox`, `cases/decision`, `evidence/image/<name>.jpg`.
+- **`src/app/api/approvals`** lists and resumes interrupted `radar_worker` threads only.
+
+## Run
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install                         # optional .env.local: NEXT_PUBLIC_LANGGRAPH_URL, LANGGRAPH_URL (both default to http://127.0.0.1:2024)
+npm run dev                         # http://127.0.0.1:3000 (bound to localhost on purpose)
+npx tsc --noEmit                    # type-check (run once `npm run dev` has generated .next/types)
 ```
-
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
