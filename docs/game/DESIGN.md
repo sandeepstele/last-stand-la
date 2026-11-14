@@ -4,6 +4,22 @@
 
 This doc covers what the player does, what they see, how real data drives each mechanic, and what the deep agent changes in play. The build plan is in [BUILD_PLAN.md](BUILD_PLAN.md), the interface in [CONTRACT.md](CONTRACT.md), and the risks in [CRITIQUE.md](CRITIQUE.md).
 
+## Decision log (the user's calls)
+
+| Time | Decision |
+|---|---|
+| 12:25 | On foot, not a map ("Go, all of it") |
+| 1:25 | Full missions + labelled aftershock debris; sound + spoken radio |
+| 1:45 | **The Night Shift:** the AI briefs the night from the real queue; cases #7 (office on record, suite 1100) and #6 (walls) |
+| 1:50 | **Entertainment** track; the deep agent always visible and running; two doors (dawn → auditor); a 2-minute presenter cut (`?demo=1`) |
+| 2:05 | **Goal:** "Settle tonight's cases and make it to dawn" (records checked weigh most, then people escorted, health, time) |
+| 2:05 | **No game over;** going down costs 100 points and is shown at dawn |
+| 2:05 | **More action:** a road flare ([G], 3 per night, lures zombies for 8 s) + a flashlight stun (hold the beam on a zombie for 1.2 s → stunned 2.5 s) |
+| 2:05 | **About 3 min per full night:** adrenaline sprint and a drawn route on the cross between the two cases |
+| 2:05 | **Your report decides HOLD:** a new seed puts the HOLD walls roll at 75-76, so a "concrete" report holds and "brick" or "can't tell" breaks in. RUN still survives |
+| 2:05 | **A live dawn debrief:** "Debrief the night shift". The AI drafts one correction per case, citing your reports, before "File the report" |
+| 2:05 | **Merge cutoff 6:00 pm** for the teammate's agent improvements (another PC); re-record 6:00-6:45; strict rehearsal at 7:30 |
+
 ## The Night Shift (current plan; user decision ~1:45 pm, see [AUDIT.md](AUDIT.md))
 
 The AI works CoStar's real open-case queue (328 cases). It **briefs the night**: the open cases inside our blocks become tonight's missions.
