@@ -7,6 +7,7 @@ export type IntroProps = {
   ready: boolean; // district loaded
   stub: boolean;
   replay: string | null;
+  attribution: string | null; // show in the intro credits when present
   onStart(): void; // must be called from a user gesture (click or Enter) so pointer lock can engage
 };
 

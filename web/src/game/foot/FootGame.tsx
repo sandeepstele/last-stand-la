@@ -79,7 +79,12 @@ function safely(name: string, s: System): System {
   };
 }
 
-export function FootGame({ game, replay }: { game: Game; replay: string | null }) {
+/**
+ * agentOff (?agent=off): visual testing against the real district without spending agent runs. The director never
+ * calls the agent; the night starts on stepping out, H/R work locally and a HOLD always breaches after 5 s.
+ * In development, window.__foot = { ctx, step } lets test scripts emit bus events (e.g. a wave) by hand.
+ */
+export function FootGame({ game, replay, agentOff = false }: { game: Game; replay: string | null; agentOff?: boolean }) {
   const { district } = game;
   const wrapRef = useRef<HTMLDivElement>(null);
   const ctxRef = useRef<FootCtx | null>(null);
@@ -155,6 +160,7 @@ export function FootGame({ game, replay }: { game: Game; replay: string | null }
       collide: makeCollide(colliders, bounds),
     };
     ctxRef.current = ctx;
+    if (process.env.NODE_ENV !== "production") (window as unknown as { __foot?: unknown }).__foot = { ctx, step: () => stepRef.current };
     const door: Pt = hero.door ? [hero.door.x, hero.door.z] : reachPoint(ctx, hero.pid, [hero.x, hero.z + 40]) ?? [hero.x, hero.z];
     const sp = spawnFor(ctx, door, hero.door?.facing ?? 180);
     Object.assign(ctx.player, { x: sp.at[0], z: sp.at[1], yaw: sp.yaw });
@@ -286,14 +292,15 @@ export function FootGame({ game, replay }: { game: Game; replay: string | null }
         const t = tipRef.current;
         for (const [code, i] of [["Digit1", 0], ["Digit2", 1], ["Digit3", 2]] as const) if (k.has(code) && t.chosen === null) setTip({ chosen: i, sentAt: null });
         // Send the chosen answer once the scout run has finished (exactly once: the loop outruns React).
-        if (t.chosen !== null && t.sentAt === null && !tipSending.current && g.phase === "scout" && g.scoutDone && !g.isLoading) {
+        if (agentOff && t.chosen !== null && t.sentAt === null) setTip({ chosen: t.chosen, sentAt: 0 });
+        if (!agentOff && t.chosen !== null && t.sentAt === null && !tipSending.current && g.phase === "scout" && g.scoutDone && !g.isLoading) {
           tipSending.current = true;
           g.sendTip(TIP_TEXTS[t.chosen]);
           setTip({ chosen: t.chosen, sentAt: g.messages.length });
         }
         const scoutBusy = g.phase === "scout" && !g.scoutDone;
         const tipBusy = t.chosen !== null && (t.sentAt === null || g.isLoading);
-        if (k.has("KeyE") && !tipBusy && !scoutBusy && g.phase !== "dusk") {
+        if (k.has("KeyE") && (agentOff || (!tipBusy && !scoutBusy && g.phase !== "dusk"))) {
           // Step out: the night begins.
           [p.x, p.z] = ctx.collide(heroDoor[0] + dirOf(hero.door?.facing ?? 180)[0] * 2.5, heroDoor[1] + dirOf(hero.door?.facing ?? 180)[1] * 2.5, 0.5);
           p.frozen = false;
@@ -305,7 +312,7 @@ export function FootGame({ game, replay }: { game: Game; replay: string | null }
       }
       if (s === "night") {
         if (!nightAsked.current && g.phase !== "night" && g.phase !== "aftershock" && !g.isLoading) {
-          const at = g.startNight(1);
+          const at = agentOff ? hero.pid : g.startNight(1);
           if (at) {
             nightAsked.current = true;
             const w = g.district?.waves.find((x) => x.n === 1);
@@ -315,6 +322,16 @@ export function FootGame({ game, replay }: { game: Game; replay: string | null }
               setBanner({ title: "Night 1", sub: `The horde is coming from the ${w.sector}.`, tone: "warn" }, 4000);
             }
           }
+        }
+        if (agentOff) {
+          if (k.has("KeyR")) startEscape(ctx, false);
+          else if (k.has("KeyH")) {
+            p.frozen = true;
+            p.hidden = true;
+            ctx.bus.emit("world:barricade", { pid: hero.pid });
+            setStep("hold");
+          }
+          return;
         }
         if (!g.decision && !g.outcome) {
           if (k.has("KeyH")) g.decide("hold");
@@ -334,8 +351,8 @@ export function FootGame({ game, replay }: { game: Game; replay: string | null }
         return;
       }
       if (s === "hold") {
-        if (g.outcome && since > 5) {
-          if (g.outcome.held) {
+        if ((g.outcome || agentOff) && since > 5) {
+          if (g.outcome?.held) {
             setBanner({ title: "The walls held.", sub: `${labelOf(g.outcome.pid_final)} kept them out.`, tone: "good" });
             setStep("aftershock");
           } else {
@@ -363,7 +380,7 @@ export function FootGame({ game, replay }: { game: Game; replay: string | null }
         return;
       }
       if (s === "safe") {
-        if (g.outcome && since > 3) setStep("aftershock");
+        if ((g.outcome || agentOff) && since > 3) setStep(agentOff ? "dawn" : "aftershock");
         return;
       }
       if (s === "aftershock") {
@@ -419,8 +436,9 @@ export function FootGame({ game, replay }: { game: Game; replay: string | null }
   // ------------------------------------------------------------------ reactions to the agent stream
   // Scout: once the hero is selected (dossier loading), start the scout run.
   useEffect(() => {
+    if (agentOff) return;
     if (scoutAsked.current && hero && game.selected === hero.pid && game.phase === "dusk" && !game.isLoading) game.startScout();
-  }, [game, hero]);
+  }, [game, hero, agentOff]);
 
   // The walls settle as the agent weighs the case.
   const wallsNote = useMemo(() => {
@@ -574,6 +592,7 @@ export function FootGame({ game, replay }: { game: Game; replay: string | null }
           feeds={{ drone: { caption: feedCaps.drone, photo: dronePhoto }, cctv: { caption: feedCaps.cctv, photo: null } }}
           badges={{ stub: game.stub, replay }}
           disclaimer={DISCLAIMER}
+          attribution={district.attribution ?? null}
         />
       )}
       {showInside && hero && (
@@ -587,7 +606,7 @@ export function FootGame({ game, replay }: { game: Game; replay: string | null }
           onChoose={(i) => tip.chosen === null && setTip({ chosen: i, sentAt: null })}
         />
       )}
-      {step === "intro" && <IntroOverlay heroLabel={heroLabel} ready={!!district} stub={game.stub} replay={replay} onStart={begin} />}
+      {step === "intro" && <IntroOverlay heroLabel={heroLabel} ready={!!district} stub={game.stub} replay={replay} attribution={district.attribution ?? null} onStart={begin} />}
       {step === "dawn" && (
         <DawnView
           title="Dawn. You made it."

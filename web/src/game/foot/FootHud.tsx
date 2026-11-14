@@ -32,6 +32,7 @@ export type HudProps = {
   feeds: { drone: FeedView; cctv: FeedView };
   badges: { stub: boolean; replay: string | null };
   disclaimer: string;
+  attribution: string | null; // "© OpenStreetMap contributors" when OSM outlines are on screen: show it in the footer
 };
 
 export function FootHud(p: HudProps) {
