@@ -288,6 +288,7 @@ def build(mode: str, store=None, checkpointer=None, m: Models | None = None):
         interrupt_on={
             "send_outreach": {"allowed_decisions": ["approve", "edit", "reject"]},
             "watch_building": {"allowed_decisions": ["approve", "reject"]},
+            "file_correction": {"allowed_decisions": ["approve", "reject"]},
         },
         store=store,
         checkpointer=checkpointer,

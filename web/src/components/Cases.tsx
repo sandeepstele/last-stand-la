@@ -109,6 +109,32 @@ export function CaseQueue({ onOpen, busy }: { onOpen: (propertyId: string, suite
   );
 }
 
+// ---------------------------------------------------------------- the inbox (case of the day)
+
+type Inbox = { inbox: { kind: string; text: string; at: string }[]; decisions: { property_id: string; suite?: string; case: string; decision: string; at: string }[] };
+
+export function InboxCard({ refreshKey }: { refreshKey: unknown }) {
+  const [box, setBox] = useState<Inbox | null>(null);
+  useEffect(() => {
+    fetch("/api/backend/cases/inbox").then((r) => (r.ok ? r.json() : null)).then(setBox).catch(() => setBox(null));
+  }, [refreshKey]);
+  const latest = box?.inbox.find((i) => i.kind === "notify_me");
+  if (!latest && !box?.decisions.length) return null;
+  return (
+    <section className={styles.card}>
+      <h2>Inbox</h2>
+      {latest && <p><strong>{latest.text}</strong> <span className={styles.muted}>({latest.at?.slice(0, 16).replace("T", " ")})</span></p>}
+      {!!box?.decisions.length && (
+        <ul className={styles.hypotheses}>
+          {box.decisions.slice(0, 3).map((d, i) => (
+            <li key={i}>{d.decision === "approve" ? "Approved" : "Rejected"} · {CASE_LABEL[d.case] ?? d.case} · {d.property_id}{d.suite ? ` suite ${d.suite}` : ""}</li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
 // ---------------------------------------------------------------- right: the case file
 
 export function CaseFile({ messages, loading }: { messages: readonly unknown[]; loading: boolean }) {

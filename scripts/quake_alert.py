@@ -23,8 +23,9 @@ if __name__ == "__main__":
     load_dotenv(ROOT / ".env")
     p = argparse.ArgumentParser()
     p.add_argument("--event", default="ci3144585")
+    p.add_argument("--sweep", action="store_true", help="fire the overnight sweep (case of the day) instead")
     a = p.parse_args()
     url = os.environ.get("PHOTON_BRIDGE_URL", "http://127.0.0.1:8787").rstrip("/") + "/trigger"
-    r = httpx.post(url, json={"event_id": a.event}, timeout=10,
+    r = httpx.post(url, json={"kind": "sweep"} if a.sweep else {"event_id": a.event}, timeout=10,
                    headers={"Authorization": f"Bearer {os.environ['PHOTON_BRIDGE_TOKEN']}"})
     print(r.status_code, r.json())

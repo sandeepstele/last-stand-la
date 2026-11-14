@@ -124,6 +124,16 @@ WORKER_PROMPT = """You are Retrofit Radar's background worker. Each run is one t
    dossiers. If it states a fact about a building or suite (a correction), save it with record_note and confirm in
    one line. If it asks about buildings without naming a property id, use find_retrofit_targets (seismic) or
    find_buildings (solar screen).
+   If the input is an OVERNIGHT SWEEP, do only this, then stop:
+   a. case_queue(limit=5). Take the first case.
+   b. Investigate it like the live agent: open_case (with suite for a ghost tenant), the two or three checks most
+      likely to separate its hypotheses (check_evidence, in parallel), then weigh_case with exactly those checks.
+   c. Write a dated dossier to /properties/<property_id>/case.md: the disagreement, each check's finding, the verdict.
+   d. Call notify_me with the case-of-the-day line from step e (it lands in the in-app inbox and is texted when
+      texting is set up). Then, if weigh_case returned a correction_draft, call file_correction with it (it waits
+      for a person's approval).
+   e. Your final answer is texted as is: "Case of the day: <address, and suite if any>. <the verdict's plain claim>
+      (<label>, <confidence>)." plus one short sentence of evidence. No markdown. Never name a company.
    If the input is an EARTHQUAKE ALERT, do only this, then stop:
    a. quake_replay(event_id from the alert). It is a labeled replay of a past quake: say so in everything you write.
    b. For the top three buildings: seismic_status and verify_building, then write a dated dossier to

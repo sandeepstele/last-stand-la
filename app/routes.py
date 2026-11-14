@@ -7,6 +7,7 @@ GET  /healthz                 configuration check (no secrets)
 GET  /cases/queue             the overnight case queue: counts by case type and the top cases by stakes
 POST /cases/decision          a person approves or rejects a DRAFT correction {property_id, case, decision, draft}
 GET  /evidence/image/{name}   a cached evidence image from fixtures/vision (file name only)
+GET  /cases/inbox             the newest inbox items (case of the day, notifications) and recorded decisions
 
 Uploads are refused when RADAR_FIELD_TOKEN is unset. Custom routes skip the server's own auth,
 so the token is the only gate. Handlers do no blocking I/O on the event loop (langgraph dev's
@@ -107,47 +108,10 @@ def _replay_label() -> str | None:
 # ------------------------------------------------------------------ case queue and evidence
 
 
-_QUEUE: dict = {"at": 0.0, "value": None}
-QUEUE_TTL_S = 60.0
-
-
 def _queue() -> dict:
-    import time
+    from app import cases
 
-    if _QUEUE["value"] is None or time.monotonic() - _QUEUE["at"] > QUEUE_TTL_S:
-        _QUEUE["value"], _QUEUE["at"] = _build_queue(), time.monotonic()
-    return _QUEUE["value"]
-
-
-def _build_queue() -> dict:
-    from app import retrofit_lists
-
-    rows = retrofit_lists.portfolio()
-    cases: list[dict] = []
-    for a in rows:
-        keys = {h["key"] for h in a["hypotheses"]}
-        past_due = any(h.get("past_due") for h in a["hypotheses"])
-        for case in ("material_conflict", "stale_entry"):
-            if case in keys:
-                cases.append({"case": case, "property_id": a["property_id"], "address": a["address"],
-                              "year_built": a["year_built"], "units": a["units"], "material": a["costar_material"],
-                              "past_due": past_due, "stakes": (2 if past_due else 0) + (a["stories"] or 0) / 10 + (a["units"] or 0) / 100})
-    try:
-        from app import tenants
-
-        cases += tenants.queue_rows()
-    except Exception:  # ghost tenants not built or kit missing: the other cases still show
-        pass
-    from app import vision
-
-    for c in cases:  # stakes stay pure; imaged cases sort first as a separate, labelled key
-        c["imagery"] = any(vision.CACHE.glob(f"{c['property_id']}_*.jpg"))
-    cases.sort(key=lambda c: (not c["imagery"], -c["stakes"]))
-    counts: dict[str, int] = {}
-    for c in cases:
-        counts[c["case"]] = counts.get(c["case"], 0) + 1
-    return {"counts": counts, "total": len(cases), "top": cases[:25], "order": "cases with imagery gathered first, then by stakes",
-            "source": "LA retrofit lists + CoStar kit, matched locally (fixtures/public)"}
+    return cases.queue()
 
 
 async def cases_queue(request: Request) -> JSONResponse:
@@ -170,6 +134,17 @@ async def cases_decision(request: Request) -> JSONResponse:
     return JSONResponse({"status": "recorded", **record})
 
 
+async def cases_inbox(request: Request) -> JSONResponse:
+    store = _store(request)
+    out = await store.asearch(("outbox",), limit=50)
+    dec = await store.asearch(("corrections",), limit=50)
+    items = sorted(({"kind": i.value.get("kind"), "text": i.value.get("text"), "at": i.value.get("at")} for i in out),
+                   key=lambda x: x["at"] or "", reverse=True)[:5]
+    decisions = sorted(({k: i.value.get(k) for k in ("property_id", "suite", "case", "decision", "at", "via")} for i in dec),
+                       key=lambda x: x["at"] or "", reverse=True)[:5]
+    return JSONResponse({"inbox": items, "decisions": decisions})
+
+
 IMAGE_NAME = re.compile(r"^[A-Za-z0-9_.-]{1,120}\.jpg$")
 
 
@@ -188,6 +163,7 @@ app = Starlette(
     routes=[
         Route("/cases/queue", cases_queue, methods=["GET"]),
         Route("/cases/decision", cases_decision, methods=["POST"]),
+        Route("/cases/inbox", cases_inbox, methods=["GET"]),
         Route("/evidence/image/{name}", evidence_image, methods=["GET"]),
         Route("/field/scan", post_scan, methods=["POST"]),
         Route("/field/scans/{property_id}", get_scans, methods=["GET"]),

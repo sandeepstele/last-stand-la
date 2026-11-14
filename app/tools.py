@@ -180,6 +180,30 @@ async def weigh_case(property_id: str, case: str, checks: list[str], runtime: To
     return await asyncio.to_thread(evidence.weigh_case, property_id, case, checks, suite, notes)
 
 
+@tool
+async def case_queue(limit: int = 5) -> dict:
+    """Today's case queue: places where a CoStar record disagrees with another source, cases with imagery
+    already gathered first, then by stakes. Counts by case type plus the top cases (property_id, suite for ghost
+    tenants, address, case type)."""
+    from app import cases
+
+    q = await asyncio.to_thread(cases.queue)
+    keep = ("case", "property_id", "suite", "address", "label", "past_due", "imagery")
+    return {"counts": q["counts"], "total": q["total"], "order": q["order"],
+            "top": [{k: c.get(k) for k in keep if c.get(k) is not None} for c in q["top"][:max(1, min(limit, 10))]]}
+
+
+@tool
+async def file_correction(property_id: str, case: str, draft: str, runtime: ToolRuntime, suite: str | None = None) -> str:
+    """File a correction draft (from weigh_case) for a CoStar researcher. ALWAYS waits for a person's approval
+    first; once approved it is recorded for review. Nothing is sent to CoStar, the city or the owner."""
+    if runtime.store is not None:
+        await runtime.store.aput(("corrections",), uuid.uuid4().hex, {
+            "property_id": property_id, "suite": suite, "case": case, "decision": "approve", "draft": draft[:2000],
+            "at": _now(), "via": "worker approval", "note": "recorded only: nothing is sent to CoStar or the city"})
+    return "Correction draft approved and recorded for a researcher (nothing was sent)."
+
+
 SEISMIC_TOOLS = [seismic_status, find_retrofit_targets, quake_replay]
 CASE_TOOLS = [open_case, check_evidence, weigh_case, record_note]
 
@@ -358,4 +382,4 @@ async def send_outreach(to: str, text: str, runtime: ToolRuntime) -> str:
 
 
 SIDE_EFFECT_TOOLS = [notify_me, send_outreach, watch_building]
-QUEUE_TOOLS = [queue_next, queue_done]
+QUEUE_TOOLS = [queue_next, queue_done, case_queue, file_correction]

@@ -4,7 +4,7 @@ import { useStream } from "@langchain/react";
 import { useEffect, useRef, useState } from "react";
 import { ApprovalBar, PlanPanel, QuakeBanner, SeismicCard, VerifierCard, finalAnswer, latestTool, latestVerify } from "@/components/Panels";
 import type { QuakeReplay, SeismicStatus } from "@/lib/contracts";
-import { CaseFile, CaseQueue } from "@/components/Cases";
+import { CaseFile, CaseQueue, InboxCard } from "@/components/Cases";
 import { WorldPane, type WorldHandle } from "@/components/WorldPane";
 import { useSceneActions } from "@/lib/useSceneActions";
 import styles from "./page.module.css";
@@ -48,6 +48,7 @@ export default function LiveRun() {
   return (
     <main className={styles.main}>
       <aside className={styles.queuePane}>
+        <InboxCard refreshKey={stream.isLoading} />
         <CaseQueue onOpen={open} busy={stream.isLoading} />
       </aside>
       <div className={styles.worldPane}>

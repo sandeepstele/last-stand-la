@@ -23,7 +23,7 @@ from dotenv import load_dotenv  # noqa: E402
 from langgraph_sdk import get_sync_client  # noqa: E402
 
 ASSISTANT = "radar_worker"
-TICK = {"messages": [{"role": "user", "content": "Heartbeat tick: work the queue."}]}
+TICK = {"messages": [{"role": "user", "content": "OVERNIGHT SWEEP: open today's case of the day."}]}
 
 
 def main() -> None:

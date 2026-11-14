@@ -17,6 +17,7 @@ import {
   type ActionRequest,
   type PendingInterrupt,
   QUAKE_ALERT,
+  SWEEP,
   allowedSender,
   describeActions,
   frame,
@@ -99,10 +100,12 @@ const server = http.createServer(async (req, res) => {
       return reply(400, { status: "error", detail: errMsg(err) });
     }
     const eventId = typeof body.event_id === "string" && /^[a-z0-9]{4,20}$/.test(body.event_id) ? body.event_id : "ci3144585";
+    const kind = body.kind === "sweep" ? "sweep" : "quake";
+    const content = kind === "sweep" ? SWEEP : QUAKE_ALERT(eventId);
     const owner = { send: async (t: string) => (await dm(OWNER)).send(t) };
-    void enqueue(OWNER, () => runAndReport(OWNER, { input: { messages: [{ role: "user", content: QUAKE_ALERT(eventId) }] } }, owner, owner));
-    console.log(`[trigger] quake replay ${eventId} -> owner ${tail(OWNER)}`);
-    return reply(202, { status: "started", event_id: eventId });
+    void enqueue(OWNER, () => runAndReport(OWNER, { input: { messages: [{ role: "user", content }] } }, owner, owner));
+    console.log(`[trigger] ${kind} -> owner ${tail(OWNER)}`);
+    return reply(202, { status: "started", kind });
   }
   if (req.method !== "POST" || req.url !== "/send") return reply(404, { status: "not_found" });
   if (!authorized(req.headers.authorization)) return reply(401, { status: "unauthorized" });

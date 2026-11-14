@@ -59,6 +59,7 @@ export function describeActions(actions: ActionRequest[]): string {
   const lines = actions.map((a) => {
     const args = a.args ?? {};
     if (a.name === "send_outreach") return `record a message to ${String(args.to ?? "someone")} (a draft in the app; nothing is sent to them): "${String(args.text ?? "").slice(0, 600)}"`;
+    if (a.name === "file_correction") return `file this correction draft for a CoStar researcher (recorded, not sent): "${String(args.draft ?? "").slice(0, 500)}"`;
     if (a.name === "watch_building") return `start watching building ${String(args.property_id ?? "?")} (${String(args.reason ?? "").replace(/[.\s]+$/, "").slice(0, 200)})`;
     return (a.description ?? a.name ?? "an action").slice(0, 300);
   });
@@ -85,6 +86,8 @@ export function lastAiText(values: unknown, from = 0): string | null {
   }
   return null;
 }
+
+export const SWEEP = "OVERNIGHT SWEEP: open today's case of the day.";
 
 export const QUAKE_ALERT = (eventId: string) =>
   `EARTHQUAKE ALERT (labeled replay): USGS event ${eventId}, the 1994 Northridge earthquake (M6.7), replayed against ` +
