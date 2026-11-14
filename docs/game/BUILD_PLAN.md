@@ -53,7 +53,20 @@ IntroOverlay / InsideView / FootHud / DawnView (.tsx)  props fixed by the direct
 - **Headless driver:** `scratchpad/shot.mjs <url> <outdir> '<steps>'`. Steps are wait, key, keys, press, click, shot and eval. It prints console errors.
 - **Checks before every commit:** `npx tsc --noEmit -p .` and `npx eslint src/game/foot src/app/play`.
 
-## Timeline
+## Timeline v2 (adopted Sat ~6 pm: the hard deadline is 8:00 am Sunday, not 10 pm)
+
+| Time | What |
+|---|---|
+| Now-1:00 am | Build everything in scope. Rolling strict-replay checks after each backend cache or recording change; one slot holder at a time on :2024 |
+| **1:00 am** | **Feature freeze.** Final re-record plus strict ×3 on the frozen data and build |
+| 1:00-2:30 | Record the ≤2:00 video from the `?demo=1` cut on strict replay (addresses per CoStar's answer); upload it unlisted |
+| 2:30-4:00 | Final README and Devpost; merge to main; make the repo public (**the user confirms**); submit (one main track, Entertainment, plus specials; Discord usernames) |
+| 4:00-8:00 | Buffer and **sleep** (the presenter's energy is scored). Devpost text edits only, no code |
+| 8:30 | demo_reset; `next build` + `next start`; open the page once; fallback tabs ready. Judging 9:30 am-2:30 pm |
+
+**Push rule:** push `main` only, never `--all`. The stale local branches feat/find-buildings, feat/replay, feat/ui and perf/live-latency carry the user's personal email.
+
+## Timeline (original, superseded)
 
 | Time | Milestone |
 |---|---|
