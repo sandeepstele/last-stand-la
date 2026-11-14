@@ -802,7 +802,10 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
   const shownMessages = useMemo(() => {
     if (revealed) return game.messages;
     const idx = game.messages.findIndex((m) => kind(m as Msg) === "tool" && (m as Msg).name === "commit_plan");
-    return idx < 0 ? game.messages : game.messages.slice(0, idx);
+    if (idx < 0) return game.messages;
+    // Keep the answer's slot (so HQ stops "waiting for your call"), hide what it says until the reveal.
+    const placeholder = { ...(game.messages[idx] as Msg), type: "tool", content: "Orders received. The night is rolling." };
+    return [...game.messages.slice(0, idx), placeholder];
   }, [game.messages, revealed]);
 
   // New radio lines go on the bus (spoken + crackle by the audio system).

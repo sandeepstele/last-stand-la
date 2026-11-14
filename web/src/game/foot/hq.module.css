@@ -235,7 +235,8 @@
 .squad[data-state="you"] .chip { color: var(--amber); }
 .squad[data-state="you"] .icon { background: var(--amber); border-color: var(--amber); color: #111; }
 .squad[data-state="you"] .icon::before { content: "\2713"; font-weight: 900; }
-.you { margin-left: auto; padding: 2px 4px; border-radius: 3px; background: var(--amber); color: #111; font: 800 9px/1 var(--mono); letter-spacing: 0.1em; }
+.squad[data-state="you"] { overflow: hidden; min-width: 0; }
+.you { margin-left: auto; flex-shrink: 0; padding: 2px 4px; border-radius: 3px; background: var(--amber); color: #111; font: 800 9px/1 var(--mono); letter-spacing: 0.1em; }
 @keyframes youIn { 0% { box-shadow: 0 0 0 0 rgba(245, 165, 36, 0); } 40% { box-shadow: 0 0 16px 3px rgba(245, 165, 36, 0.6); } 100% { box-shadow: none; } }
 
 /* ---- AI moments: one big transient lower-third card at a time */
