@@ -257,7 +257,7 @@ export function createWorld(ctx: FootCtx): System {
   const heroK = kits.find((k) => k.b.conflict && k.b.door) ?? kits.find((k) => k.b.conflict && k.b.hero) ?? null;
   const question = heroK ? add(questionSprite(9)) : null;
   if (question && heroK) {
-    question.position.set(heroK.c[0], heroK.h + 11, heroK.c[1]);
+    question.position.set(heroK.c[0], heroK.h + 6.5, heroK.c[1]);
     keep(question.material);
     keep(question.material.map!);
   }
@@ -361,7 +361,7 @@ export function createWorld(ctx: FootCtx): System {
   };
 
   // ================================================================== beacon
-  const beamU = { uColor: { value: C(0xffb347) }, uAlpha: { value: 0 }, uTime: { value: 0 } };
+  const beamU = { uColor: { value: new THREE.Color().setRGB(1.0, 0.7, 0.32) }, uAlpha: { value: 0 }, uTime: { value: 0 } };
   const beamMat = keep(
     new THREE.ShaderMaterial({
       uniforms: beamU,
@@ -562,9 +562,9 @@ export function createWorld(ctx: FootCtx): System {
       fog.far = lerp(220, 900, dawn) + lift * 3.6;
       hemi.color.copy(NIGHT.hemiSky).lerp(DAWN.hemiSky, dawn);
       hemi.groundColor.copy(NIGHT.hemiGround).lerp(DAWN.hemiGround, dawn);
-      hemi.intensity = lerp(1.6, 2.4, dawn);
+      hemi.intensity = lerp(2.0, 2.4, dawn);
       moon.color.copy(NIGHT.moon).lerp(DAWN.moon, dawn);
-      moon.intensity = lerp(1.5, 2.6, dawn);
+      moon.intensity = lerp(1.8, 2.6, dawn);
       moon.position.set(lerp(-160, 320, dawn) + cam.x, lerp(260, 140, dawn), lerp(-220, -60, dawn) + cam.z);
       moonTarget.position.set(cam.x, 0, cam.z);
       for (const m of groundMats) m.emissive.copy(groundTint.night).lerp(groundTint.dawn, dawn * 0.85);
@@ -594,7 +594,7 @@ export function createWorld(ctx: FootCtx): System {
       if (question && heroK) {
         const s = splits.get(heroK.b.pid);
         question.visible = !s?.leaned;
-        question.position.y = heroK.h + 11 + Math.sin(t * 1.6) * 0.8;
+        question.position.y = heroK.h + 6.5 + Math.sin(t * 1.6) * 0.6;
       }
 
       // retrofit rings pulse
@@ -611,7 +611,7 @@ export function createWorld(ctx: FootCtx): System {
         const mat = beaconLabel.material;
         const img = mat.map?.image as { width: number; height: number } | undefined;
         beaconLabel.scale.set((hgt * (img?.width ?? 4)) / (img?.height ?? 1), hgt, 1);
-        beaconLabel.position.y = beaconH + 6 + hgt;
+        beaconLabel.position.y = beaconH + 13 + hgt * 0.5;
       }
 
       route.update(dt);

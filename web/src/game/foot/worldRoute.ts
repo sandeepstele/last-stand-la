@@ -187,13 +187,13 @@ void main() {
   // chevron-ish head: brighter leading edge of each dash
   float head = smoothstep(0.30, 0.48, ph) * (1.0 - smoothstep(0.48, 0.55, ph));
   float endFade = smoothstep(0.0, 3.0, uLen - vUv.x) * smoothstep(0.0, 2.0, vUv.x);
-  float a = (edge * 0.28 + core * dash * 0.75 + head * core * 0.6) * endFade * uFade;
+  float a = (edge * 0.35 + core * dash * 0.9 + head * core * 0.8) * endFade * uFade;
   gl_FragColor = vec4(uColor * a, a);
 }`;
 
 /** The route ribbon. set(pts) on world:route; update() recomputes at most every 0.5 s unless the target moved. */
 export function createRoute(ctx: FootCtx, grid: Grid) {
-  const uniforms = { uTime: { value: 0 }, uLen: { value: 1 }, uColor: { value: new THREE.Color(0xffa62b) }, uFade: { value: 0 } };
+  const uniforms = { uTime: { value: 0 }, uLen: { value: 1 }, uColor: { value: new THREE.Color().setRGB(1.0, 0.66, 0.2) }, uFade: { value: 0 } };
   const mat = new THREE.ShaderMaterial({
     uniforms, vertexShader: RIBBON_VS, fragmentShader: RIBBON_FS,
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false, side: THREE.DoubleSide,
@@ -211,7 +211,7 @@ export function createRoute(ctx: FootCtx, grid: Grid) {
   let dirty = false;
 
   const build = (path: Pt[]) => {
-    const W = 1.7, y = 0.09;
+    const W = 2.2, y = 0.09;
     const pos: number[] = [], uv: number[] = [], idx: number[] = [];
     let dist = 0;
     for (let i = 0; i < path.length; i++) {
