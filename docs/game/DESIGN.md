@@ -35,6 +35,33 @@ You're a survivor in downtown LA at nightfall. Your squad commander is an AI on 
 
 **No game over.** If the player goes down, the squad drags them clear (health back to 60). The building's fate is the server's roll; the player's own fate is an arcade layer that never feeds the agent or the rolls.
 
+## Missions: "Night 1" (user decision, ~1:25 pm: full missions, labelled debris)
+
+**Goal:** survive until dawn and bring as many survivors as you can. At dawn you get a score and a rank. There's no game over (if you go down, your squad drags you clear).
+
+| Objective | Kind | How |
+|---|---|---|
+| Reach the hero building | ★ main | Walk there before the **nightfall clock** (2:30) runs out. At nightfall the streets fill up (more zombies); the agent's wave still waits for your report |
+| Check the walls inside | ★ main | Inside the real 3D tour: [1] concrete / [2] brick / [3] can't tell. Required before the night |
+| Survive the night | ★ main | **HOLD = defend the door:** a barricade bar drained by zombies pressing on it; hold [E] near the door to nail boards (from crates); [Space] shoves. Lasts at least 25 s, until the server's roll lands. If the walls fail, it's a breach and you escape with the survivors. **RUN = escort run:** lead the survivors along the route to the fallback the agent picked; zombies go for them too |
+| File the report | ★ main | At dawn: the draft correction to the real record goes to a human researcher for review (local; nothing is sent) |
+| Rescue the survivors | ◇ side | 2 fictional survivors, each cornered by a pack of 4 zombies. Get within 2.5 m and they follow you. Get them inside (sheltered) and keep them alive |
+| Scavenge supplies | ◇ side | Crates (game items): boards for the barricade, a medkit ([Q], +40 HP) |
+| Aftershock | event | Mid-run or mid-defence: red debris zones around buildings with unfinished city retrofit orders. Damage while inside them. Always labelled "game outcome, not an engineering assessment" |
+
+**Score:** survivors saved × 250 + crates × 40 + health × 2 + a time bonus. Rank S ≥ 900, A ≥ 700, B ≥ 450, else C.
+
+**The agent on screen (the HQ panel):**
+- its own `write_todos` plan, with live checks;
+- the four squads (records, aerial, interior, city) lighting up as the subagents run;
+- the case odds bar;
+- evidence cards for the checks it chose;
+- "HQ is waiting for your call" during the interrupt.
+
+**Sound and spoken radio:** procedural WebAudio plus local speech for HQ lines. It starts after the first key press; [V] mutes.
+
+**None of this adds an agent message,** so the six recorded nights still replay exactly.
+
 ## Controls
 
 | Key | Action |
@@ -46,6 +73,9 @@ You're a survivor in downtown LA at nightfall. Your squad commander is an AI on 
 | E | Enter or leave a building at its door |
 | 1 / 2 / 3 | Answer the walls question (inside) |
 | H / R | HOLD or RUN when the agent asks |
+| Q | Use a medkit |
+| E (hold, at the door during HOLD) | Nail boards onto the barricade |
+| V | Mute or unmute |
 | Enter | Start, skip the intro, play again |
 
 ## What the player sees
@@ -85,6 +115,7 @@ You're a survivor in downtown LA at nightfall. Your squad commander is an AI on 
 | Interior 3D tour (Matterport) | The room you walk into and look around: what you report comes from what you see |
 | Aerial oblique and top-down (Vexcel) | The agent's vision check, shown on the DRONE feed |
 | Floors (CoStar stories) | Window rows on the facades (3.8 m per floor). The windows themselves are stylised, not real |
+| Supplies | **Game items, not data.** The kit's tenant industries are almost all "office", with no medical or hardware categories, so crates are placed by the game (seeded) and labelled "a crate (game item)". Never attach an "on record" reason to them |
 | People on record (CoStar) | Wave sizes scale with the district's real apartments (290 / 500 / 790). The lit-window pattern is stylised; don't present it as data |
 | Vexcel roof objects (skylights, AC units) | In the fortress card's ROOF score ("skylights are ways in"). Rendering them on the roof is a stretch goal |
 

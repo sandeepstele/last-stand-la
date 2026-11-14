@@ -18,6 +18,7 @@
 // Hard rule: what the player does with their hands (health, sprinting) never feeds the agent or the rolls.
 // The building's fate is the server's seeded roll; the player's fate is the arcade layer. No game over.
 
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import type { Game } from "../useGame";
@@ -26,6 +27,7 @@ import { kind, parse, radioLines, type Msg } from "../radio";
 import { DISCLAIMER, type Building } from "../types";
 import { boundsOf, buildColliders, createBus, dirOf, makeCollide, reachPoint, DOOR_R, SCOUT_R, type FootCtx, type Pt, type SupplySpot, type SurvivorSpot, type SurvivorState, type System } from "./engine";
 import { createInput, type Input } from "./input";
+import { closestOnPoly } from "./collide";
 import { createWorld } from "./world";
 import { createPlayer } from "./player";
 import { createHorde } from "./horde";
@@ -110,7 +112,7 @@ function planMission(ctx: FootCtx, heroPid: string, door: Pt, spawn: Pt): { supp
     if (!at) continue;
     want[kind] -= 1;
     used.push(at);
-    supplies.push({ id: `crate-${supplies.length}`, x: at[0], z: at[1], kind, n: kind === "boards" ? 2 : 1, why: "scavenged", pid: null });
+    supplies.push({ id: `crate-${supplies.length}`, x: at[0], z: at[1], kind, n: kind === "boards" ? 2 : 1, why: "a crate (game item)", pid: null });
   }
   const survivors: SurvivorSpot[] = [];
   for (let i = 0; i < 2; i++) {
@@ -142,8 +144,10 @@ function safely(name: string, s: System): System {
  * calls the agent; the night starts on stepping out, H/R work locally and a HOLD always breaches after 5 s.
  * In development, window.__foot = { ctx, step } lets test scripts emit bus events (e.g. a wave) by hand.
  */
-export function FootGame({ game, replay, agentOff = false }: { game: Game; replay: string | null; agentOff?: boolean }) {
+/** presenter (?demo=1): [F] fast-forwards the slow parts (walk to the door, the escape run, the door defence) for a 30-40 s pitch. */
+export function FootGame({ game, replay, agentOff = false, presenter = false }: { game: Game; replay: string | null; agentOff?: boolean; presenter?: boolean }) {
   const { district } = game;
+  const router = useRouter();
   const wrapRef = useRef<HTMLDivElement>(null);
   const ctxRef = useRef<FootCtx | null>(null);
   const feedsRef = useRef<Feeds | null>(null);
@@ -241,7 +245,7 @@ export function FootGame({ game, replay, agentOff = false }: { game: Game; repla
     ctx.bus.emit("world:beacon", { pid: hero.pid });
     const offDown = ctx.bus.on("player:downed", () => (downed.current = true));
     const offMission = [
-      ctx.bus.on("mission:pickup", (e) => setBanner({ title: e.kind === "boards" ? `+${e.n} boards` : "+1 medkit", sub: e.why === "scavenged" ? (e.kind === "medkit" ? "[Q] to use it." : "For the barricade.") : e.why, tone: "good" }, 2200)),
+      ctx.bus.on("mission:pickup", (e) => setBanner({ title: e.kind === "boards" ? `+${e.n} boards` : "+1 medkit", sub: e.kind === "medkit" ? "[Q] to use it." : "For the barricade.", tone: "good" }, 2200)),
       ctx.bus.on("mission:survivor", (e) =>
         setBanner(
           e.state === "following" ? { title: `${e.name} is with you`, sub: "Keep them close. Zombies go for them too.", tone: "good" }
@@ -324,7 +328,7 @@ export function FootGame({ game, replay, agentOff = false }: { game: Game; repla
     ctx.bus.emit("world:beacon", { pid: toPid });
     if (to) ctx.bus.emit("horde:target", { x: to[0], z: to[1] });
     setStep("escape");
-    setBanner(breach ? { title: "They're through!", sub: to ? `Run to ${labelOf(toPid)}.` : "Get clear and survive.", tone: "bad" } : { title: `Run to ${labelOf(toPid)}`, sub: "Shift to sprint. Space to shove.", tone: "warn" });
+    setBanner(breach ? { title: "They're through!", sub: to ? `Run to ${labelOf(toPid)}.` : "Get clear and survive.", tone: "bad" } : { title: `Run to ${labelOf(toPid)}`, sub: "Adrenaline: hold Shift and sprint the whole way. Space to shove.", tone: "warn" });
   };
 
   const startDefend = (ctx: FootCtx, door: Pt) => {
@@ -395,6 +399,15 @@ export function FootGame({ game, replay, agentOff = false }: { game: Game; repla
         ctx.camera.lookAt(hero.x, 10, hero.z);
         if (k.has("Enter") && g.district) begin();
         return;
+      }
+      if (presenter && k.has("KeyF")) {
+        // Fast-forward for the pitch: never changes what the agent is sent, only where the player stands / how long HOLD lasts.
+        if (s === "approach") [p.x, p.z] = ctx.collide(heroDoor[0] + dirOf(hero.door?.facing ?? 180)[0] * 2, heroDoor[1] + dirOf(hero.door?.facing ?? 180)[1] * 2, 0.5);
+        if (s === "escape" && fallbackPid) {
+          const at = reachPoint(ctx, fallbackPid, here) ?? routeTo.current;
+          if (at) [p.x, p.z] = ctx.collide(at[0], at[1], 0.5);
+        }
+        if (s === "hold") stepAt.current = ctx.time - DEFEND_MIN_S;
       }
       if (s === "approach") {
         if (!scoutAsked.current && dist(here, heroDoor) < SCOUT_R && g.phase === "dusk") {
@@ -499,8 +512,13 @@ export function FootGame({ game, replay, agentOff = false }: { game: Game; repla
       if (s === "escape") {
         const to = routeTo.current;
         if (to) ctx.bus.emit("world:route", { pts: [here, to] });
+        // Adrenaline: the real route goes around a city block (about 356 m on the demo night), so sprint never runs dry.
+        p.stamina = Math.max(p.stamina, 0.6);
         if (since > 8) fireDebris();
-        if ((to && dist(here, to) < DOOR_R + 1) || (!to && since > 25)) {
+        // Arrived = next to the fallback's outline anywhere (the route may end on a different side than `to`).
+        const fc = fallbackPid ? ctx.colliderOf.get(fallbackPid) : undefined;
+        const atFallback = !!fc && closestOnPoly(p.x, p.z, fc.pts).d < 4.2; // C's multi-goal route ends within 3.5 m of the outline
+        if ((to && (dist(here, to) < DOOR_R + 1 || atFallback)) || (!to && since > 25)) {
           if (to) ctx.bus.emit("mission:shelter", { pid: fallbackPid ?? "", x: to[0], z: to[1] });
           p.frozen = true;
           p.hidden = true;
@@ -806,7 +824,11 @@ export function FootGame({ game, replay, agentOff = false }: { game: Game; repla
           onPlayAgain={playAgain}
           score={score}
           reportFiled={prog.filed}
-          onFileReport={() => setProg((q) => ({ ...q, filed: true }))}
+          onFileReport={() => {
+            setProg((q) => ({ ...q, filed: true }));
+            // Two doors, one engine: the same agent as the auditor, on this building's case, with the player's report in it.
+            if (!game.stub && !agentOff && hero) router.push(`/?check=${encodeURIComponent(hero.pid)}&from=laststand`);
+          }}
         />
       )}
     </main>

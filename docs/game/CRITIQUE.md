@@ -29,6 +29,12 @@ Adversarial by design. Updated Sat Nov 14, ~1:20 pm, while the four on-foot buil
 | 10 | Low | **Controls are unfamiliar to judges** | WASD, mouse, E, 1/2/3, H/R | The intro controls card, keycap hints on the HUD, an E prompt at the door. The presenter can drive while narrating |
 | 11 | Low | **The vision read itself is weak on fine detail** | The tuck-under test went 1/5. The hero's read ("exposed concrete frame") is verified and cached | The game uses only the hero's verified read; vision is capped at 0.2 with a second look |
 
+### Found during the build
+- ✅ **The walkable area cut off the hero's street** (Builder C's flood fill: about 3,000 m² reachable). Fix: bounds = the mosaic padded by 80 m.
+- ✅ **The camera faced the wall after stepping out** (Builder A). Fix: face the door's outward direction on step-out, breach and defend.
+- ✅ **A negative first-frame dt** ran timers backwards (Builder A). Fix: clamp at 0.
+- ⚠️ **The escape route is long:** 356 m around a real city block (hero door → fallback 9629605), about 85 s at walking pace. Mitigation: "adrenaline" (sprint never runs dry during the escape) brings it to about 47 s. For the 2-minute pitch, narrate during the run, or skip the intro.
+
 ## Judging lens (what each judge needs to see in 2 minutes)
 
 - **Entertainment (main track):** play, not a dashboard. A person, a horde, a choice under pressure, a walk-in reveal. ✔ if the gate passes.

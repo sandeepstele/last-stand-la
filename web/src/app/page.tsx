@@ -1,7 +1,8 @@
 "use client";
 
 import { useStream } from "@langchain/react";
-import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { ApprovalBar, PlanPanel, QuakeBanner, SeismicCard, VerifierCard, finalAnswer, latestTool, latestVerify } from "@/components/Panels";
 import type { QuakeReplay, SeismicStatus } from "@/lib/contracts";
 import { CaseFile, CaseQueue, InboxCard } from "@/components/Cases";
@@ -13,13 +14,33 @@ import styles from "./page.module.css";
 // (never expose LANGSMITH_API_KEY through a NEXT_PUBLIC_ variable).
 const API_URL = process.env.NEXT_PUBLIC_LANGGRAPH_URL ?? "http://127.0.0.1:2024";
 
-export default function LiveRun() {
+export default function Page() {
+  return (
+    <Suspense fallback={<main className={styles.main} />}>
+      <LiveRun />
+    </Suspense>
+  );
+}
+
+function LiveRun() {
   const stream = useStream({ assistantId: "radar", apiUrl: API_URL });
   const world = useRef<WorldHandle>(null);
-  const [question, setQuestion] = useState("Check building 247337.");
+  // Deep link from the game's dawn screen ("File the report"): /?check=<pid>&from=laststand opens that building's case.
+  const params = useSearchParams();
+  const checkParam = params.get("check");
+  const deep = checkParam && /^[A-Za-z0-9_-]{1,32}$/.test(checkParam) ? checkParam : null;
+  const fromGame = params.get("from") === "laststand";
+  const [question, setQuestion] = useState(deep ? `Check building ${deep}.` : "Check building 247337.");
   // Every question starts a fresh thread: the previous case's tool results can't leak into this one's
   // cards, the agent's context stays small (latency), and replay keys stay stable.
   const ask = (q: string) => void stream.submit({ messages: [{ type: "human", content: q }] }, { threadId: null });
+
+  const deepFired = useRef(false);
+  useEffect(() => {
+    if (!deep || deepFired.current) return;
+    deepFired.current = true;
+    void stream.submit({ messages: [{ type: "human", content: `Check building ${deep}.` }] }, { threadId: null });
+  }, [deep, stream]);
 
   useSceneActions(stream, async (action) =>
     world.current ? world.current.perform(action) : { id: action.id, ok: false, error: "world pane not mounted" },
@@ -77,6 +98,12 @@ export default function LiveRun() {
             Replay Northridge 1994
           </button>
         </form>
+        {fromGame && (
+          <p className={styles.muted}>
+            From Last Stand LA: this is the same agent, now as the auditor. Your report from inside the building is in this case file as a
+            human report (strong, capped, never final). Every case in the queue on the left gets the same treatment.
+          </p>
+        )}
         {replay && !replay.startsWith("recording") && (
           <p className={styles.warning}><span className={styles.badge}>REPLAY</span> Model answers are replayed from a recorded run ({replay}); the data, tools and images are live.</p>
         )}
