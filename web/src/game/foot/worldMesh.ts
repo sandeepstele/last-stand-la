@@ -190,20 +190,26 @@ export function addCap(buf: Buf, ring: Pt[], y: number, color: THREE.Color): voi
   }
 }
 
-/** A flat band on the ground between two offsets of a ring (retrofit rings). */
+/** A flat band on the ground between two offsets of a ring (retrofit rings). uv = (metres along, 0 inner .. 1 outer). */
 export function addBand(buf: Buf, ring: Pt[], dIn: number, dOut: number, y: number): void {
   const a = offsetRing(ring, dIn), b = offsetRing(ring, dOut);
   const n = ring.length;
+  let u = 0;
   for (let i = 0; i < n; i++) {
     const j = (i + 1) % n;
-    // quad a[i], b[i], b[j], a[j]; facing up
-    const quad: Pt[] = [a[i], b[i], b[j], a[i], b[j], a[j]];
-    const cy = (quad[1][1] - quad[0][1]) * (quad[2][0] - quad[0][0]) - (quad[1][0] - quad[0][0]) * (quad[2][1] - quad[0][1]);
-    const tri = cy >= 0 ? quad : [quad[0], quad[2], quad[1], quad[3], quad[5], quad[4]];
-    for (const [x, z] of tri) {
+    const len = Math.hypot(a[j][0] - a[i][0], a[j][1] - a[i][1]);
+    const V: [Pt, number, number][] = [
+      [a[i], u, 0], [b[i], u, 1], [b[j], u + len, 1],
+      [a[i], u, 0], [b[j], u + len, 1], [a[j], u + len, 0],
+    ];
+    u += len;
+    const [p, q, r] = V;
+    const cy = (q[0][1] - p[0][1]) * (r[0][0] - p[0][0]) - (q[0][0] - p[0][0]) * (r[0][1] - p[0][1]);
+    const tri = cy >= 0 ? V : [V[0], V[2], V[1], V[3], V[5], V[4]];
+    for (const [[x, z], tu, tv] of tri) {
       buf.pos.push(x, y, z);
       buf.nrm.push(0, 1, 0);
-      buf.uv.push(0, 0);
+      buf.uv.push(tu, tv);
       buf.col.push(1, 1, 1);
       buf.lit.push(0);
     }

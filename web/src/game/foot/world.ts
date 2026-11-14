@@ -263,14 +263,35 @@ export function createWorld(ctx: FootCtx): System {
   }
 
   // ================================================================== retrofit orders (a fact from the city's list)
-  const ringMats: THREE.MeshBasicMaterial[] = [];
+  // Hazard-striped bands (not a path): amber = an unfinished order on the city's list, red = past due.
+  const ringPulse = { value: 1 };
   {
     const amber = newBuf(), red = newBuf();
-    for (const k of kits) if (k.b.unfinished) addBand(k.b.past_due ? red : amber, k.ring, 1.9, 2.5, 0.07);
-    for (const [buf, col] of [[amber, AMBER], [red, RED]] as const) {
+    for (const k of kits) if (k.b.unfinished) addBand(k.b.past_due ? red : amber, k.ring, 1.8, 2.9, 0.07);
+    for (const [buf, rgb] of [[amber, [1.0, 0.62, 0.12]], [red, [1.0, 0.16, 0.14]]] as const) {
       if (!buf.pos.length) continue;
-      const m = keep(new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
-      ringMats.push(m);
+      const m = keep(
+        new THREE.ShaderMaterial({
+          uniforms: { uColor: { value: new THREE.Color().setRGB(rgb[0], rgb[1], rgb[2]) }, uPulse: ringPulse },
+          transparent: true,
+          depthWrite: false,
+          blending: THREE.AdditiveBlending,
+          polygonOffset: true,
+          polygonOffsetFactor: -2,
+          polygonOffsetUnits: -2,
+          side: THREE.DoubleSide,
+          vertexShader: /* glsl */ `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+          fragmentShader: /* glsl */ `
+            uniform vec3 uColor; uniform float uPulse; varying vec2 vUv;
+            void main(){
+              float s = smoothstep(0.45, 0.55, fract((vUv.x + vUv.y * 1.1) / 1.6));
+              float edge = smoothstep(0.0, 0.12, vUv.y) * (1.0 - smoothstep(0.88, 1.0, vUv.y));
+              float rim = 1.0 - smoothstep(0.0, 0.2, min(vUv.y, 1.0 - vUv.y));
+              float a = (mix(0.12, 0.85, s) * edge + rim * 0.5) * uPulse;
+              gl_FragColor = vec4(uColor * a, a);
+            }`,
+        }),
+      );
       add(new THREE.Mesh(keep(toGeometry(buf, { lit: false })), m)).renderOrder = 1;
     }
   }
@@ -598,7 +619,7 @@ export function createWorld(ctx: FootCtx): System {
       }
 
       // retrofit rings pulse
-      for (const m of ringMats) m.opacity = 0.35 + 0.3 * (0.5 + 0.5 * Math.sin(t * 2.6));
+      ringPulse.value = (0.55 + 0.45 * (0.5 + 0.5 * Math.sin(t * 2.6))) * (1 - dawn * 0.5);
 
       // beacon
       beamU.uTime.value = t;
