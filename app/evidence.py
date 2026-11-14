@@ -57,6 +57,7 @@ CHECK_WHAT = {
     "replacement_permits": "Demolition or new-building permits at the address since 2020",
     "era_and_height": "Year built, stories and measured height per floor vs typical framing for each material",
     "site_structures": "How many structures Vexcel sees on the parcel",
+    "human_report": "What a person told the team (who, when), counted as testimony: strong but not final",
     "listing_timeline": "When the suite went on the market, what kind of listing it is, and when the tenant moved in",
     "lease_terms": "The tenant's lease expiration on record",
     "tenancy_trail": "Whether the same company has newer locations, in this building or elsewhere",
@@ -389,9 +390,30 @@ def suite_tour(pid: str, case: str, suite: str) -> dict[str, Any]:
     return _vision_result(r, [], "", "")
 
 
+HUMAN_CAP = 0.35  # testimony is strong but not final; several notes never add up past this
+
+
+def human_report(pid: str, case: str, suite: str | None = None, notes: list[dict] | None = None) -> dict[str, Any]:
+    hyps = CASES[case]["hypotheses"]
+    usable = [n for n in notes or [] if n.get("supports") in hyps]
+    if not usable:
+        said = "; ".join(f"{n.get('source', 'someone')} on {n.get('at')}: {n.get('note')}" for n in notes or [])
+        return {"finding": said or "no team reports on record", "effects": [],
+                "why": "no report on record that bears on this case's hypotheses" if notes else "nothing reported"}
+    total: dict[str, float] = {}
+    for n in usable:
+        total[n["supports"]] = total.get(n["supports"], 0) + 0.25
+    first = usable[-1]
+    eff = [{"hypothesis": k, "delta": round(min(v, HUMAN_CAP), 2)} for k, v in total.items()]
+    return {"finding": "; ".join(f"{n.get('source', 'someone')} reported on {n.get('at')}: {n.get('note')}" for n in usable),
+            "effects": eff, "why": f"first-hand report recorded by {first.get('recorded_by', 'the team')}: strong but not final, capped at +{HUMAN_CAP}",
+            "callout": f"Human report: {first.get('source', 'someone')} ({first.get('at')})", "human": True}
+
+
 GHOST_CHECKS = {"listing_timeline", "lease_terms", "tenancy_trail", "lot_activity", "suite_tour"}
 
 CHECKS: dict[str, Callable[..., dict[str, Any]]] = {
+    "human_report": human_report,
     "listing_timeline": listing_timeline,
     "lease_terms": lease_terms,
     "tenancy_trail": tenancy_trail,
@@ -444,7 +466,9 @@ def open_case(pid: str, suite: str | None = None) -> dict[str, Any]:
     }
 
 
-def _call(check: str, pid: str, case: str, suite: str | None) -> dict[str, Any]:
+def _call(check: str, pid: str, case: str, suite: str | None, notes: list[dict] | None = None) -> dict[str, Any]:
+    if check == "human_report":
+        return human_report(pid, case, suite, notes)
     if check in GHOST_CHECKS:
         if not suite:
             return {"finding": "this check needs the suite", "effects": [], "why": "pass suite="}
@@ -452,24 +476,24 @@ def _call(check: str, pid: str, case: str, suite: str | None) -> dict[str, Any]:
     return CHECKS[check](pid, case)
 
 
-def run_check(pid: str, check: str, case: str, suite: str | None = None) -> dict[str, Any]:
+def run_check(pid: str, check: str, case: str, suite: str | None = None, notes: list[dict] | None = None) -> dict[str, Any]:
     if case not in CASES:
         return {"status": "bad_case", "allowed": list(CASES)}
-    if check not in CASES[case]["checks"]:
+    if check not in CASES[case]["checks"] and check != "human_report":
         return {"status": "bad_check", "allowed": CASES[case]["checks"]}
-    out = _call(check, pid, case, suite)
+    out = _call(check, pid, case, suite, notes)
     return {"property_id": pid, **({"suite": suite} if suite else {}), "case": case, "check": check, "looks_at": CHECK_WHAT[check], **out}
 
 
-def weigh_case(pid: str, case: str, checks: list[str], suite: str | None = None) -> dict[str, Any]:
+def weigh_case(pid: str, case: str, checks: list[str], suite: str | None = None, notes: list[dict] | None = None) -> dict[str, Any]:
     if case not in CASES:
         return {"status": "bad_case", "allowed": list(CASES)}
     spec = CASES[case]
-    used = [c for c in dict.fromkeys(checks) if c in spec["checks"]]
+    used = [c for c in dict.fromkeys(checks) if c in spec["checks"] or (c == "human_report" and notes)]
     p = {k: v[1] for k, v in spec["hypotheses"].items()}
     trail = []
     for c in used:
-        r = _call(c, pid, case, suite)
+        r = _call(c, pid, case, suite, notes)
         for e in r["effects"]:
             p[e["hypothesis"]] = p.get(e["hypothesis"], 0) + e["delta"]
         trail.append({"check": c, "finding": r["finding"], "effects": r["effects"], "why": r["why"],
@@ -484,6 +508,15 @@ def weigh_case(pid: str, case: str, checks: list[str], suite: str | None = None)
     label = ("likely" if conf >= 0.6 or (conf >= 0.5 and margin >= 0.3)
              else "leaning" if conf >= 0.5 or (conf >= 0.4 and margin >= 0.2) else "unresolved")
     remaining = [c for c in spec["checks"] if c not in used]
+    # does the person's report point somewhere other than the record evidence does?
+    machine = {k: v[1] for k, v in spec["hypotheses"].items()}
+    for t in trail:
+        if t["check"] != "human_report":
+            for e in t["effects"]:
+                machine[e["hypothesis"]] += e["delta"]
+    machine_lead = max(machine, key=machine.get)
+    human_says = {e["hypothesis"] for t in trail if t["check"] == "human_report" for e in t["effects"]}
+    conflict = bool(human_says) and machine_lead not in human_says
     rec = costar.get(pid) if case == "ghost_tenant" else _ctx(pid)[0]
     claim = spec["hypotheses"][lead][0]
     ticket = None
@@ -507,5 +540,7 @@ def weigh_case(pid: str, case: str, checks: list[str], suite: str | None = None)
     return {"property_id": pid, **({"suite": suite} if suite else {}), "case": case, "checks_used": used, "trail": trail,
             "priors": {k: v[1] for k, v in spec["hypotheses"].items()}, "posterior": post,
             "verdict": {"hypothesis": lead, "claim": claim, "confidence": conf, "label": label},
-            "next_check": remaining[0] if remaining and label != "likely" else ("a researcher's look at the twin or drawings" if label != "likely" else None),
+            "next_check": ("a fresh tour or a site visit to settle it: the person's report and the records disagree" if conflict
+                           else remaining[0] if remaining and label != "likely" else ("a researcher's look at the twin or drawings" if label != "likely" else None)),
+            "report_conflicts_with_records": conflict,
             "correction_draft": ticket, "draft_needs_approval": bool(ticket)}

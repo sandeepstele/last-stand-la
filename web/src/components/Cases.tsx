@@ -27,6 +27,7 @@ export const CASE_LABEL: Record<string, string> = {
   ghost_tenant: "Tenant on record, suite listed for lease",
 };
 const CHECK_LABEL: Record<string, string> = {
+  human_report: "Human report",
   compliance_filings: "City retrofit filings",
   permit_text: "Permit wording",
   replacement_permits: "Demolition / new-building permits",

@@ -94,9 +94,11 @@ turn together in one message, each with the property id:
 
 Rules:
 - Report weigh_case's numbers as given; never compute or adjust confidence yourself.
-- If open_case returns team_notes, say each as a claim with its date ("the team was told on <date> that ...") and
-  which check would verify it; a note never changes the verdict by itself.
-- When the user tells you a fact about a building or suite (a correction), call record_note with it.
+- If open_case returns team_notes, always include the human_report check alongside your other checks and pass it
+  to weigh_case. Say who reported what and when; if weigh_case says the report conflicts with the records, say
+  so plainly and give its next check.
+- When the user tells you a fact about a building or suite (a correction), call record_note with it, its source,
+  and the hypothesis it supports.
 - Say "past a deadline" only for a step whose state is overdue. Unfinished but on schedule is not a violation.
 - Never say a record or an owner is wrong. Say what each source says and that it is worth a look.
 - not_proven_safe means "not on the list, which does not mean safe"; never call a building unsafe or safe.

@@ -120,14 +120,20 @@ def _note_key(property_id: str, suite: str | None) -> str:
 
 
 @tool
-async def record_note(property_id: str, note: str, runtime: ToolRuntime, suite: str | None = None) -> str:
-    """Save a fact a person told you about a building or suite (e.g. "plans were submitted in October", "the
-    tenant is still there, I called them"). It is kept as a team note and shown on later investigations as a
-    claim to verify, never as evidence on its own."""
+async def record_note(property_id: str, note: str, runtime: ToolRuntime, suite: str | None = None,
+                      source: str = "a team member", supports: str | None = None) -> str:
+    """Save a fact a person told you about a building or suite (e.g. "the property manager says the tenant is
+    still there"). source: who it came from ("property manager (by phone)"). supports: the hypothesis key it backs
+    if clear (ghost_tenant: still_there, gone_dark, subleasing, moved_within, listing_stale; material_conflict:
+    city_list_current, costar_current, different_structure), else omit. Later investigations count it as the
+    human_report check: strong but capped, never final."""
     if runtime.store is None:
         return "No store available; the note was not saved."
     key = _note_key(property_id, suite)
-    await runtime.store.aput(("notes", key), uuid.uuid4().hex, {"note": note[:500], "at": _now()[:10]})
+    channel = ((getattr(runtime, "config", None) or {}).get("configurable") or {}).get("channel")
+    await runtime.store.aput(("notes", key), uuid.uuid4().hex, {
+        "note": note[:500], "at": _now()[:10], "source": source[:80], "supports": supports,
+        "recorded_by": "Radar, from a text" if channel == "imessage" else "Radar, in the app"})
     return f"Saved as a team note on {key}; later investigations will show it as a claim to verify."
 
 
@@ -142,25 +148,36 @@ async def open_case(property_id: str, runtime: ToolRuntime, suite: str | None = 
     if runtime.store is not None:
         items = await runtime.store.asearch(("notes", _note_key(property_id, suite)), limit=10)
         if items:
-            out["team_notes"] = [{"note": i.value["note"], "noted_on": i.value["at"]} for i in items]
+            out["team_notes"] = [{"note": i.value["note"], "noted_on": i.value["at"], "source": i.value.get("source")} for i in items]
+            for c in out.get("cases", []):
+                c["checks"].append({"check": "human_report", "looks_at": evidence.CHECK_WHAT["human_report"]})
     return out
 
 
+async def _notes(runtime: ToolRuntime, property_id: str, suite: str | None) -> list[dict]:
+    if getattr(runtime, "store", None) is None:
+        return []
+    items = await runtime.store.asearch(("notes", _note_key(property_id, suite)), limit=10)
+    return [i.value for i in items]
+
+
 @tool
-def check_evidence(property_id: str, case: str, check: str, suite: str | None = None) -> dict:
+async def check_evidence(property_id: str, case: str, check: str, runtime: ToolRuntime, suite: str | None = None) -> dict:
     """Run one check for an open case and get what it found and how it shifts each hypothesis (+ supports,
     - weakens). Checks: compliance_filings, permit_text, replacement_permits, era_and_height, site_structures
     for building cases; listing_timeline, lease_terms, tenancy_trail, lot_activity, suite_tour for ghost_tenant (pass
-    suite). open_case lists which apply. Run the ones most likely to separate the hypotheses, in parallel."""
-    return evidence.run_check(property_id, check, case, suite)
+    suite); human_report when open_case shows team_notes. Run the ones most likely to separate the hypotheses, in parallel."""
+    notes = await _notes(runtime, property_id, suite)
+    return await asyncio.to_thread(evidence.run_check, property_id, check, case, suite, notes)
 
 
 @tool
-def weigh_case(property_id: str, case: str, checks: list[str], suite: str | None = None) -> dict:
+async def weigh_case(property_id: str, case: str, checks: list[str], runtime: ToolRuntime, suite: str | None = None) -> dict:
     """Combine the checks you ran into updated confidence for each hypothesis, a verdict (likely / leaning /
     unresolved), the next most useful check, and a DRAFT correction note when warranted (never sent; a person
     must approve it). The arithmetic is done here; report its numbers, don't compute your own."""
-    return evidence.weigh_case(property_id, case, checks, suite)
+    notes = await _notes(runtime, property_id, suite)
+    return await asyncio.to_thread(evidence.weigh_case, property_id, case, checks, suite, notes)
 
 
 SEISMIC_TOOLS = [seismic_status, find_retrofit_targets, quake_replay]

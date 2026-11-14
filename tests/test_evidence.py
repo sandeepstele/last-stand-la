@@ -117,3 +117,19 @@ def test_tenant_described_by_industry_and_headcount():
     assert tenants.describe({"employees": 8, "industry": 1}) == "an 8-person accounting office"
     assert tenants.describe({"employees": 21, "industry": 0}) == "a 21-person office"
     assert tenants.describe({"employees": None, "industry": 4}) == "a real estate firm"
+
+
+def test_human_report_moves_the_case_and_is_capped(ghost):
+    base = ev.weigh_case("X1", "ghost_tenant", ["listing_timeline", "tenancy_trail"], "300")
+    note = {"note": "tenant is still there", "at": "2026-11-14", "source": "property manager (by phone)",
+            "supports": "still_there", "recorded_by": "Radar, from a text"}
+    one = ev.weigh_case("X1", "ghost_tenant", ["listing_timeline", "tenancy_trail", "human_report"], "300", notes=[note])
+    assert one["posterior"]["still_there"] > base["posterior"]["still_there"]
+    assert one["report_conflicts_with_records"] and one["next_check"].startswith("a fresh tour or a site visit")
+    many = ev.run_check("X1", "human_report", "ghost_tenant", "300", notes=[note] * 5)
+    assert many["effects"] == [{"hypothesis": "still_there", "delta": ev.HUMAN_CAP}]
+
+
+def test_a_note_without_a_usable_hypothesis_moves_nothing(ghost):
+    r = ev.run_check("X1", "human_report", "ghost_tenant", "300", notes=[{"note": "call me", "at": "2026-11-14", "supports": "vibes"}])
+    assert r["effects"] == [] and "call me" in r["finding"]
