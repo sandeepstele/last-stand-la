@@ -24,6 +24,7 @@ from app.interior import SQFT_PER_M2, InteriorProfile
 ASSUMPTIONS: dict[str, Any] = {
     "efficiency_band": (0.80, 1.00),  # listed rentable area vs footprint x stories (gross)
     "gross_band": (0.90, 1.10),  # listed GROSS area (CoStar GBA, outside face of walls) vs footprint x stories
+    "edge_margin_pct": 3.0,  # aerial outlines include eaves and edge error: this close past the band edge is noise
     "stories_convention": "above-grade",  # listed stories count floors from the entrance up: VERIFY with CoStar
     "coverage_complete_share": 0.70,  # a twin must span this share of the footprint to rule anything out
     "mezzanine_share": 0.5,
@@ -38,7 +39,7 @@ ASSUMPTIONS: dict[str, Any] = {
     "grid_t_co2_per_mwh": {"houston": 0.37, "los_angeles": 0.22},  # EPA eGRID subregions
     "reroof_conditions": ("poor", "fair"),
 }
-_HEURISTIC = {"efficiency_band", "gross_band", "coverage_complete_share", "floor_height_tolerance", "reroof_conditions", "stories_convention"}
+_HEURISTIC = {"efficiency_band", "gross_band", "edge_margin_pct", "coverage_complete_share", "floor_height_tolerance", "reroof_conditions", "stories_convention"}
 SOURCED: dict[str, str] = {}  # e.g. {"yield_kwh_per_kw": "NREL PVWatts v8, run 2026-11-14"}
 
 
@@ -96,8 +97,8 @@ class Reconciliation:
     gross_sqft: float
     expected_low_sqft: float
     expected_high_sqft: float
-    status: str  # within | above | below
-    gap_pct: float  # signed, vs. the nearest edge of the band; 0 when within
+    status: str  # within | above | below ("within" includes the edge margin)
+    gap_pct: float  # signed, vs. the nearest edge of the band; 0 inside the band, small but nonzero inside the margin
     formula: str
 
 
@@ -117,10 +118,15 @@ def reconcile_area(
         status, gap = "below", (listed_sqft - lo) / lo * 100
     else:
         status, gap = "within", 0.0
+    margin = ASSUMPTIONS["edge_margin_pct"]
+    note = ""
+    if status != "within" and abs(gap) <= margin:
+        status = "within"
+        note = f" ({gap:+.1f}% past the band edge, inside the {margin:g}% measurement margin)"
     extra = f" {'+' if extra_gross_sqft >= 0 else '-'} {abs(extra_gross_sqft):,.0f}" if extra_gross_sqft else ""
     formula = (
         f"({footprint_sqft:,.0f} footprint x {stories} stories{extra}) x {lo_f:.2f}-{hi_f:.2f}"
-        f" = {lo:,.0f}-{hi:,.0f} sq ft expected; listed {listed_sqft:,.0f}"
+        f" = {lo:,.0f}-{hi:,.0f} sq ft expected; listed {listed_sqft:,.0f}{note}"
     )
     return Reconciliation(listed_sqft, round(gross), round(lo), round(hi), status, round(gap, 1), formula)
 
@@ -310,7 +316,7 @@ def twin_fits_height(interior: InteriorProfile, aerial: Aerial) -> bool:
     if span is None or aerial.height_m is None:
         return True
     return span <= aerial.height_m * (1 + ASSUMPTIONS["floor_height_tolerance"]) + ASSUMPTIONS["parapet_allowance_m"]
-_VERDICT_KEYS = ["efficiency_band", "gross_band", "coverage_complete_share", "mezzanine_share", "default_floor_to_floor_m",
+_VERDICT_KEYS = ["efficiency_band", "gross_band", "edge_margin_pct", "coverage_complete_share", "mezzanine_share", "default_floor_to_floor_m",
                  "floor_height_tolerance", "parapet_allowance_m", "stories_convention"]
 
 

@@ -192,3 +192,13 @@ def test_a_twin_taller_than_the_building_is_ignored():
     assert inv.warnings and "may not be this building" in inv.warnings[0]
     assert inv.twin_coverage is None
     assert inv.verdict == "worth_a_look"
+
+
+def test_a_listed_area_just_past_the_band_edge_is_measurement_noise():
+    """Real kit cases sat 1-2% past the band edge; aerial outlines include eaves."""
+    near = reconcile_area(210_000, 238_000, 1, band=(0.90, 1.10))  # 2.0% under the 214,200 edge
+    assert near.status == "within" and "measurement margin" in near.formula and near.gap_pct == -2.0
+    far = reconcile_area(205_000, 238_000, 1, band=(0.90, 1.10))  # 4.3% under
+    assert far.status == "below"
+    inv = investigate(Records(rba_sqft=210_000, stories=1, area_basis="gross"), Aerial(footprint_sqft=238_000))
+    assert inv.verdict == "consistent" and "measurement margin" in inv.headline
