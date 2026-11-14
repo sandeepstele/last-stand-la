@@ -41,6 +41,7 @@ import { createFlare } from "./flare";
 import { createCityMap, type City } from "./cityMap";
 import { createRoofObjects, type RoofSystem } from "./roofObjects";
 import { SuiteSweep, type SweepScore } from "./SuiteSweep";
+import { InsideMesh3D } from "./InsideMesh3D";
 import { HqPanel } from "./HqPanel";
 import { HqMoments } from "./hqMoments";
 import { mulberry32 } from "../prng";
@@ -1144,6 +1145,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
   const visitBase = visitD && visitD !== "loading" && visitD !== "error" ? visitD : null;
   const hops = (step === "visit" ? visitBase?.images.inside_hops : step === "inside" && heroDossier ? heroDossier.images.inside_hops : undefined) ?? [];
   const hopNow = hops.length ? hops[Math.min(hop, hops.length - 1)] : null;
+  const insideMesh = (step === "visit" ? visitBase?.images.inside_mesh : step === "inside" && heroDossier ? heroDossier.images.inside_mesh : null) ?? null;
   const visitFaces = hopNow && step === "visit" ? hopNow.faces : visitBase?.images.inside ?? visitBase?.images.pano ?? [];
   const officeDossier = office ? game.dossiers[office.pid] : undefined;
   const officeFaces = officeDossier && officeDossier !== "loading" && officeDossier !== "error" ? officeDossier.images.inside ?? officeDossier.images.pano ?? [] : [];
@@ -1234,9 +1236,11 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
           onChoose={(i) => tip.chosen === null && setTip({ chosen: i, sentAt: null })}
         />
       )}
-      {showInside && hops.length > 1 && (
+      {showInside && hops.length > 1 && (insideMesh ? (
+        <InsideMesh3D url={insideMesh.url} hops={hops} at={Math.min(hop, hops.length - 1)} heading={hopHeading} />
+      ) : (
         <HopMap hops={hops} at={Math.min(hop, hops.length - 1)} heading={hopHeading} onPick={setHop} />
-      )}
+      ))}
       {showInside && (
         // The agent keeps talking while you're inside: the radio stays on screen (top-right is kept free by InsideView).
         <div style={{ position: "absolute", top: 16, right: 16, width: 360, maxHeight: 260, overflow: "hidden", zIndex: 30, pointerEvents: "none" }}>

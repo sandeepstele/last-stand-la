@@ -70,7 +70,9 @@ export type DossierCase = { case: string; question: string; hypotheses: Hypothes
 
 /** v1.1 optional: one cube face of an interior panorama (f1-f4 sides, f0 top, f5 bottom). */
 /** One Matterport scan spot inside a building: x/y in metres of the twin's floor plan, its 6 cube faces. */
-export type InsideHop = { id: string; x: number; y: number; faces: PanoFace[] };
+export type InsideHop = { id: string; x: number; y: number; faces: PanoFace[]; neighbors?: { id: string; m: number }[] };
+/** The building's real (untextured) Matterport mesh: same x/y frame as inside_hops, z up, metres. */
+export type InsideMesh = { url: string; format: string; units?: string; up?: string; textured?: boolean };
 export type PanoFace = { face: "f0" | "f1" | "f2" | "f3" | "f4" | "f5"; name: string };
 
 /** GET /game/dossier/{pid}, and the fortress_dossier tool result. */
@@ -80,7 +82,7 @@ export type Dossier = {
   scores: Record<ScoreKey, Score>;
   unknowns: string[];
   /** File names served by /evidence/image/{name}. */
-  images: { drone: string[]; cctv: string[]; pano?: PanoFace[]; inside?: PanoFace[]; inside_hops?: InsideHop[] };
+  images: { drone: string[]; cctv: string[]; pano?: PanoFace[]; inside?: PanoFace[]; inside_hops?: InsideHop[]; inside_mesh?: InsideMesh | null };
   case: DossierCase | null;
   disclaimer: string;
   /** Vexcel roof counts (real) for the on-screen roof; positions drawn are illustrative. Null without an aerial. */

@@ -121,11 +121,13 @@ export function InsideWalk({ hops, index, onIndex, onHeading, className }: WalkP
       const hd = (heading() + (sign < 0 ? 180 : 0)) % 360;
       let best = -1, bd = Infinity;
       // Close and straight ahead first; then wider; then the nearest spot anywhere in front (sparse scans).
-      const passes = [{ maxD: 4, cone: 35 }, { maxD: 7, cone: 60 }, { maxD: Infinity, cone: 90 }];
+      const passes = [{ maxD: 8, cone: 45 }, { maxD: 4, cone: 35 }, { maxD: 7, cone: 60 }, { maxD: Infinity, cone: 90 }];
+      const linked = new Set((h.neighbors ?? []).map((n) => n.id));
       for (let pass = 0; pass < passes.length && best < 0; pass++) {
         const { maxD, cone } = passes[pass];
         hs.forEach((o, j) => {
           if (j === cur) return;
+          if (pass === 0 && linked.size && !linked.has(o.id)) return; // the walk graph first (real neighbouring spots)
           const d = Math.hypot(o.x - h.x, o.y - h.y);
           if (d < 0.8 || d > maxD) return;
           const b = ((Math.atan2(o.x - h.x, o.y - h.y) * 180) / Math.PI + 360) % 360;
