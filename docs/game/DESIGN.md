@@ -1,6 +1,6 @@
 # Last Stand LA: game design (on foot)
 
-**"The zombies are fake. The weak spots are real."**
+**"Settle tonight's cases and make it to dawn."**
 
 This doc covers what the player does, what they see, how real data drives each mechanic, and what the deep agent changes in play. The build plan is in [BUILD_PLAN.md](BUILD_PLAN.md), the interface in [CONTRACT.md](CONTRACT.md), and the risks in [CRITIQUE.md](CRITIQUE.md).
 
@@ -18,6 +18,11 @@ This doc covers what the player does, what they see, how real data drives each m
 | 2:05 | **About 3 min per full night:** adrenaline sprint and a drawn route on the cross between the two cases |
 | 2:05 | **Your report decides HOLD:** a new seed puts the HOLD walls roll at 75-76, so a "concrete" report holds and "brick" or "can't tell" breaks in. RUN still survives |
 | 2:05 | **A live dawn debrief:** "Debrief the night shift". The AI drafts one correction per case, citing your reports, before "File the report" |
+| 2:10 | **At the table:** the presenter drives the 2-minute cut, then the judge plays a fresh normal night (demo_reset between judges) |
+| 2:10 | **The escort is honest:** the office comes with you only if the evidence leans "present" (still there, or the listing is stale) and you didn't report the suite empty. Otherwise "Nobody to bring; HQ flags the record" |
+| 2:10 | **Forgiving difficulty:** chasers 3.2 m/s, half contact damage, more stamina |
+| 2:10 | **Name:** keep "Last Stand LA"; DROP "The zombies are fake. The weak spots are real." everywhere. The tagline is now the goal: "Settle tonight's cases and make it to dawn." |
+| 2:15 | **Seed 2026:** a "concrete" report makes HOLD hold (walls 76 vs roll 75); "can't tell" (74) and "brick" (71) break in; RUN holds (60 vs 12) |
 | 2:05 | **Merge cutoff 6:00 pm** for the teammate's agent improvements (another PC); re-record 6:00-6:45; strict rehearsal at 7:30 |
 
 ## The Night Shift (current plan; user decision ~1:45 pm, see [AUDIT.md](AUDIT.md))
