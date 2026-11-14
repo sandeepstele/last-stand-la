@@ -26,6 +26,7 @@ import { kind, parse, radioLines, type Msg } from "../radio";
 import { DISCLAIMER, type Building } from "../types";
 import { boundsOf, buildColliders, createBus, dirOf, makeCollide, reachPoint, DOOR_R, SCOUT_R, type FootCtx, type Pt, type SupplySpot, type SurvivorSpot, type SurvivorState, type System } from "./engine";
 import { createInput, type Input } from "./input";
+import { closestOnPoly } from "./collide";
 import { createWorld } from "./world";
 import { createPlayer } from "./player";
 import { createHorde } from "./horde";
@@ -502,7 +503,10 @@ export function FootGame({ game, replay, agentOff = false }: { game: Game; repla
         // Adrenaline: the real route goes around a city block (about 356 m on the demo night), so sprint never runs dry.
         p.stamina = Math.max(p.stamina, 0.6);
         if (since > 8) fireDebris();
-        if ((to && dist(here, to) < DOOR_R + 1) || (!to && since > 25)) {
+        // Arrived = next to the fallback's outline anywhere (the route may end on a different side than `to`).
+        const fc = fallbackPid ? ctx.colliderOf.get(fallbackPid) : undefined;
+        const atFallback = !!fc && closestOnPoly(p.x, p.z, fc.pts).d < 3.5;
+        if ((to && (dist(here, to) < DOOR_R + 1 || atFallback)) || (!to && since > 25)) {
           if (to) ctx.bus.emit("mission:shelter", { pid: fallbackPid ?? "", x: to[0], z: to[1] });
           p.frozen = true;
           p.hidden = true;
