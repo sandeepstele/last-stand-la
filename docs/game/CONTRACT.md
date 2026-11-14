@@ -49,9 +49,11 @@ Images are served by `/evidence/image/{name}` (through `/api/backend/evidence/im
    - `Tip: I'm inside the building. The walls look like brick.`
    - `Tip: I'm inside the building. I can't tell what the walls are made of.`
 3. `Wave 1 is coming from the W`
-4. The resume of the `commit_plan` interrupt:
-   - RUN = `{type:"approve"}` (the agent proposes RUN to 9629605 in all six recorded nights);
-   - HOLD = `{type:"edit", edited_action:{name:"commit_plan", args:{pid, action:"hold", to_pid:null}}}`.
+4. The resume of the `commit_plan` interrupt. **The mapping is relative to the agent's proposal, never fixed:**
+   - the key that matches the proposal's `args.action` sends `{type:"approve"}`;
+   - the other key sends `{type:"edit", edited_action:{name:"commit_plan", args:{pid, action, to_pid}}}`, where to_pid is `find_fallback.to_pid` for RUN and `null` for HOLD.
+
+   In all six recorded nights the agent proposed RUN to 9629605, so in replay RUN = approve and HOLD = edit. Live, it may propose HOLD; `useGame.decide` handles both.
 
 **Tool results the UI reads:**
 - `fortress_dossier` (dossier shape);
@@ -64,13 +66,23 @@ Images are served by `/evidence/image/{name}` (through `/api/backend/evidence/im
 
 ## The six recorded nights (seed 1990, strict replay 3× clean)
 
+The numbers in this table are the replay's. Live odds depend on which checks the agent chooses: in one live night it added a check, and the tip moved 0.78 → 0.82. Every number is still computed in code.
+
 | Tip | Odds (concrete, as the city lists it) | HOLD | RUN to 9629605 |
 |---|---|---|---|
 | Concrete | 0.66 → 0.72 | walls 76 vs roll 78: they get in | 70 − 10 vs 8: held |
 | Brick | 0.66 → 0.54 (CoStar's material 0.17 → 0.32) | 71 vs 78: they get in | held |
 | Can't tell | unchanged, 0.66 | 74 vs 78: they get in | held |
 
-The aftershock is survived in every case. Re-record (about 5 min, the primary's script) only if the prompt, the tools, these strings or the seed change. **The map mode's order (scout → wave → tip) is NOT in this recording,** so the map mode is live-only now.
+The aftershock is survived in every case.
+
+**Re-record or verify:** `scripts/game_nights.py` (on `game`, 5667ca6).
+- **Command:** `uv run python scripts/game_nights.py [--tips concrete brick cant_tell] [--actions run hold]`.
+- **To record:** `cp fixtures/replay/demo.json fixtures/replay/game.json`, then start the server with `RADAR_REPLAY=record:game`.
+- **To verify:** start it with `RADAR_REPLAY=game RADAR_REPLAY_STRICT=1`, then `grep -c "replay miss"` on the server log must print 0.
+- **When to re-record:** only if the prompt, the tools, these strings or the seed change.
+
+**The map mode is live-only (unverified in replay, not impossible).** Replay keys depend only on the steps since the latest message. So the map mode's scout, wave and HOLD/RUN steps would hit (before a tip, its HOLD result equals the can't-tell night, 74 vs 78). But a tip sent *after* the wave is untested, and the map mode's old preset text would miss for sure.
 
 ## The on-foot engine (frontend-internal; see `web/src/game/foot/engine.ts`)
 
