@@ -414,6 +414,13 @@ def with_feeds(d: dict[str, Any]) -> dict[str, Any]:
     if not images.get("inside") and f["inside"]:
         images["inside"] = [{"face": n.rsplit("_", 1)[-1].split(".")[0], "name": n} for n in f["inside"]]
     images_roof = roof(pid)
+    try:
+        model = (costar.get(pid).get("matterport_model_ids") or [None])[0]
+    except Exception:  # not a kit building (synthetic tests)
+        model = None
+    if model and (FIXTURES / "matterport" / "mesh" / f"{model}_50k.obj").exists():
+        images["inside_mesh"] = {"url": f"game/mesh/{pid}", "format": "obj", "units": "m", "up": "z",
+                                 "frame": "same as inside_hops x/y (scan spots stand at z=0)", "textured": False}
     hops = VISION / f"feed_{pid}_hops.json"  # scan spots to walk between (scripts/fetch_hops.py), floor-plan metres
     if hops.exists():
         try:

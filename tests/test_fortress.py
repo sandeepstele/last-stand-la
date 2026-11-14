@@ -240,3 +240,15 @@ def test_roof_facts_are_counts_only(monkeypatch):
     assert r["objects"] == {"skylight": 8} and r["capture"] == "2025-12" and "illustrative" in r["note"]
     monkeypatch.setattr(fortress, "_aerial", lambda pid: None)
     assert fortress.roof("TEST-A") is None
+
+
+def test_mesh_route_serves_only_a_cached_mesh(monkeypatch, tmp_path):
+    from app import costar
+
+    monkeypatch.setattr(routes, "MESH_DIR", tmp_path)
+    monkeypatch.setattr(costar, "get", lambda pid: {"matterport_model_ids": ["M1"]} if pid == "1" else {})
+    (tmp_path / "M1_50k.obj").write_text("v 0 0 0\n")
+    c = TestClient(routes.app)
+    r = c.get("/game/mesh/1")
+    assert r.status_code == 200 and r.text.startswith("v ")
+    assert c.get("/game/mesh/2").status_code == 404 and c.get("/game/mesh/..%2Fx").status_code == 404

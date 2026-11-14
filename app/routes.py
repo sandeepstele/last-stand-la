@@ -176,6 +176,25 @@ async def game_city(request: Request) -> JSONResponse:
     return JSONResponse(await asyncio.to_thread(fortress.city))
 
 
+MESH_DIR = __import__("pathlib").Path(__file__).resolve().parent.parent / "fixtures" / "matterport" / "mesh"
+
+
+async def game_mesh(request: Request) -> Response:
+    # GET /game/mesh/{pid}: the interior shell (Matterport 50k OBJ, untextured, z up, same frame as the scan spots).
+    # Licensed and gitignored; served to the local game only.
+    from app import costar
+
+    pid = request.path_params["pid"]
+    if not PID.match(pid):
+        return JSONResponse({"error": "bad id"}, status_code=404)
+    models = (await asyncio.to_thread(costar.get, pid)).get("matterport_model_ids") or []
+    path = MESH_DIR / f"{models[0]}_50k.obj" if models else None
+    if not path or not await asyncio.to_thread(path.is_file):
+        return JSONResponse({"error": "no interior mesh cached"}, status_code=404)
+    data = await asyncio.to_thread(path.read_bytes)
+    return Response(data, media_type="text/plain", headers={"cache-control": "private, max-age=3600"})
+
+
 async def game_suites(request: Request) -> JSONResponse:
     from app import fortress
 
@@ -263,6 +282,7 @@ app = Starlette(
         Route("/game/district", game_district, methods=["GET"]),
         Route("/game/city", game_city, methods=["GET"]),
         Route("/game/suites/{pid}", game_suites, methods=["GET"]),
+        Route("/game/mesh/{pid}", game_mesh, methods=["GET"]),
         Route("/game/dossier/{pid}", game_dossier, methods=["GET"]),
         Route("/game/resolve", game_resolve, methods=["POST"]),
         Route("/cases/queue", cases_queue, methods=["GET"]),
