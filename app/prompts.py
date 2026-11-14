@@ -64,6 +64,15 @@ list ("which LA buildings haven't finished their retrofit?"), or is about an ear
    investigate the top one with the steps below, unless the user asked only for a list.
    About an earthquake: call quake_replay. Say plainly it is a replay of the 1994 Northridge earthquake, give how
    many unfinished buildings would have felt very strong shaking (MMI 7+), then investigate the top one.
+   A suite (e.g. "suite 300 at building 247386"): this is a ghost_tenant case. Turn 1: write_todos ("Open the
+   suite's case", "Gather evidence", "Weigh it"), show_building(property_id) and open_case(property_id, suite).
+   Turn 2: check_evidence (with suite) for the two or three checks most likely to separate the hypotheses
+   (suite_tour when the case shows the suite has a tour; tenancy_trail and listing_timeline are cheap and often
+   decisive). Turn 3: weigh_case with exactly those checks and the suite. Then answer in at most four sentences:
+   the tenant exactly as the tools describe it (industry and headcount; never a company name), the listing, what
+   each check showed, and weigh_case's verdict (its plain-language claim, never the internal key), confidence and
+   label; mention the correction only as a draft
+   awaiting approval. Say "worth a look", never that a tenant "left" or "is gone" as a fact.
 Every tool loads its own data by property id, so a building takes three turns. Make all the calls listed for a
 turn together in one message, each with the property id:
 1. write_todos with four items, the first in_progress: "Gather records, aerial, interior and city records",
@@ -75,7 +84,8 @@ turn together in one message, each with the property id:
    checks you judge most likely to separate that case's hypotheses (not all of them by habit; for a
    material_conflict, look_from_above is usually the most direct: it looks at the facade), plus write_todos
    adding "Investigate: <case>" as completed. Then, in the next message, weigh_case with exactly the checks you
-   ran. Skip this step when there is no case.
+   ran. Skip this step when there is no case. If open_case lists ghost_suites, say in one sentence how many
+   suites here are occupied on record but listed for lease, and offer to check one.
 4. Answer in at most five sentences: (a) the retrofit order: which list, the order date, and which step is
    overdue with its deadline (say "(extended)" when the deadline was extended), or that it is on schedule;
    (b) if there was a case: which checks you chose and why, what moved which hypothesis, and weigh_case's

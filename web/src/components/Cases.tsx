@@ -8,7 +8,7 @@ import styles from "@/app/page.module.css";
 
 type Effect = { hypothesis: string; delta: number };
 type Hypothesis = { key: string; claim: string; prior: number };
-type OpenCase = { property_id: string; cases: { case: string; question: string; hypotheses: Hypothesis[] }[] };
+type OpenCase = { property_id: string; suite?: string; tenant?: string; ghost_suites?: string[]; cases: { case: string; question: string; hypotheses: Hypothesis[] }[] };
 type Check = {
   property_id: string; case: string; check: string; looks_at?: string; finding: string; why: string;
   effects: Effect[]; images?: string[]; callout?: string; status?: string;
@@ -18,7 +18,7 @@ type Weighed = {
   verdict: { hypothesis: string; claim: string; confidence: number; label: string };
   next_check: string | null; correction_draft: string | null;
 };
-type QueueRow = { case: string; property_id: string; address?: string; year_built?: number; material?: string; past_due?: boolean; label?: string };
+type QueueRow = { case: string; property_id: string; suite?: string; address?: string; year_built?: number; material?: string; past_due?: boolean; label?: string };
 type Queue = { counts: Record<string, number>; total: number; top: QueueRow[] };
 
 export const CASE_LABEL: Record<string, string> = {
@@ -72,7 +72,7 @@ export function liveConfidence(hypotheses: Hypothesis[], checks: Check[]): Recor
 
 // ---------------------------------------------------------------- left: the overnight queue
 
-export function CaseQueue({ onOpen, busy }: { onOpen: (propertyId: string) => void; busy: boolean }) {
+export function CaseQueue({ onOpen, busy }: { onOpen: (propertyId: string, suite?: string) => void; busy: boolean }) {
   const [q, setQ] = useState<Queue | null>(null);
   const [err, setErr] = useState<string | null>(null);
   useEffect(() => {
@@ -91,10 +91,11 @@ export function CaseQueue({ onOpen, busy }: { onOpen: (propertyId: string) => vo
           <ul className={styles.hypotheses}>
             {Object.entries(q.counts).map(([k, n]) => <li key={k}><strong>{n}</strong> · {CASE_LABEL[k] ?? k}</li>)}
           </ul>
+          <p className={styles.muted}>Order: imagery gathered first, then by stakes</p>
           <ol className={styles.queue}>
             {q.top.slice(0, 12).map((c) => (
-              <li key={`${c.case}-${c.property_id}`}>
-                <button type="button" disabled={busy} onClick={() => onOpen(c.property_id)}>
+              <li key={`${c.case}-${c.property_id}-${c.suite ?? ""}`}>
+                <button type="button" disabled={busy} onClick={() => onOpen(c.property_id, c.suite)}>
                   <strong>{c.address ?? c.property_id}</strong>
                   <span className={styles.muted}>{CASE_LABEL[c.case] ?? c.case}{c.label ? ` · ${c.label}` : ""}{c.past_due ? " · past a deadline" : ""}</span>
                 </button>
@@ -124,13 +125,14 @@ export function CaseFile({ messages, loading }: { messages: readonly unknown[]; 
   const decide = async (d: "approve" | "reject") => {
     const r = await fetch("/api/backend/cases/decision", {
       method: "POST", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ property_id: pid, case: c.case, decision: d, draft: weighed?.correction_draft }),
+      body: JSON.stringify({ property_id: pid, suite: opened.suite, case: c.case, decision: d, draft: weighed?.correction_draft }),
     }).catch(() => null);
     setDecision(r?.ok ? (d === "approve" ? "Approved: recorded for a researcher (nothing was sent)." : "Rejected: nothing recorded as a correction.") : "Could not record the decision.");
   };
   return (
     <section className={styles.card} data-verdict={final && weighed.verdict.label !== "unresolved" ? "worth_a_look" : undefined}>
       <h2>Case file · {CASE_LABEL[c.case] ?? c.case}</h2>
+      {opened.suite && <p className={styles.big}>Suite {opened.suite}{opened.tenant ? ` · ${opened.tenant} on record` : ""}</p>}
       <p className={styles.muted}>{c.question}</p>
       <ul className={styles.bars}>
         {c.hypotheses.map((h) => (

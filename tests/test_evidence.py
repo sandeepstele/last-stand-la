@@ -73,4 +73,47 @@ def test_vision_shifts_are_capped_and_unconfirmed_reads_count_for_nothing():
     assert r["effects"] == [{"hypothesis": "city_list_current", "delta": ev.VISION_CAP}] and r["images"] == ["a.jpg"]
     doubted = dict(confirmed, answer="cant_tell", second_look="too dark to tell")
     r = ev._vision_result(doubted, [{"hypothesis": "city_list_current", "delta": 0.2}], "why", "x")
-    assert r["effects"] == [] and "too dark" in r["finding"] and r["callout"] == "Can't tell from the air"
+    assert r["effects"] == [] and "too dark" in r["finding"] and r["callout"] == "Can't tell from the images"
+
+
+# ---------------------------------------------------------------- ghost tenants (synthetic facts)
+
+FACTS = {"property_id": "X1", "suite": "300", "city": "Los Angeles",
+         "tenants": [{"tenant": "a 50-person office", "employees": 50, "tenant_since": "2019-01-04", "lease_expires": "2024-08-19",
+                      "business_status": "active", "sqft": 14000}],
+         "listings": [{"type": "relet", "on_market": "2025-08-06", "available": "", "sqft": 14000, "lease_pending": False}],
+         "listed_since": "2025-08-06", "tour": None, "trail_elsewhere": [{"since": "2025-11-26", "city": "Houston", "same_building": False, "suite": None}],
+         "trail_same_building": []}
+
+
+@pytest.fixture
+def ghost(monkeypatch):
+    from app import costar
+
+    monkeypatch.setattr(ev, "_facts", lambda pid, suite: FACTS)
+    monkeypatch.setattr(costar, "get", lambda pid: {"address": "1 Test St, Los Angeles, CA"})
+
+
+def test_ghost_case_opens_per_suite_and_never_names_the_company(ghost):
+    out = ev.open_case("X1", "300")
+    assert out["cases"][0]["case"] == "ghost_tenant" and out["tenant"] == "a 50-person office"
+    assert len(out["cases"][0]["hypotheses"]) == 5
+
+
+def test_ghost_checks_move_toward_gone_and_draft_a_reverification(ghost):
+    w = ev.weigh_case("X1", "ghost_tenant", ["listing_timeline", "lease_terms", "tenancy_trail"], "300")
+    assert w["verdict"]["hypothesis"] == "gone_dark" and w["verdict"]["label"] in ("leaning", "likely")
+    assert w["correction_draft"].startswith("DRAFT") and "re-verify occupancy" in w["correction_draft"]
+    assert "a 50-person office" in w["correction_draft"]
+
+
+def test_ghost_checks_need_the_suite(ghost):
+    assert ev.run_check("X1", "tenancy_trail", "ghost_tenant")["finding"] == "this check needs the suite"
+
+
+def test_tenant_described_by_industry_and_headcount():
+    from app import tenants
+
+    assert tenants.describe({"employees": 8, "industry": 1}) == "an 8-person accounting office"
+    assert tenants.describe({"employees": 21, "industry": 0}) == "a 21-person office"
+    assert tenants.describe({"employees": None, "industry": 4}) == "a real estate firm"

@@ -36,9 +36,10 @@ export default function LiveRun() {
     const id = setInterval(() => t0.current !== null && setElapsed((Date.now() - t0.current) / 1000), 250);
     return () => clearInterval(id);
   }, [stream.isLoading]);
-  const open = (pid: string) => {
-    setQuestion(`Check building ${pid}.`);
-    ask(`Check building ${pid}.`);
+  const open = (pid: string, suite?: string) => {
+    const q = suite ? `Check suite ${suite} at building ${pid}: is the tenant on record still there?` : `Check building ${pid}.`;
+    setQuestion(q);
+    ask(q);
   };
   return (
     <main className={styles.main}>

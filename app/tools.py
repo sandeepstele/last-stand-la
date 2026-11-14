@@ -116,27 +116,29 @@ def quake_replay(event_id: str = "ci3144585", limit: int = 8) -> dict:
 
 
 @tool
-def open_case(property_id: str) -> dict:
-    """Open an investigation when the records contradict each other (material_conflict: the city's concrete list
-    vs CoStar's material; stale_entry: listed but newer than the ordinance). Returns each case's question, the
-    competing hypotheses with prior confidence, and the checks you can run. Empty when there is nothing to investigate."""
-    return evidence.open_case(property_id)
+def open_case(property_id: str, suite: str | None = None) -> dict:
+    """Open an investigation when the records contradict each other. Without suite: building cases
+    (material_conflict: the city's concrete list vs CoStar's material; stale_entry: listed but newer than the
+    ordinance), plus ghost_suites = suites CoStar records as occupied that are listed for lease. With suite: the
+    ghost_tenant case for that suite. Returns each case's question, hypotheses with priors, and the checks you can run."""
+    return evidence.open_case(property_id, suite)
 
 
 @tool
-def check_evidence(property_id: str, case: str, check: str) -> dict:
+def check_evidence(property_id: str, case: str, check: str, suite: str | None = None) -> dict:
     """Run one check for an open case and get what it found and how it shifts each hypothesis (+ supports,
     - weakens). Checks: compliance_filings, permit_text, replacement_permits, era_and_height, site_structures
-    (open_case lists which apply to each case). Run the ones most likely to separate the hypotheses, in parallel."""
-    return evidence.run_check(property_id, check, case)
+    for building cases; listing_timeline, lease_terms, tenancy_trail, lot_activity, suite_tour for ghost_tenant (pass
+    suite). open_case lists which apply. Run the ones most likely to separate the hypotheses, in parallel."""
+    return evidence.run_check(property_id, check, case, suite)
 
 
 @tool
-def weigh_case(property_id: str, case: str, checks: list[str]) -> dict:
+def weigh_case(property_id: str, case: str, checks: list[str], suite: str | None = None) -> dict:
     """Combine the checks you ran into updated confidence for each hypothesis, a verdict (likely / leaning /
     unresolved), the next most useful check, and a DRAFT correction note when warranted (never sent; a person
     must approve it). The arithmetic is done here; report its numbers, don't compute your own."""
-    return evidence.weigh_case(property_id, case, checks)
+    return evidence.weigh_case(property_id, case, checks, suite)
 
 
 SEISMIC_TOOLS = [seismic_status, find_retrofit_targets, quake_replay]

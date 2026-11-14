@@ -165,3 +165,61 @@ def ask(pid: str, key: str, images: list[Path], question: str, choices: list[str
     }
     cached.write_text(json.dumps(result, indent=1))
     return result
+
+
+# ------------------------------------------------------------------ inside the suite, and the parking lot
+
+
+def suite_panos(pid: str, suite: str, model_id: str, panos: int = 2) -> list[Path]:
+    """Side faces of the first panoramas of a suite's Matterport tour (team token, read-only query).
+    Cube faces come back as [up, four sides, down]; only the sides show the room."""
+    hits = sorted(CACHE.glob(f"{pid}_s{suite}_p*_f*.jpg"))
+    if hits:
+        return hits
+    from app import matterport
+
+    q = '{ model(id: "%s") { panoLocations { id skybox(resolution: "2k") { status children } } } }' % model_id
+    locs = matterport._post(q)["model"]["panoLocations"]
+    CACHE.mkdir(parents=True, exist_ok=True)
+    out: list[Path] = []
+    for i, loc in enumerate(locs[:panos]):
+        faces = (loc.get("skybox") or {}).get("children") or []
+        for j in (1, 3) if i else (1, 2, 3, 4):
+            if j < len(faces):
+                r = httpx.get(faces[j], timeout=60)
+                if r.status_code == 200:
+                    p = CACHE / f"{pid}_s{suite}_p{i}_f{j}.jpg"
+                    p.write_bytes(r.content)
+                    out.append(p)
+    if not out:
+        raise VisionUnavailable("the tour has no downloadable panoramas")
+    return out
+
+
+def car_counts(pid: str, aer: dict[str, Any]) -> dict[str, Any]:
+    """Cars on and around the building's lot in the oldest capture and the latest (Vexcel SAM3 detection)."""
+    cached = CACHE / f"{pid}_cars.json"
+    if cached.exists():
+        return json.loads(cached.read_text())
+    hist = sorted(aer.get("footprint_history") or [], key=lambda h: h.get("date") or "")
+    if len(hist) < 2:
+        raise VisionUnavailable("only one capture on record")
+    wkt = _area(aer)
+
+    def count(collection: str | None) -> int:
+        req: dict[str, Any] = {"layer": vexcel.LAYERS, "srid": 4326, "wkt": wkt, "crop": "bounding_box"}
+        if collection:
+            req["collection"] = collection
+        body = {"wkt": wkt, "srid": 4326, "buffer-meter": 0, "images": [{"endpoint": "ortho/extract", "request": req}],
+                "model-input": {"elements": [{"label": "car", "model": "sam3", "detection-threshold": 0.4}], "include": ["bbox", "confidence"]}}
+        with vexcel._client() as c:
+            r = vexcel._send(c, "POST", "elements/detect", json=body, timeout=300)
+        if r.status_code >= 400:
+            raise VisionUnavailable(f"elements/detect returned {r.status_code}")
+        return sum(len(f["properties"].get("detections") or []) for f in r.json().get("features") or [])
+
+    out = {"oldest": {"date": hist[0]["date"], "collection": hist[0]["collection"], "cars": count(hist[0]["collection"])},
+           "latest": {"date": aer.get("capture_date") or hist[-1]["date"], "collection": "latest", "cars": count(None)},
+           "area": "the building and its immediate surroundings (shared lots and streets included)"}
+    cached.write_text(json.dumps(out, indent=1))
+    return out

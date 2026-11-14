@@ -99,8 +99,19 @@ async def healthz(request: Request) -> JSONResponse:
 # ------------------------------------------------------------------ case queue and evidence
 
 
-@lru_cache(maxsize=1)
+_QUEUE: dict = {"at": 0.0, "value": None}
+QUEUE_TTL_S = 60.0
+
+
 def _queue() -> dict:
+    import time
+
+    if _QUEUE["value"] is None or time.monotonic() - _QUEUE["at"] > QUEUE_TTL_S:
+        _QUEUE["value"], _QUEUE["at"] = _build_queue(), time.monotonic()
+    return _QUEUE["value"]
+
+
+def _build_queue() -> dict:
     from app import retrofit_lists
 
     rows = retrofit_lists.portfolio()
@@ -121,14 +132,13 @@ def _queue() -> dict:
         pass
     from app import vision
 
-    for c in cases:  # cases the overnight sweep already gathered imagery for come first
+    for c in cases:  # stakes stay pure; imaged cases sort first as a separate, labelled key
         c["imagery"] = any(vision.CACHE.glob(f"{c['property_id']}_*.jpg"))
-        c["stakes"] += 5 if c["imagery"] else 0
-    cases.sort(key=lambda c: -c["stakes"])
+    cases.sort(key=lambda c: (not c["imagery"], -c["stakes"]))
     counts: dict[str, int] = {}
     for c in cases:
         counts[c["case"]] = counts.get(c["case"], 0) + 1
-    return {"counts": counts, "total": len(cases), "top": cases[:25],
+    return {"counts": counts, "total": len(cases), "top": cases[:25], "order": "cases with imagery gathered first, then by stakes",
             "source": "LA retrofit lists + CoStar kit, matched locally (fixtures/public)"}
 
 
@@ -145,7 +155,7 @@ async def cases_decision(request: Request) -> JSONResponse:
     pid = str(body.get("property_id") or "")
     if decision not in ("approve", "reject") or not layers.PROPERTY_ID.match(pid):
         return JSONResponse({"error": "decision must be approve or reject, with a valid property_id"}, status_code=400)
-    record = {"property_id": pid, "case": str(body.get("case") or "")[:40], "decision": decision,
+    record = {"property_id": pid, "suite": str(body.get("suite") or "")[:20] or None, "case": str(body.get("case") or "")[:40], "decision": decision,
               "draft": str(body.get("draft") or "")[:2000], "at": datetime.now(UTC).isoformat(),
               "note": "recorded only: nothing is sent to CoStar or the city"}
     await _store(request).aput(("corrections",), uuid.uuid4().hex, record)
