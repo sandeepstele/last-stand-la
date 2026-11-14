@@ -1,6 +1,20 @@
 # Last Stand LA: demo script and ops
 
-## The 2-minute table demo (on foot, strict replay)
+## The 2-minute pitch: one engine, two doors (current)
+
+| Time | On screen | Say |
+|---|---|---|
+| 0:00 | The game starts; the HQ panel shows "Tonight's cases: #7 and #6 of 328" | "CoStar's records are only true if someone checks them. Our AI auditor works CoStar's real queue of 328 open cases, and tonight it sends you to two of them." |
+| 0:10 | Suite 1100's real tour: [1] "Empty" | "CoStar says three people work here, but the suite is listed for lease. I look: empty. That's evidence now." |
+| 0:20 | [F] to the fortress; the walls question; [1] Concrete; the odds move | "Case two: CoStar says masonry, the city says concrete. The agent looked at the aerial itself; I confirm from inside." |
+| 0:35 | The wave; "HQ proposes RUN"; [R]; [F] fast-forward; dawn | "It reads the horde and proposes, and I decide. Code rolls every number." |
+| 0:45 | **File the report** → the auditor on 737 Broadway, with "the player" as a human report in the case file | "What you just played is the real product: the same deep agent, as CoStar's auditor." |
+| 0:50-1:45 | The auditor: the queue (#6 with your note), a ghost-tenant case, case of the day from the overnight sweep, a texted correction moving a verdict | the auditor script (README) |
+| 1:45-2:00 | The numbers | "226 on retrofit lists, 61 unfinished, only 12 of 69 concrete records agree. Inside and out, the record should match the building." |
+
+Use `?demo=1` for the presenter fast-forward [F]. The judge can play the full game at the table afterwards.
+
+## The 2-minute table demo (on foot only, older script)
 
 | Time | On screen | Say |
 |---|---|---|

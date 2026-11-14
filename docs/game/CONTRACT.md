@@ -42,7 +42,22 @@ Images are served by `/evidence/image/{name}` (through `/api/backend/evidence/im
 
 ## The agent (graph `laststand`, one thread per night)
 
-**Messages the web app sends, in this order.** These are the exact strings the replay covers:
+**The Night Shift (on foot, live).** The agent briefs the night from the real queue. Messages in this order on one thread:
+1. `Brief the night shift` (a fresh thread). The agent calls `night_cases()`, then `write_todos`.
+   - Result: `{"total": 328, "in_area": 17, "cases": [{"n", "case", "property_id", "suite", "label", "question", "stakes"}]}`.
+   - These are the queue cases inside the play area with imagery gathered: tonight, #6 (material conflict, 6375735) and #7 (ghost tenant, 254167 suite 1100).
+2. `Check suite 1100 at building 254167: is the tenant on record still there?`: the agent opens the ghost_tenant case and chooses among listing_timeline, lease_terms, tenancy_trail, lot_activity and suite_tour, then calls weigh_case.
+3. One of:
+   - `Tip: I'm inside suite 1100. It's empty: no one is working here.`
+   - `Tip: I'm inside suite 1100. People are working here.`
+   - `Tip: I'm inside suite 1100. I can't tell if anyone works here.`
+   
+   The agent calls record_note, then weigh_case. The office NPCs spawn only if the verdict leans `still_there`.
+4. Then the case #6 sequence below, on the SAME thread (`Scout property` is not fresh).
+
+Stub and `agent=off` play case #6 only.
+
+**Case #6 messages, in this order.** These are the exact strings the replay covers:
 1. `Scout property 6375735`
 2. One of:
    - `Tip: I'm inside the building. The walls and columns look like concrete.`

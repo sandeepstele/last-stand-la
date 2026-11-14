@@ -4,6 +4,18 @@
 
 This doc covers what the player does, what they see, how real data drives each mechanic, and what the deep agent changes in play. The build plan is in [BUILD_PLAN.md](BUILD_PLAN.md), the interface in [CONTRACT.md](CONTRACT.md), and the risks in [CRITIQUE.md](CRITIQUE.md).
 
+## The Night Shift (current plan; user decision ~1:45 pm, see [AUDIT.md](AUDIT.md))
+
+The AI works CoStar's real open-case queue (328 cases). It **briefs the night**: the open cases inside our blocks become tonight's missions.
+- **Case #7:** is the 3-person office on record in suite 1100 still there? You walk into that suite's real 3D tour and report.
+  - If the agent then leans "still there", you escort them.
+  - Otherwise the record gets flagged.
+- **Case #6:** are the fortress walls concrete? You walk into the building's own tour and report.
+- **The night:** the agent's HOLD/RUN call, then code rolls against the case odds and the city's quake data.
+- **Dawn:** "Records checked tonight: 2 open cases." Your reports are evidence in them. **File the report** opens the same agent as the auditor, on that case, with your report in it.
+
+**The agent makes the calls, code does the maths, the engine runs the night.** The fun (zombies, the door defence, the escort, the aftershock) is the pressure that makes each record matter.
+
 ## Why on foot
 
 The first version (`/play`, the "commander's map") passed its end-to-end gate 3/3. But it was a bird's-eye map of floating boxes with HOLD/RUN buttons. The user's verdict: "just boxes… nothing for the normal man… where are the zombies… looks like a block clicker."
