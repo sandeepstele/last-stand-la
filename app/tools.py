@@ -9,7 +9,8 @@ Status of each seam:
   field check  REAL (app/field.py, Store-backed)
   queue        REAL (Store namespace "queue")
   scene        app/scene.py (live graph only)
-  photon       app/photon.py; not configured until PHOTON_* keys exist (then outbound only)
+  photon       app/photon.py -> the iMessage bridge in photon/ (Photon Spectrum); inbox-only until
+               PHOTON_BRIDGE_TOKEN is set and the bridge runs
 
 Any exception a tool raises is turned into a message by ToolErrorMiddleware (app/agent.py),
 so a missing fixture or a Wi-Fi drop can't abort a run.
@@ -191,9 +192,13 @@ async def notify_me(text: str, runtime: ToolRuntime) -> str:
     """Text the user (their own number) a short finding. Not gated."""
     delivery = await photon.send(text[:600])
     await _outbox(runtime, "notify_me", {"text": text[:600]}, delivery)
+    if delivery["status"] == "sent":
+        return "Texted the user (also saved to the in-app inbox)."
     if delivery["status"] == "not_configured":
         return "Saved to the in-app inbox (texting is not configured)."
-    return f"Text {delivery['status']} (202 means accepted, not yet delivered)."
+    if delivery["status"] == "bridge_offline":
+        return "Saved to the in-app inbox (the texting bridge is not running)."
+    return f"Saved to the in-app inbox; the text failed ({delivery['status']})."
 
 
 @tool

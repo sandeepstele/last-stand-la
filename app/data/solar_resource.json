@@ -1,5 +1,5 @@
 {
-  "_source": "NREL PVWatts v8 (developer.nlr.gov/api/pvwatts/v8.json), city-center coordinates, system_capacity=1 kW, azimuth=180, array_type=1 (fixed roof mount), module_type=0 (standard), losses=14%. Fetched Fri 2026-11-13 with DEMO_KEY. Values are AC kWh per kW-DC per year. Public NREL output, not licensed data.",
+  "_source": "NREL PVWatts v8 (developer.nlr.gov/api/pvwatts/v8.json), city-center coordinates, system_capacity=1 kW, azimuth=180, array_type=1 (fixed roof mount), module_type=0 (standard), losses=14%. Houston fetched Fri 2026-11-13 with DEMO_KEY and re-confirmed Sat 2026-11-14; Los Angeles fetched Sat 2026-11-14 with a registered key. Values are AC kWh per kW-DC per year. Public NREL output, not licensed data.",
   "houston": {"lat": 29.7604, "lon": -95.3698, "10": 1379.5, "20": 1421.4},
-  "los_angeles": {"lat": 34.0522, "lon": -118.2437, "10": null, "20": null, "_note": "DEMO_KEY was rate-limited; run scripts/solar_screen.py --refresh-yield with NLR_API_KEY set"}
+  "los_angeles": {"lat": 34.0522, "lon": -118.2437, "10": 1605.0, "20": 1677.1}
 }

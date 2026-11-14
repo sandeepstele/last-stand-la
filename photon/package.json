@@ -1,0 +1,22 @@
+{
+  "name": "radar-photon",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "iMessage bridge for Retrofit Radar (Photon Spectrum). Reads credentials from the repo's .env.",
+  "scripts": {
+    "send": "tsx src/send.ts",
+    "start": "tsx src/bridge.ts",
+    "test": "tsx --test src/*.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@langchain/langgraph-sdk": "1.16.0",
+    "spectrum-ts": "12.16.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "tsx": "^4",
+    "typescript": "^5"
+  }
+}

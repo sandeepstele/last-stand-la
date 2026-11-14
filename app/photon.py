@@ -1,43 +1,45 @@
-"""Photon 2.0 messaging (stretch: outbound first, inbound and YES/NO approvals last).
+"""Texts to the team over iMessage, through the Photon Spectrum bridge in photon/.
 
-Outbound contract (Photon 2.0 blog; verify against the beta docs once access is granted):
-  POST https://api.photon.codes/v1/projects/{PHOTON_PROJECT_ID}/messages
-  Authorization: Bearer {PHOTON_API_KEY}, idempotency-key: <uuid>
-  body {spaceId, senderId, content}
-  202 means ACCEPTED, not delivered.
-Addressing: the owner's space and the sender are created once in the Photon dashboard/API and
-set in .env (PHOTON_OWNER_SPACE_ID, PHOTON_SENDER_ID).
-
-Inbound (not implemented): POST /photon/webhook verifying Standard Webhooks headers
-(webhook-id, webhook-timestamp, webhook-signature), dedupe on webhook-id, accept only the
-owner's texts. Approvals by text need the server, not the model, to send the approval prompt
-from the interrupt payload (see docs/ENGINEERING.md, "Deferred").
+The bridge is a small Node process (cd photon && npm start) that holds the Spectrum connection.
+  Outbound (this module, used by notify_me):
+    POST {PHOTON_BRIDGE_URL}/send   Authorization: Bearer {PHOTON_BRIDGE_TOKEN}
+    {"text": ..., "to": "owner" | "team"} -> 200 {"status": "sent"} once Spectrum accepted it.
+    The bridge can only text the team's own numbers from .env (PHOTON_OWNER_PHONE, PHOTON_TEAM_PHONE).
+  Inbound (the bridge itself): a text from those numbers starts a radar_worker run on a thread per
+  sender and the answer is texted back; approvals (send_outreach, watch_building) are texted by
+  the bridge from the interrupt payload and resumed with YES / NO. See photon/README.md.
 """
 
 from __future__ import annotations
 
 import os
-import uuid
 from typing import Any
 
 import httpx
 
-API = "https://api.photon.codes/v1/projects/{project}/messages"
+DEFAULT_URL = "http://127.0.0.1:8787"
 
 
 def configured() -> bool:
-    return all(os.environ.get(k) for k in ("PHOTON_API_KEY", "PHOTON_PROJECT_ID", "PHOTON_OWNER_SPACE_ID", "PHOTON_SENDER_ID"))
+    return bool(os.environ.get("PHOTON_BRIDGE_TOKEN"))
 
 
-async def send(text: str, space_id: str | None = None) -> dict[str, Any]:
+async def send(text: str, to: str = "owner", transport: httpx.AsyncBaseTransport | None = None) -> dict[str, Any]:
     if not configured():
         return {"status": "not_configured"}
-    url = API.format(project=os.environ["PHOTON_PROJECT_ID"])
-    headers = {"Authorization": f"Bearer {os.environ['PHOTON_API_KEY']}", "idempotency-key": uuid.uuid4().hex}
-    body = {"spaceId": space_id or os.environ["PHOTON_OWNER_SPACE_ID"], "senderId": os.environ["PHOTON_SENDER_ID"], "content": text}
+    url = os.environ.get("PHOTON_BRIDGE_URL", DEFAULT_URL).rstrip("/") + "/send"
+    headers = {"Authorization": f"Bearer {os.environ['PHOTON_BRIDGE_TOKEN']}"}
     try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            response = await client.post(url, headers=headers, json=body)
+        async with httpx.AsyncClient(timeout=20, transport=transport) as client:
+            response = await client.post(url, headers=headers, json={"text": text, "to": to})
+    except httpx.ConnectError:
+        return {"status": "bridge_offline"}
     except httpx.HTTPError as e:
         return {"status": "error", "detail": type(e).__name__}
-    return {"status": "accepted" if response.status_code == 202 else f"http_{response.status_code}"}
+    if response.status_code == 200:
+        return {"status": "sent"}
+    try:
+        detail = str(response.json().get("detail", ""))[:200]
+    except ValueError:
+        detail = ""
+    return {"status": f"http_{response.status_code}", "detail": detail}

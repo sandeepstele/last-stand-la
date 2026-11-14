@@ -63,7 +63,9 @@ Judging is at your table. Special-track judges come only in round 1 (9:30–12:3
 **Worker tick** (hourly cron, plus `scripts/heartbeat.py tick` as the demo button):
 1. `queue_next()` returns up to 3 buildings.
 2. For each: `verify_building`, `retrofit`, a dossier at `/properties/<pid>/dossier.md`, then `queue_done`.
-3. `notify_me` only when a finding crosses a threshold. Today that goes to the in-app outbox; it texts once Photon is configured.
+3. `notify_me` only when a finding crosses a threshold. It always lands in the in-app outbox and is texted through the iMessage bridge (`photon/`) when the bridge runs.
+
+**Texts** (Photon Spectrum, `photon/`): a text from a team number starts a `radar_worker` run on one thread per sender and the answer is texted back. When a run stops at an approval, the bridge (not the model) texts the request from the interrupt payload, and YES / NO resumes it with one decision per action request. Only the numbers in `.env` can text or be texted. See `photon/README.md`.
 
 **Field check** (stretch): see §7 and `ios/RadarField/README.md`. A stand-in scan never changes a verdict.
 
@@ -149,9 +151,9 @@ Decision: live = flash, worker = argon (`RADAR_ORCH_MODEL`, `RADAR_WORKER_MODEL`
 - **Repo:** the hackathon rule needs a **public** GitHub repo created this weekend. It holds no commits yet; push only `retrofit-radar/`, never the private planning repo. A pre-commit hook (`scripts/check_secrets.sh`) blocks `.env` files, keys and real fixtures.
 - **CoStar toolkit keys and terms:** ask the on-site engineers tonight what can be shown on Devpost and in screenshots. Real data stays gitignored.
 - **Deployment:** the public repo has no real fixtures, so deploy from a private mirror or seed the Store. Custom routes skip platform auth; the field token is their only gate.
-- **Photon:** the beta guidelines haven't been read. Text approvals need the server to send the prompt from the interrupt payload (the model can't, since HITL interrupts before tools run). Deferred.
+- **Photon:** built on Spectrum (`spectrum-ts` 12.16, cloud iMessage) as the `photon/` bridge, outbound and inbound with text approvals. On the free plan every number must be a project user in the Photon dashboard (`Target not allowed for this project` otherwise).
 - **iOS:** `NSAllowsArbitraryLoads` is on for LAN http during the hackathon. Use a throwaway token and rotate it after the event.
-- **Keys to rotate after judging:** Matterport, LangSmith and Google (all were pasted into chat).
+- **Keys to rotate after judging:** Matterport (personal and team), LangSmith, Google, Vexcel, NREL and the Spectrum project secret (all were pasted into chat).
 
 ## 12. Review log
 
@@ -166,6 +168,6 @@ Decision: live = flash, worker = argon (`RADAR_ORCH_MODEL`, `RADAR_WORKER_MODEL`
 | Writer and the auto general-purpose subagent inherited every tool | Major | Writer cut; explicit tool-less general-purpose |
 | Cron had no input; morning digest needed its own cron | Major | `heartbeat.py` passes input; digest cut (hourly tick plus manual tick) |
 | Field scans on local disk; blocking I/O under `langgraph dev` | Major | Store-backed scans; async handlers; verified with 0 blocking errors |
-| Photon addressing undefined; text approvals deadlock | Major | `photon.py` uses explicit space/sender IDs; text approvals deferred |
+| Photon addressing undefined; text approvals deadlock | Major | Spectrum bridge addresses by phone (allowlisted); the bridge, not the model, texts approvals and resumes them |
 | Peri forced; no projector; special-track judges only in round 1 | Major | Peri skipped; table demo; logistics in PLAN |
 | Placeholders and synthetic data unlabeled | Major | Assumption status plus provenance in every result; prompt labels them |
