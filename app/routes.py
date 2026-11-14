@@ -176,6 +176,15 @@ async def game_city(request: Request) -> JSONResponse:
     return JSONResponse(await asyncio.to_thread(fortress.city))
 
 
+async def game_suites(request: Request) -> JSONResponse:
+    from app import fortress
+
+    pid = request.path_params["pid"]
+    if not PID.match(pid) or not await asyncio.to_thread(fortress.building, pid):
+        return JSONResponse({"error": "not a building in the district"}, status_code=404)
+    return JSONResponse(await asyncio.to_thread(fortress.suites, pid))
+
+
 async def game_dossier(request: Request) -> JSONResponse:
     from app import fortress
 
@@ -253,6 +262,7 @@ app = Starlette(
         Route("/demo/reset", demo_reset, methods=["POST"]),
         Route("/game/district", game_district, methods=["GET"]),
         Route("/game/city", game_city, methods=["GET"]),
+        Route("/game/suites/{pid}", game_suites, methods=["GET"]),
         Route("/game/dossier/{pid}", game_dossier, methods=["GET"]),
         Route("/game/resolve", game_resolve, methods=["POST"]),
         Route("/cases/queue", cases_queue, methods=["GET"]),

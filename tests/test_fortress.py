@@ -213,3 +213,30 @@ def test_feed_photos_reach_the_screen_but_never_the_agent(monkeypatch, tmp_path)
     shown = fortress.with_feeds(base)
     assert shown["images"]["drone"] == ["feed_TEST-A_oblique_south.jpg"] and len(shown["images"]["inside"]) == 6
     assert shown["images"]["inside"][0] == {"face": "f0", "name": "feed_TEST-A_twin_p0_f0.jpg"}
+
+
+def test_suite_sweep_answer_key_comes_from_code(monkeypatch):
+    from app import cases, evidence
+
+    fortress._suites.cache_clear()
+    monkeypatch.setattr(cases, "ordered", lambda: [
+        {"case": "ghost_tenant", "property_id": "2", "suite": "1100", "label": "suite 1100: a 3-person office"},
+        {"case": "ghost_tenant", "property_id": "2", "suite": "1400", "label": "suite 1400: a 12-person office"},
+        {"case": "material_conflict", "property_id": "2"}])
+    monkeypatch.setattr(fortress, "building", lambda pid: {"label": "TEST-B"})
+    monkeypatch.setattr(evidence, "run_check", lambda pid, check, case, suite, notes: {"finding": f"{check} {suite}", "why": "w"})
+    verdicts = {"1100": ("leaning", "listing_stale"), "1400": ("unresolved", "still_there")}
+    monkeypatch.setattr(evidence, "weigh_case", lambda pid, case, checks, suite, notes: {"verdict": {
+        "label": verdicts[suite][0], "hypothesis": verdicts[suite][1], "confidence": 0.5, "text": "t"}})
+    s = fortress.suites("2")
+    assert [(x["n"], x["suite"], x["answer"]["group"]) for x in s["suites"]] == [(1, "1100", "there"), (2, "1400", "cant_tell")]
+    assert s["suites"][0]["who"] == "a 3-person office" and len(s["suites"][0]["clues"]) == 3
+    fortress._suites.cache_clear()
+
+
+def test_roof_facts_are_counts_only(monkeypatch):
+    monkeypatch.setattr(fortress, "_aerial", lambda pid: {"roof_shape": "flat", "roof_objects": {"skylight": 8}, "capture_date": "2025-12-01"})
+    r = fortress.roof("TEST-A")
+    assert r["objects"] == {"skylight": 8} and r["capture"] == "2025-12" and "illustrative" in r["note"]
+    monkeypatch.setattr(fortress, "_aerial", lambda pid: None)
+    assert fortress.roof("TEST-A") is None

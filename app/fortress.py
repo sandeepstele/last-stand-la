@@ -413,13 +413,14 @@ def with_feeds(d: dict[str, Any]) -> dict[str, Any]:
     images["drone"] = images["drone"] + [n for n in f["drone"] if n not in images["drone"]]
     if not images.get("inside") and f["inside"]:
         images["inside"] = [{"face": n.rsplit("_", 1)[-1].split(".")[0], "name": n} for n in f["inside"]]
+    images_roof = roof(pid)
     hops = VISION / f"feed_{pid}_hops.json"  # scan spots to walk between (scripts/fetch_hops.py), floor-plan metres
     if hops.exists():
         try:
             images["inside_hops"] = json.loads(hops.read_text())
         except ValueError:
             pass
-    return d | {"images": images}
+    return d | {"images": images} | ({"roof": images_roof} if images_roof else {})
 
 
 @lru_cache(maxsize=128)
@@ -624,4 +625,47 @@ def city() -> dict[str, Any]:
                     "has_tour": bool(feeds["inside"] or list(VISION.glob(f"{pid}_s*_p0_f*.jpg")) or list(VISION.glob(f"{pid}_twin_p0_f*.jpg")))})
     return {"center": {"lat": round(lat0, 6), "lon": round(lon0, 6)}, "count": len(out), "total_buildings": len(out),
             "total_cases": len(cases.ordered()), "buildings": out}
+
+
+# ------------------------------------------------------------------ side missions (HTTP only; never agent tool outputs)
+
+SWEEP_CHECKS = ["listing_timeline", "lease_terms", "tenancy_trail"]  # records-only clues: no vision, no model
+_GROUPS = {"still_there": "there", "listing_stale": "there", "gone_dark": "gone", "moved_within": "gone", "subleasing": "sublet"}
+
+
+@lru_cache(maxsize=32)
+def _suites(pid: str) -> str:
+    from app import cases
+
+    out = []
+    for n, c in enumerate(cases.ordered(), 1):
+        if c["case"] != "ghost_tenant" or str(c["property_id"]) != pid:
+            continue
+        clues = [{"check": k, "finding": (r := evidence.run_check(pid, k, "ghost_tenant", c["suite"], []))["finding"],
+                  "why": r.get("why")} for k in SWEEP_CHECKS]
+        w = evidence.weigh_case(pid, "ghost_tenant", SWEEP_CHECKS, c["suite"], [])
+        v = w["verdict"]
+        # the answer key comes from code: a lean (likely/leaning) is "there" / "gone" / "sublet"; unresolved is
+        # "cant_tell": the records alone don't settle it, and saying so is the right call
+        group = _GROUPS.get(v["hypothesis"], "cant_tell") if v["label"] in ("likely", "leaning") else "cant_tell"
+        out.append({"n": n, "suite": c["suite"], "who": (c.get("label") or "").split(": ", 1)[-1], "tonight": (pid, c["suite"]) in NIGHT_PIN,
+                    "clues": clues, "answer": {"group": group, "label": v["label"], "hypothesis": v["hypothesis"],
+                                               "confidence": v["confidence"], "text": v["text"]}})
+    b = building(pid)
+    return json.dumps({"pid": pid, "label": b["label"] if b else pid, "suites": out,
+                       "stamps": ["there", "gone", "sublet", "cant_tell"], "source": "CoStar records, code-weighed (no model)"})
+
+
+def suites(pid: str) -> dict[str, Any]:
+    """Ghost-suite sweep: every open ghost-tenant case in this building, with records-only clues and a code answer key."""
+    return json.loads(_suites(str(pid).strip()))
+
+
+def roof(pid: str) -> dict[str, Any] | None:
+    """Roof facts for the skylight mission: Vexcel counts only (no positions), so placement on screen is illustrative."""
+    aer = _aerial(pid)
+    if not aer:
+        return None
+    return {"shape": aer.get("roof_shape"), "material": aer.get("roof_material"), "objects": aer.get("roof_objects") or {},
+            "capture": (aer.get("capture_date") or "")[:7], "note": "counts from Vexcel; positions on screen are illustrative"}
 
