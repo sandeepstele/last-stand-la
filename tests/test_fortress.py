@@ -127,3 +127,40 @@ def test_osm_heights_and_point_in_outline():
 def test_district_has_no_blocks_without_the_osm_extract(monkeypatch, tmp_path):
     monkeypatch.setattr(fortress, "OSM", tmp_path / "missing.json")
     assert fortress._osm_blocks(34.0, -118.0) == []
+
+
+def test_night_cases_are_the_queue_cases_in_our_blocks(monkeypatch):
+    from app import cases, evidence
+
+    queue = [{"case": "ghost_tenant", "property_id": "9", "suite": "1", "imagery": True, "label": "suite 1: a 2-person office"},  # far away
+             {"case": "material_conflict", "property_id": "1", "imagery": True, "material": "Masonry"},
+             {"case": "ghost_tenant", "property_id": "2", "suite": "1100", "imagery": True, "label": "suite 1100: a 3-person office"},
+             {"case": "stale_entry", "property_id": "3", "imagery": False}]
+    where = {"1": {"x": -300.0, "z": -100.0, "label": "TEST-A"}, "2": {"x": 0.0, "z": 0.0, "label": "TEST-B"},
+             "3": {"x": 10.0, "z": 10.0, "label": "TEST-C"}, "9": {"x": 5000.0, "z": 0.0, "label": "TEST-far"}}
+    monkeypatch.setattr(cases, "ordered", lambda: queue)
+    monkeypatch.setattr(fortress, "building", lambda pid: where.get(str(pid)))
+    monkeypatch.setattr(evidence, "open_case", lambda pid, suite=None: {"cases": [{"case": "material_conflict" if pid == "1" else "ghost_tenant", "question": "Q?"}]})
+    out = fortress.night_cases()
+    assert out["total"] == 4 and out["in_area"] == 3
+    assert [(c["n"], c["property_id"], c["suite"]) for c in out["cases"]] == [(2, "1", None), (3, "2", "1100")]  # imagery first
+    assert out["cases"][0]["stakes"].endswith("CoStar records masonry")
+    assert out["cases"][1]["label"] == "suite 1100, TEST-B" and out["cases"][1]["stakes"].startswith("a 3-person office on record")
+
+
+def test_debrief_draft_is_built_in_code_and_cites_the_player(monkeypatch):
+    from app import cases, evidence
+
+    monkeypatch.setattr(cases, "ordered", lambda: [{"case": "ghost_tenant", "property_id": "2", "suite": "1100"}])
+    monkeypatch.setattr(fortress, "building", lambda pid: {"label": "TEST-B"})
+    seen = {}
+
+    def weigh(pid, case, checks, suite, notes):
+        seen.update(case=case, checks=checks)
+        return {"verdict": {"hypothesis": "listing_stale", "label": "unresolved", "confidence": 0.42, "text": "Unresolved: x"},
+                "correction_draft": None, "next_check": "a site visit", "trail": [{"check": "suite_tour", "finding": "empty"}]}
+    monkeypatch.setattr(evidence, "weigh_case", weigh)
+    d = fortress.draft("2", "1100", ["suite_tour"], [{"note": "empty", "source": "the player"}])
+    assert seen == {"case": "ghost_tenant", "checks": ["suite_tour", "human_report"]}
+    assert d["n"] == 1 and d["label"] == "suite 1100, TEST-B" and d["your_report"] == "empty"
+    assert d["text"].startswith("No correction drafted yet.") and "Next check: a site visit" in d["text"]

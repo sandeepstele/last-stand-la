@@ -1,6 +1,8 @@
 """Record and replay model responses: the labelled demo fallback for when Wi-Fi or Vertex fails.
 
   RADAR_REPLAY=record:<name>   run normally, save every model response to fixtures/replay/<name>.json
+  RADAR_REPLAY=fill:<name>     answer from the recording, and record only the steps it is missing (never overwrites):
+                               for a variant whose first steps match an existing recording but whose later data differs
   RADAR_REPLAY=<name>          answer from the recording (paced RADAR_REPLAY_DELAY_S apart, default 1.0 s);
                                a question that wasn't recorded goes to the live model as usual
   (unset)                      no wrapper at all: the live path is untouched
@@ -45,6 +47,8 @@ def mode() -> tuple[str, str] | None:
         return None
     if v.startswith("record:"):
         return "record", v.split(":", 1)[1] or "demo"
+    if v.startswith("fill:"):
+        return "fill", v.split(":", 1)[1] or "demo"
     return "replay", v
 
 
@@ -87,6 +91,7 @@ class ReplayChatModel(BaseChatModel):
     inner: Any
     name_: str = "demo"
     recording: bool = False
+    filling: bool = False  # replay hits, record misses
 
     @property
     def _llm_type(self) -> str:
@@ -112,10 +117,11 @@ class ReplayChatModel(BaseChatModel):
             log.warning("replay miss %s: system=%r question=%r tail=%s", k, system,
                         _text(messages[last_h])[:80] if last_h >= 0 else "",
                         [type(m).__name__ + (f":{m.name}" if isinstance(m, ToolMessage) else "") for m in messages[last_h + 1:]])
-            if os.environ.get("RADAR_REPLAY_STRICT") == "1":
+            if os.environ.get("RADAR_REPLAY_STRICT") == "1" and not self.filling:
                 raise RuntimeError(f"replay {self.name_} has no recording for this step ({k}); not calling the live model")
             return None
-        time.sleep(float(os.environ.get("RADAR_REPLAY_DELAY_S", "1.0")))
+        if not self.filling:
+            time.sleep(float(os.environ.get("RADAR_REPLAY_DELAY_S", "1.0")))
         msg = messages_from_dict([rec])[0]
         msg = msg if isinstance(msg, AIMessage) else AIMessage(content=msg.content)
         # fresh ids: a recorded id would make the reducer replace an earlier message instead of appending, and
@@ -128,7 +134,7 @@ class ReplayChatModel(BaseChatModel):
         if hit is None:
             model, rest = self._bound(dict(kwargs))
             hit = model.invoke(messages, stop=stop, **rest)
-            if self.recording:
+            if self.recording or self.filling:
                 _save(self.name_, key(messages), hit)
         return ChatResult(generations=[ChatGeneration(message=hit)])
 
@@ -139,7 +145,7 @@ class ReplayChatModel(BaseChatModel):
         if hit is None:
             model, rest = self._bound(dict(kwargs))
             hit = await model.ainvoke(messages, stop=stop, **rest)
-            if self.recording:
+            if self.recording or self.filling:
                 await asyncio.to_thread(_save, self.name_, key(messages), hit)
         return ChatResult(generations=[ChatGeneration(message=hit)])
 
@@ -148,4 +154,4 @@ def wrap(model: Any) -> Any:
     m = mode()
     if m is None or isinstance(model, str):
         return model
-    return ReplayChatModel(inner=model, name_=m[1], recording=m[0] == "record")
+    return ReplayChatModel(inner=model, name_=m[1], recording=m[0] == "record", filling=m[0] == "fill")

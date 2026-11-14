@@ -190,7 +190,9 @@ def ask(pid: str, key: str, images: list[Path], question: str, choices: list[str
 def suite_panos(pid: str, suite: str, model_id: str, panos: int = 2) -> list[Path]:
     """Side faces of the first panoramas of a suite's Matterport tour (team token, read-only query).
     Cube faces come back as [up, four sides, down]; only the sides show the room."""
-    hits = sorted(CACHE.glob(f"{pid}_s{suite}_p*_f*.jpg"))
+    # side faces only: the game also caches the up/down faces (f0, f5) for its 360 view, and they must not change
+    # which images (and so which cached answer) the suite tour read uses
+    hits = sorted(p for p in CACHE.glob(f"{pid}_s{suite}_p*_f*.jpg") if p.stem[-3:] not in ("_f0", "_f5"))
     if hits:
         return hits
     from app import matterport

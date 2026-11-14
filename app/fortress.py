@@ -31,7 +31,7 @@ from app import costar, evidence, quake, retrofit_lists
 
 CENTER_PID = "254167"
 RADIUS_M = 900
-SEED = 1990  # the demo night: holding the gamble loses wave 1, running to the fallback survives it (rolls stay in code)
+SEED = 2026  # the demo night: HOLD at 737 Broadway rolls 75, so a "concrete" report (walls 76) holds and "brick" (71) or "can't tell" (74) let them in; RUN to 755 Spring St rolls 12 and holds. Rolls stay in code.
 HEROES = ("6375735", "254167", "52227")
 NO_EXTRUDE = {"256390"}  # Vexcel's outline is 17 m tall for a 13-story record: likely another structure
 DISCLAIMER = "Game outcome, not an engineering assessment"
@@ -56,6 +56,8 @@ SECTORS = ("N", "NE", "E", "SE", "S", "SW", "W", "NW")
 # aerial mosaic under the playable area (fetched once into fixtures/vision, gitignored; the bounds are the box it was
 # extracted for, in district metres).
 ENTERABLE = ("6375735", "254167")
+# Agent message types this server handles AND has recorded for strict replay; the frontend sends only these.
+FEATURES = ("night_shift", "debrief")
 GROUND = {"image": "laststand_ground.jpg", "x0": -420, "z0": -220, "x1": 60, "z1": 60}
 
 
@@ -288,7 +290,7 @@ def district() -> dict[str, Any]:
     waves = [{"n": w["n"], "sector": w["sector"], "arrive_s": w["arrive_s"], "size": max(50, round(units * w["share"] / 10) * 10)}
              for w in WAVES]
     return {"center": {"lat": round(lat0, 6), "lon": round(lon0, 6)}, "radius_m": RADIUS_M, "seed": SEED,
-            "buildings": buildings, "waves": waves, "ground": _ground(), "blocks": backdrop,
+            "buildings": buildings, "waves": waves, "ground": _ground(), "blocks": backdrop, "features": list(FEATURES),
             "attribution": OSM_ATTRIBUTION if blocks else None}
 
 
@@ -498,3 +500,60 @@ def resolve(pid: str, wave: int, seed: int = SEED, action: str = "hold", to_pid:
            f"aftershock: quake {q['value']} + 40 vs roll {quake_roll}: " + ("the building rode it out" if quake_ok else "the building cracked")]
     return {"held": held, "walls": w["value"], "quake": q["value"], "walls_roll": walls_roll, "quake_roll": quake_roll,
             "why": "; ".join(why) + f". {DISCLAIMER}.", "pid_final": final}
+
+
+# ------------------------------------------------------------------ the night shift (real cases in the play area)
+
+PLAY_PAD_M = 80
+
+
+def night_cases(limit: int = 3) -> dict[str, Any]:
+    """The open auditor cases whose building lies in the play area (the ground mosaic +- 80 m), in queue order. Tonight's
+    shift works the ones whose imagery is already gathered (at most `limit`). Hedged questions; never a company name."""
+    from app import cases
+
+    g = GROUND
+    ordered = cases.ordered()
+    inside = []
+    for n, c in enumerate(ordered, 1):
+        b = building(c["property_id"])
+        if b and g["x0"] - PLAY_PAD_M <= b["x"] <= g["x1"] + PLAY_PAD_M and g["z0"] - PLAY_PAD_M <= b["z"] <= g["z1"] + PLAY_PAD_M:
+            inside.append((n, c, b))
+    tonight = []
+    for n, c, b in [x for x in inside if x[1].get("imagery")][:limit]:
+        suite = c.get("suite")
+        case = next((k for k in evidence.open_case(c["property_id"], suite).get("cases") or [] if k["case"] == c["case"]), None)
+        if c["case"] == "ghost_tenant":
+            label = f"suite {suite}, {b['label']}"
+            stakes = f"{(c.get('label') or '').split(': ', 1)[-1] or 'a tenant'} on record; the suite is listed for lease"
+        elif c["case"] == "material_conflict":
+            label = b["label"]
+            stakes = f"an unfinished city concrete retrofit order; CoStar records {(c.get('material') or 'another material').lower()}"
+        else:
+            label = b["label"]
+            stakes = "the city's list may name a building that was replaced"
+        tonight.append({"n": n, "case": c["case"], "property_id": c["property_id"], "suite": suite, "label": label,
+                        "question": case["question"] if case else None, "stakes": stakes})
+    return {"total": len(ordered), "in_area": len(inside), "cases": tonight}
+
+
+def draft(pid: str, suite: str | None, checks: list[str], notes: list[dict]) -> dict[str, Any]:
+    """The dawn debrief for one case worked tonight: its verdict and a hedged correction draft, built in code from
+    weigh_case and the evidence trail (citing any report the player made). Nothing is sent; filing it is a person's
+    call in the auditor."""
+    from app import cases
+
+    pid, case = str(pid).strip(), ("ghost_tenant" if suite else "material_conflict")
+    checks = list(dict.fromkeys(checks + (["human_report"] if notes and "human_report" not in checks else [])))
+    w = evidence.weigh_case(pid, case, checks, suite, notes)
+    v = w["verdict"]
+    n = next((i for i, c in enumerate(cases.ordered(), 1)
+              if c["case"] == case and str(c["property_id"]) == pid and (c.get("suite") or None) == (suite or None)), None)
+    b = building(pid)
+    where = b["label"] if b else pid
+    report = next((x.get("note") for x in reversed(notes) if x.get("source") == "the player"), None)
+    text = w.get("correction_draft") or (f"No correction drafted yet. {v['text']}." + (f" Next check: {w['next_check']}." if w.get("next_check") else ""))
+    return {"n": n, "case": case, "property_id": pid, "suite": suite, "label": f"suite {suite}, {where}" if suite else where,
+            "hypothesis": v["hypothesis"], "label_verdict": v["label"], "confidence": v["confidence"], "text": text,
+            "evidence": [{"check": t["check"], "finding": t["finding"]} for t in w["trail"]], "your_report": report}
+
