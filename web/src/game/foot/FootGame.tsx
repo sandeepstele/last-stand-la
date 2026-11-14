@@ -364,7 +364,8 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
     ctx.cameraOwner = "player";
     ctx.bus.emit("world:route", { pts: to ? [from, to] : null });
     ctx.bus.emit("world:beacon", { pid: toPid });
-    if (to) ctx.bus.emit("horde:target", { x: to[0], z: to[1] });
+    // The horde swarms the fortress you left (chasers still come for you); not the door you're running to.
+    if (hero?.door) ctx.bus.emit("horde:target", { x: hero.door.x, z: hero.door.z });
     setStep("escape");
     setBanner(breach ? { title: "They're through!", sub: to ? `Run to ${labelOf(toPid)}.` : "Get clear and survive.", tone: "bad" } : { title: `Run to ${labelOf(toPid)}`, sub: "Adrenaline: hold Shift and sprint the whole way. Space to shove.", tone: "warn" });
   };
