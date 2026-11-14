@@ -387,6 +387,22 @@ function FeedFrame({ slot, feed }: { slot: "drone" | "cctv"; feed: FeedView }) {
   );
 }
 
+// ------------------------------------------------------------------ damage feedback: a red flash on each hit, a pulsing edge when low
+function Hurt({ health }: { health: number }) {
+  const [prev, setPrev] = useState(health);
+  const [hits, setHits] = useState(0);
+  if (health !== prev) {
+    setPrev(health);
+    if (health < prev - 0.5) setHits((h) => h + 1);
+  }
+  return (
+    <>
+      {health < 30 && <div className={styles.lowEdge} />}
+      {hits > 0 && <div className={styles.hitFlash} key={hits} />}
+    </>
+  );
+}
+
 // ------------------------------------------------------------------ the HUD
 export function FootHud(p: HudProps) {
   const low = p.health < 30;
@@ -397,6 +413,7 @@ export function FootHud(p: HudProps) {
   const interact = p.barricade ? null : hints.find((h) => h.key === "E" && !h.disabled) ?? null;
   return (
     <div className={`${styles.root} ${styles.hud}`}>
+      <Hurt health={p.health} />
       <div className={styles.leftCol}>
         <Missions objectives={p.objectives} now={p.objective} timer={p.timer} survivors={p.survivors} badges={p.badges} />
         <FortressMini dossier={p.dossier} heroLabel={p.heroLabel} wallsNote={p.wallsNote} />

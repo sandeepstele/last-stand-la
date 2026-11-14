@@ -451,3 +451,9 @@
 .fileBtn:hover:not(:disabled) { filter: brightness(1.08); }
 .fileBtn:disabled { cursor: default; animation: none; color: #062b1b; background: var(--green); border-color: #9be8c3; }
 @media (max-width: 900px) { .stats { grid-template-columns: repeat(2, 1fr); } }
+
+/* ------------------------------------------------------------------ damage feedback */
+.lowEdge { position: absolute; inset: 0; pointer-events: none; box-shadow: inset 0 0 130px 24px rgba(229, 72, 77, 0.32); animation: lowPulse 1.1s ease-in-out infinite; }
+@keyframes lowPulse { 50% { box-shadow: inset 0 0 170px 44px rgba(229, 72, 77, 0.5); } }
+.hitFlash { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse at center, rgba(229, 72, 77, 0) 45%, rgba(229, 72, 77, 0.45) 100%); animation: hitFlash 0.45s ease-out both; }
+@keyframes hitFlash { from { opacity: 1; } to { opacity: 0; } }
