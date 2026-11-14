@@ -95,7 +95,8 @@ const squad = (name: string) => SQUAD[name] ?? `${name.charAt(0).toUpperCase()}$
 
 /** First sentence, markdown stripped, capped. */
 export function firstSentence(s: string, max = 150): string {
-  const clean = s.replace(/[#*_`>]+/g, "").replace(/\s+/g, " ").trim();
+  // Underscores become spaces ("non_ductile_concrete" -> "non ductile concrete"), not deletions.
+  const clean = s.replace(/[#*`>]+/g, "").replace(/_+/g, " ").replace(/\s+/g, " ").trim();
   const m = clean.match(/^(.+?[.!?])(\s|$)/);
   const one = m ? m[1] : clean;
   return one.length > max ? `${one.slice(0, max - 1).trimEnd()}…` : one;
