@@ -49,14 +49,14 @@ export function createCityMap(ctx: FootCtx, onLoad: (c: City) => void): System {
     const outside = rows.filter((r) => !inPlay(r.x, r.z)); // the play area already draws its own buildings
     const box = new THREE.BoxGeometry(1, 1, 1);
     box.translate(0, 0.5, 0);
-    const mat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+    const mat = new THREE.MeshBasicMaterial({ color: 0xffffff }); // unlit: readable from 2 km up at dusk
     const bars = new THREE.InstancedMesh(box, mat, Math.max(1, outside.length));
     const m = new THREE.Matrix4();
     const q = new THREE.Quaternion();
     const col = new THREE.Color();
     outside.forEach((r, i) => {
       const h = Math.max(6, Math.min(300, Number(r.height_m) || 12));
-      const w = h > 80 ? 30 : 22;
+      const w = h > 80 ? 60 : 45; // exaggerated footprints so the city reads from the air (heights stay real)
       m.compose(new THREE.Vector3(r.x, 0, r.z), q, new THREE.Vector3(w, h, w));
       bars.setMatrixAt(i, m);
       col.setHex(r.unfinished ? 0xc0392b : MATERIAL_COLOR[(r.material as Material) ?? "unknown"] ?? MATERIAL_COLOR.unknown);
@@ -70,12 +70,12 @@ export function createCityMap(ctx: FootCtx, onLoad: (c: City) => void): System {
 
     const cases = rows.filter((r) => r.case);
     if (cases.length) {
-      const geo = new THREE.CylinderGeometry(4, 4, 1, 8, 1, true);
+      const geo = new THREE.CylinderGeometry(28, 28, 1, 10, 1, true);
       geo.translate(0, 0.5, 0);
-      const pm = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false });
+      const pm = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false });
       pillars = new THREE.InstancedMesh(geo, pm, cases.length);
       cases.forEach((r, i) => {
-        m.compose(new THREE.Vector3(r.x, 0, r.z), q, new THREE.Vector3(1, 420, 1));
+        m.compose(new THREE.Vector3(r.x, 0, r.z), q, new THREE.Vector3(1, 900, 1));
         pillars!.setMatrixAt(i, m);
         pillars!.setColorAt(i, col.setHex(CASE_COLOR[r.case ?? ""] ?? 0xf5a524));
       });

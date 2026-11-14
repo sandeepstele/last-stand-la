@@ -477,10 +477,10 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
       }
 
       if (s === "intro") {
-        // From all of LA down to tonight's district: 4 km up to 110 m over 16 s.
+        // From all of LA down to tonight's district: 2.4 km up to 110 m over 16 s.
         const kk = Math.min(1, ctx.time / 16);
         const e = kk * kk * (3 - 2 * kk);
-        const alt = 4200 * (1 - e) + 110 * e, rad = 2600 * (1 - e) + 170 * e, ang = ctx.time * 0.12;
+        const alt = 2400 * (1 - e) + 110 * e, rad = 1800 * (1 - e) + 170 * e, ang = ctx.time * 0.12;
         if (ctx.camera.far < 30000) {
           ctx.camera.far = 30000;
           ctx.camera.updateProjectionMatrix();
@@ -1238,7 +1238,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
         </div>
       )}
       {step === "intro" && city && (
-        <div style={{ position: "absolute", left: 24, bottom: 24, zIndex: 45, pointerEvents: "none", color: "#e2e8f0", font: "600 13px/1.4 ui-monospace, monospace", background: "rgba(5,7,13,.6)", padding: "8px 12px", borderLeft: "3px solid #f5a524" }}>
+        <div style={{ position: "absolute", left: 24, bottom: 72, zIndex: 45, pointerEvents: "none", color: "#e2e8f0", font: "600 13px/1.4 ui-monospace, monospace", background: "rgba(5,7,13,.6)", padding: "8px 12px", borderLeft: "3px solid #f5a524" }}>
           ALL OF CoStar&apos;S LA RECORDS · {city.buildings.toLocaleString()} buildings · {city.cases} open cases (pillars of light)
         </div>
       )}
