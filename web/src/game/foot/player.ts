@@ -247,7 +247,7 @@ export function createPlayer(ctx: FootCtx): System {
       // camera pressed against the avatar (wall behind): fade it, and drop it entirely when the lens is in its head
       const near = rig.near();
       avatar.setFade(1 - 0.8 * near);
-      if (near > 0.85) avatar.root.visible = false;
+      if (near > 0.7) avatar.root.visible = false;
       const low = p.health > 0 && p.health < 35 ? (1 - p.health / 35) * (0.32 + 0.12 * Math.sin(t * 4.5)) : 0;
       const op = p.hidden ? 0 : Math.round(Math.max(flashV, low) * 100) / 100;
       if (op !== flashShown) {
