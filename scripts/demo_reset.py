@@ -7,6 +7,8 @@ Clears, in the running agent server's Store (LANGGRAPH_URL, default http://127.0
   ("notes", <any building or suite>)   team notes / human reports, so a judge's correction moves the case live
   ("corrections",)                     Approve / Reject decisions on correction drafts
   ("outbox",)                          notify_me / send_outreach drafts
+  paused background-worker threads           runs waiting at an approval (deleted, not decided), so the next
+                                             sweep or text starts on a clean thread
 Keeps fixtures/ (Vexcel, Matterport, vision answers, public data), so the demo stays fast and offline.
 Then re-warms the case queue.
 """
@@ -44,6 +46,11 @@ def main() -> None:
             if a.dry_run:
                 break
         cleared["/".join(prefix)] = n
+    paused = client.threads.search(metadata={"graph_id": "radar_worker"}, status="interrupted", limit=100)
+    for t in paused:
+        if not a.dry_run:
+            client.threads.delete(t["thread_id"])
+    cleared["paused worker threads"] = len(paused)
     print(("would clear " if a.dry_run else "cleared ") + ", ".join(f"{k}: {v}" for k, v in cleared.items()))
     try:
         import httpx

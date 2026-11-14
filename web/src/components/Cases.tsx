@@ -113,17 +113,45 @@ export function CaseQueue({ onOpen, busy }: { onOpen: (propertyId: string, suite
 
 type Inbox = { inbox: { kind: string; text: string; at: string }[]; decisions: { property_id: string; suite?: string; case: string; decision: string; at: string }[] };
 
+type Pending = { thread_id: string; actions: { name?: string; args: Record<string, unknown> }[] };
+
+function describePending(a: { name?: string; args: Record<string, unknown> }): string {
+  if (a.name === "file_correction") return `File this correction draft for a CoStar researcher: ${String(a.args.draft ?? "")}`;
+  if (a.name === "send_outreach") return `Record a message to ${String(a.args.to ?? "someone")} (a draft; nothing is sent): ${String(a.args.text ?? "")}`;
+  if (a.name === "watch_building") return `Start watching building ${String(a.args.property_id ?? "")}`;
+  return a.name ?? "an action";
+}
+
 export function InboxCard({ refreshKey }: { refreshKey: unknown }) {
   const [box, setBox] = useState<Inbox | null>(null);
+  const [pending, setPending] = useState<Pending[]>([]);
+  const [tick, setTick] = useState(0);
+  const [note, setNote] = useState<string | null>(null);
   useEffect(() => {
     fetch("/api/backend/cases/inbox").then((r) => (r.ok ? r.json() : null)).then(setBox).catch(() => setBox(null));
-  }, [refreshKey]);
+    fetch("/api/approvals").then((r) => r.json()).then((j: { pending?: Pending[] }) => setPending(j.pending ?? [])).catch(() => setPending([]));
+  }, [refreshKey, tick]);
+  const decide = async (thread_id: string, decision: "approve" | "reject") => {
+    const r = await fetch("/api/approvals", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ thread_id, decision }) }).catch(() => null);
+    setNote(r?.ok ? (decision === "approve" ? "Approved: the agent is recording it (nothing is sent)." : "Rejected: nothing recorded.") : "Could not reach the agent.");
+    setTimeout(() => setTick((t) => t + 1), 4000);
+  };
   const latest = box?.inbox.find((i) => i.kind === "notify_me");
-  if (!latest && !box?.decisions.length) return null;
+  if (!latest && !box?.decisions.length && !pending.length) return null;
   return (
     <section className={styles.card}>
       <h2>Inbox</h2>
       {latest && <p><strong>{latest.text}</strong> <span className={styles.muted}>({latest.at?.slice(0, 16).replace("T", " ")})</span></p>}
+      {pending.map((p) => (
+        <div key={p.thread_id} className={styles.draft}>
+          <p><span className={styles.badge}>WAITING FOR YOU</span> {p.actions.map(describePending).join("; ")}</p>
+          <div className={styles.approval}>
+            <button type="button" onClick={() => void decide(p.thread_id, "approve")}>Approve</button>
+            <button type="button" onClick={() => void decide(p.thread_id, "reject")}>Reject</button>
+          </div>
+        </div>
+      ))}
+      {note && <p className={styles.muted}>{note}</p>}
       {!!box?.decisions.length && (
         <ul className={styles.hypotheses}>
           {box.decisions.slice(0, 3).map((d, i) => (

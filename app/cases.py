@@ -39,8 +39,11 @@ def build_queue() -> dict:
         pass
     from app import vision
 
-    for c in cases:  # stakes stay pure; imaged cases sort first as a separate, labelled key
-        c["imagery"] = any(vision.CACHE.glob(f"{c['property_id']}_*.jpg"))
+    for c in cases:  # stakes stay pure; cases with their OWN imagery gathered sort first, as a separate key
+        if c["case"] == "ghost_tenant":
+            c["imagery"] = any(vision.CACHE.glob(f"{c['property_id']}_s{c['suite']}_*.jpg"))  # the suite's tour
+        else:
+            c["imagery"] = any(vision.CACHE.glob(f"{c['property_id']}_o*.jpg"))  # aerial: ortho / oblique
     cases.sort(key=lambda c: (not c["imagery"], -c["stakes"]))
     counts: dict[str, int] = {}
     for c in cases:
