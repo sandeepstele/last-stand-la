@@ -516,6 +516,7 @@ export const District3D = forwardRef<DistrictHandle, Props>(function District3D(
         el.className = styles.label;
         el.textContent = b.label;
         el.dataset.pid = b.pid;
+        el.addEventListener("click", () => onSelectRef.current(b.pid)); // labels are click targets too
         labels.appendChild(el);
         rec.label = el;
       }
