@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 from functools import lru_cache
+from statistics import median
 from typing import Any, Callable
 
 from app import costar, retrofit_lists
@@ -449,6 +450,52 @@ CHECKS: dict[str, Callable[..., dict[str, Any]]] = {
     "era_and_height": era_and_height,
     "site_structures": site_structures,
 }
+
+
+@lru_cache(maxsize=1)
+def check_stats() -> dict[str, dict[str, dict[str, Any]]]:
+    """Measure check movement over the local queue using cached inputs only.
+
+    A check's move is the largest absolute evidence delta it returned for a hypothesis.
+    Vision, Vexcel and Matterport helpers refuse cache misses while this runs, so warming
+    the stats can never trigger external requests.
+    """
+    from app import cases as case_queue, layers, vision
+
+    totals: dict[str, dict[str, dict[str, Any]]] = {}
+    with layers.cached_only(), vision.cached_only():
+        for row in case_queue.ordered():
+            case, pid, suite = row["case"], str(row["property_id"]), row.get("suite")
+            for check in CASES[case]["checks"]:
+                group = totals.setdefault(case, {}).setdefault(check, {"cases": 0, "moved_cases": 0,
+                                                                       "moves": [], "errors": 0})
+                try:
+                    result = run_check(pid, check, case, suite)
+                except Exception:
+                    group["errors"] += 1
+                    continue
+                group["cases"] += 1
+                move = max((abs(float(effect.get("delta", 0))) for effect in result.get("effects", [])), default=0.0)
+                if move > 0:
+                    group["moved_cases"] += 1
+                    group["moves"].append(move)
+
+    out: dict[str, dict[str, dict[str, Any]]] = {}
+    for case, checks in totals.items():
+        out[case] = {}
+        for check, group in checks.items():
+            n = group["cases"]
+            rate = group["moved_cases"] / n if n else 0.0
+            typical = median(group["moves"]) if group["moves"] else 0.0
+            out[case][check] = {
+                "cases": n,
+                "moved_cases": group["moved_cases"],
+                "move_rate": round(rate, 4),
+                "typical_move": round(typical, 2),
+                "expected_move": round(rate * typical, 3),
+                "errors": group["errors"],
+            }
+    return out
 
 
 # ------------------------------------------------------------------ cases

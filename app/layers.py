@@ -23,6 +23,8 @@ import json
 import math
 import os
 import re
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -33,6 +35,17 @@ from app.verify import Aerial, Records
 FIXTURES = Path(__file__).resolve().parent.parent / "fixtures"
 PROPERTY_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
 _MODES = {"costar": ("cached", "kit", "auto"), "vexcel": ("cached", "live", "auto")}
+_CACHED_ONLY: ContextVar[bool] = ContextVar("layers_cached_only", default=False)
+
+
+@contextmanager
+def cached_only():
+    """Make layer reads use local fixtures only in the current context."""
+    token = _CACHED_ONLY.set(True)
+    try:
+        yield
+    finally:
+        _CACHED_ONLY.reset(token)
 
 # CoStar property type -> the verifier's building_type (default floor-to-floor heights)
 VERIFIER_TYPE = {"Office": "office", "Industrial": "industrial", "Flex": "industrial", "GeneralRetail": "retail",
@@ -56,6 +69,8 @@ def check_property_id(property_id: str) -> str:
 
 
 def _mode(layer: str) -> str:
+    if _CACHED_ONLY.get() and layer in ("costar", "vexcel"):
+        return "cached"
     mode = os.environ.get(f"RADAR_LAYER_{layer.upper()}", "auto").strip().lower()
     if layer == "costar" and mode == "live":
         mode = "kit"

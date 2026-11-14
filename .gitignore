@@ -10,6 +10,8 @@ fixtures/*/*
 !fixtures/*/.gitkeep
 !fixtures/costar/TEST-A.json
 !fixtures/vexcel/TEST-A.json
+evals/cases.jsonl
+evals/*.private.jsonl
 
 # python / tooling
 .venv/
