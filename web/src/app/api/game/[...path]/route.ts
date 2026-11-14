@@ -23,7 +23,10 @@ async function forward(req: Request, path: string[]): Promise<Response> {
   if (!p) return Response.json({ error: "not allowed" }, { status: 404 });
   const init: RequestInit = { method: req.method, headers: { "content-type": req.headers.get("content-type") ?? "application/json" } };
   if (req.method === "POST") init.body = await req.text();
-  const r = await fetch(`${BACKEND}/${p}`, init).catch(() => null);
+  // The dossier may carry the checks run so far (the server recomputes walls with them + people's notes). Whitelisted shape.
+  const checks = new URL(req.url).searchParams.get("checks");
+  const q = p.startsWith("game/dossier/") && checks && /^[a-z_,]{1,300}$/.test(checks) ? `?checks=${checks}` : "";
+  const r = await fetch(`${BACKEND}/${p}${q}`, init).catch(() => null);
   if (!r) return Response.json({ error: "agent server unreachable" }, { status: 502 });
   return new Response(r.body, { status: r.status, headers: { "content-type": r.headers.get("content-type") ?? "application/json" } });
 }

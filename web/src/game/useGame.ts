@@ -99,6 +99,15 @@ export function useGame(stub: boolean) {
       .catch(() => setDossiers((m) => ({ ...m, [pid]: "error" })));
   }, [stub]);
 
+  // A dossier recomputed by the server with the checks run so far (walls follow the evidence + people's reports).
+  const [fresh, setFresh] = useState<Record<string, Dossier>>({});
+  const refreshDossier = useCallback((pid: string, checks: string[]) => {
+    if (stub || !checks.length) return;
+    getJson<Dossier>(`/api/game/dossier/${encodeURIComponent(pid)}?checks=${checks.join(",")}`)
+      .then((d) => d?.scores && setFresh((m) => ({ ...m, [pid]: d })))
+      .catch(() => {});
+  }, [stub]);
+
   // ------------------------------------------------------------ phase
   const [phase, setPhase] = useState<Phase>("dusk");
   const [fortress, setFortress] = useState<string | null>(null);
@@ -232,6 +241,7 @@ export function useGame(stub: boolean) {
   const reset = useCallback(() => {
     if (fallbackTimer.current) clearTimeout(fallbackTimer.current);
     agent.reset();
+    setFresh({});
     setPhase("dusk");
     setFortress(null);
     setSelected(null);
@@ -270,7 +280,7 @@ export function useGame(stub: boolean) {
     return d?.scores && d.pid === (fortress ?? selected) ? d : null;
   }, [messages, fortress, selected]);
   const focusPid = fortress ?? selected;
-  const dossier: DossierState | null = streamDossier ?? (focusPid ? dossiers[focusPid] ?? null : null);
+  const dossier: DossierState | null = (focusPid ? fresh[focusPid] : undefined) ?? streamDossier ?? (focusPid ? dossiers[focusPid] ?? null : null);
 
   // Done once the agent has answered the scout prompt (an AI message after the newest human one), or failed.
   const scoutDone = phase === "scout" && !agent.isLoading && lastHumanIndex(messages) >= 0
@@ -284,7 +294,7 @@ export function useGame(stub: boolean) {
     stub, district, districtError, retryDistrict,
     phase: shownPhase, selected, fortress, focusPid, dossier, wave, waveN,
     messages, isLoading: agent.isLoading, agentError: agent.error,
-    horde, fallback, proposal, decision, decideError, outcome, scoutDone, runDone, say, dossiers,
+    horde, fallback, proposal, decision, decideError, outcome, scoutDone, runDone, say, dossiers, refreshDossier,
     conflictMaterials,
     select, startScout, startNight, decide, goDawn, sendTip, reset,
   };

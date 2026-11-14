@@ -26,7 +26,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import type { Game } from "../useGame";
 import { evidenceUrl } from "../Pano";
-import { SECTOR_NAME, kind, latestResult, parse, radioLines, type Msg } from "../radio";
+import { SECTOR_NAME, checksFor, kind, latestResult, parse, radioLines, type Msg } from "../radio";
 import { DISCLAIMER, type Building } from "../types";
 import { boundsOf, buildColliders, createBus, dirOf, makeCollide, reachPoint, DOOR_R, SCOUT_R, type FootCtx, type Pt, type SupplySpot, type SurvivorSpot, type SurvivorState, type System } from "./engine";
 import { createInput, type Input } from "./input";
@@ -767,6 +767,13 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
     }
     return null;
   }, [game.messages, hero]);
+  // After each verdict on the fortress, ask the server for the walls recomputed with the checks so far (and your report).
+  const heroWeighs = useMemo(() => (hero ? game.messages.filter((m) => kind(m as Msg) === "tool" && (m as Msg).name === "weigh_case" && String(parse<{ property_id?: string }>(m as Msg)?.property_id) === hero.pid).length : 0), [game.messages, hero]);
+  const { refreshDossier } = game;
+  useEffect(() => {
+    if (hero && heroWeighs > 0) refreshDossier(hero.pid, checksFor(game.messages, hero.pid));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [heroWeighs, hero, refreshDossier]);
   const lean = hero ? game.conflictMaterials[hero.pid] ?? null : null;
   useEffect(() => {
     if (hero) ctxRef.current?.bus.emit("world:lean", { pid: hero.pid, material: lean });
