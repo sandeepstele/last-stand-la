@@ -115,13 +115,35 @@ def quake_replay(event_id: str = "ci3144585", limit: int = 8) -> dict:
     return quake.replay(event_id, limit)
 
 
+def _note_key(property_id: str, suite: str | None) -> str:
+    return f"{property_id}#{suite}" if suite else str(property_id)
+
+
 @tool
-def open_case(property_id: str, suite: str | None = None) -> dict:
+async def record_note(property_id: str, note: str, runtime: ToolRuntime, suite: str | None = None) -> str:
+    """Save a fact a person told you about a building or suite (e.g. "plans were submitted in October", "the
+    tenant is still there, I called them"). It is kept as a team note and shown on later investigations as a
+    claim to verify, never as evidence on its own."""
+    if runtime.store is None:
+        return "No store available; the note was not saved."
+    key = _note_key(property_id, suite)
+    await runtime.store.aput(("notes", key), uuid.uuid4().hex, {"note": note[:500], "at": _now()[:10]})
+    return f"Saved as a team note on {key}; later investigations will show it as a claim to verify."
+
+
+@tool
+async def open_case(property_id: str, runtime: ToolRuntime, suite: str | None = None) -> dict:
     """Open an investigation when the records contradict each other. Without suite: building cases
     (material_conflict: the city's concrete list vs CoStar's material; stale_entry: listed but newer than the
     ordinance), plus ghost_suites = suites CoStar records as occupied that are listed for lease. With suite: the
-    ghost_tenant case for that suite. Returns each case's question, hypotheses with priors, and the checks you can run."""
-    return evidence.open_case(property_id, suite)
+    ghost_tenant case for that suite. Returns each case's question, hypotheses with priors, the checks you can run,
+    and team_notes: facts people told the team earlier (claims to verify, not evidence)."""
+    out = await asyncio.to_thread(evidence.open_case, property_id, suite)
+    if runtime.store is not None:
+        items = await runtime.store.asearch(("notes", _note_key(property_id, suite)), limit=10)
+        if items:
+            out["team_notes"] = [{"note": i.value["note"], "noted_on": i.value["at"]} for i in items]
+    return out
 
 
 @tool
@@ -142,7 +164,7 @@ def weigh_case(property_id: str, case: str, checks: list[str], suite: str | None
 
 
 SEISMIC_TOOLS = [seismic_status, find_retrofit_targets, quake_replay]
-CASE_TOOLS = [open_case, check_evidence, weigh_case]
+CASE_TOOLS = [open_case, check_evidence, weigh_case, record_note]
 
 
 # ------------------------------------------------------------------ data layers (specialists)
