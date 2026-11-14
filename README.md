@@ -1,66 +1,108 @@
 # Retrofit Radar
 
-**The built world, ground-truthed.** A LangChain deep agent that checks a commercial building's listed area and stories against what the aerial and the interior twin actually measure, explains any gap before flagging it, and then sizes a solar and roof retrofit on numbers it trusts. A background worker keeps screening the watchlist. Built at HackPrinceton Fall 2026.
+**An AI auditor for CoStar's building records.** Retrofit Radar is a LangChain deep agent. It finds places where a CoStar building record disagrees with the city's own records, the aerial imagery (Vexcel) or the inside of the building (Matterport). It investigates each disagreement the way a researcher would, looking at the images itself, and hands back a draft correction with its evidence for a person to approve. Built at HackPrinceton Fall 2026.
 
-## Who it's for and the problem
+## The problem
 
-**Who:** commercial solar and retrofit developers and asset managers screening Houston and Los Angeles buildings.
+Decisions about buildings rest on their records: what a building is made of, who occupies it, whether ordered work was done. Records go stale quietly. Checking them means a researcher pulling permits, photos and tours one building at a time.
 
-**The problem:** retrofit decisions rest on records someone typed in once (square feet, stories, roof), and checking a portfolio means checking each building by hand.
+## What it does
 
-**What Retrofit Radar does:** it reads three layers for the same address:
-- **CoStar records:** what the building claims to be.
-- **Vexcel aerials:** what it looks like from above.
-- **Matterport twins:** what it looks like inside.
+The agent opens **cases** wherever independent sources disagree:
 
-When the layers disagree, it tests explanations such as a basement, a mezzanine, the floor count, a setback or a merged footprint. It then reports either **"verified inside and out"** or **"worth a look"**, with a range and a confidence, and never "the record is wrong". Finally it sizes solar on the usable roof and reports kWh per year and tonnes of CO2 avoided.
+| Case | The disagreement | Found in the CoStar kit (Houston + Los Angeles) |
+|---|---|---|
+| **Material conflict** | LA's non-ductile concrete retrofit list names the building; CoStar records another material | Only 12 of the 65 buildings matched to the city's concrete list are recorded as concrete by CoStar |
+| **Stale entry** | A city retrofit list still names a building that was replaced | 8 found; 2 backed by demolition permits |
+| **Ghost tenant** | CoStar records a company in a suite that is listed for lease right now | 316 suites, about 5,050 employees on record |
+
+For each case the agent:
+1. **Opens the case:** competing hypotheses, each with a prior confidence.
+2. **Chooses the evidence** most likely to separate them:
+   - city retrofit filings, permit wording, and demolition or new-building permits;
+   - year built and floor height against the materials used in that era;
+   - lease terms and the company's trail to newer locations;
+   - car counts across aerial captures;
+   - **vision reads** of Vexcel aerial and oblique imagery and Matterport 360° tours, each confirmed by a skeptical second pass.
+3. **Weighs the evidence in code**, not in the model. It returns a verdict (*likely*, *leaning* or *unresolved*), the next check, and a **draft correction** that a person approves or rejects. Nothing is sent to anyone.
+4. **Learns from people.** A correction texted in (for example, "the property manager says the tenant is still there") becomes evidence with a source and a date. It moves the case, capped so it never settles the case on its own, and the agent says where the person and the records disagree.
+
+**Examples (live runs):**
+- **247337, Los Angeles.** The city lists non-ductile concrete; CoStar records steel. The agent looked at the facade, saw "closely spaced vertical concrete fins running the full height", and a second look confirmed it. With the retrofit plans filed with the city's concrete program, the verdict is *likely concrete (0.73-0.82)*, with a correction draft for a CoStar researcher.
+- **11547997.** The agent compared the 2021 and 2026 aerial captures: a pitched-roof building was replaced by a new flat-roof one. That matches a 2022 demolition permit: *likely replaced (0.98)*.
+- **247386, suite 300.** CoStar records a 50-person office there, and the suite has been listed for 15 months. A leasing tour taken after the listing reads "furnished but unoccupied": *worth a look, leaning gone (0.42)*. A texted "the property manager says they're still there" moves it to *unresolved*, flags the conflict, and makes the next check a site visit.
 
 ## How it works
 
 ```
-question ─▶ orchestrator (deep agent, todos)
-             ├─ records · aerial · interior specialists (parallel subagents)
-             ├─ verify_building(property_id)  ← pure Python, loads every number from the data layers
-             ├─ scene verbs ─▶ 3D world pane (each action confirmed by the browser)
-             └─ retrofit(property_id)         ─▶ answer + approvals for anything that leaves the app
-heartbeat ─▶ background worker: queue → verify → dossier → notify
+live question ─▶ orchestrator (deepagents: todos, parallel specialists)
+                   ├─ records · aerial · interior · civic specialists (parallel task)
+                   ├─ open_case ─▶ check_evidence (the agent chooses) ─▶ weigh_case (pure Python)
+                   │      checks: filings · permits · era & height · tenancy trail · lot activity · vision (2-pass)
+                   ├─ scene verbs ─▶ 3D view (three.js)
+                   └─ draft correction ─▶ a person approves or rejects (recorded, never sent)
+texts (iMessage via Photon) ─▶ background worker ─▶ record_note ─▶ next investigation weighs it
 ```
 
-The architecture, contracts, verifier rules and build plan are in [docs/ENGINEERING.md](docs/ENGINEERING.md). The message schemas are in [contracts/](contracts/).
+- **Code holds the rules; the model holds the judgment.** Matching, deadlines, priors and evidence weights are deterministic and tested. The model chooses what to check, reads the images and explains. It never types a number a tool didn't return.
+- **deepagents features in use:**
+  - planning with todos;
+  - parallel subagents;
+  - a filesystem for dossiers;
+  - Store-backed team notes;
+  - human-in-the-loop approvals;
+  - a scheduled background worker;
+  - LangSmith traces.
+- **Speed:** a live case takes about 10-30 s. Model calls that stall on Vertex fall over to a faster model after 8 s.
+- **Models:**
+  - Gemini 3.8 Flash on Vertex AI orchestrates; Gemini 3.5 Flash-Lite runs the specialists;
+  - vision reads run on Gemini 3.8 Flash, or on Claude Opus 5.5 on Vertex AI with `RADAR_VISION_MODEL=claude-opus-5-5`.
+
+## Honesty and limits
+
+- **We never say a record or an owner is wrong.** Either source can be out of date, so verdicts are drafts for a person to review.
+- **"Unfinished" is not non-compliance.** Most retrofit orders are on schedule, with deadlines running to the 2040s. Only 13 of the 56 unfinished orders are past a deadline, even after the city's extensions.
+- **Vision is evidence, not a verdict.** Its weight is capped at 0.2, it needs a confirming second look, and "can't tell" is a valid answer.
+- **Car counts are lot-level** and count only as weak evidence. Tours are dated, and older tours count for less.
+- **An aerial outline bigger than its own parcel** usually includes a neighbor, so the agent refuses to compare areas there.
+- **Earthquake mode is a labeled replay** of the 1994 Northridge earthquake (USGS ShakeMap). It is an optional trigger, not live data.
+- **Company names are never shown.** Tenants appear as "a 50-person office".
+
+## Data
+
+- **CoStar hackathon kit:** properties, tenancies, companies, listings, attachments.
+- **Vexcel:** property attributes, ortho and oblique imagery, open-vocabulary detection, capture history.
+- **Matterport (team token, read-only queries):** layouts and 360° panoramas.
+- **Free public data:**
+  - LA's soft-story and non-ductile concrete retrofit lists;
+  - LADBS permits since 2020 (retrofit, demolition and new building);
+  - the USGS Northridge ShakeMap.
+
+**Licensed CoStar, Vexcel and Matterport data is not in this repository.** It is matched only on the machine that runs the agent, and nothing from the kit is sent to outside services. Synthetic `TEST-*` fixtures let the tests run without it.
 
 ## Run it
 
 ```bash
-uv venv && uv pip install -e . pytest "langgraph-cli[inmem]"   # Python 3.11+
-cp .env.example .env                                           # fill in keys; never commit .env
-.venv/bin/python -m pytest -q                                   # 51 tests, no network
-.venv/bin/langgraph dev --host 0.0.0.0 --port 2024 --no-browser # both graphs + /field/scan
-.venv/bin/python scripts/seed_store.py --queue TEST-A           # standing orders, skills, queue
+uv sync                                                   # Python 3.11+, dependencies + dev tools
+cp .env.example .env                                      # fill in keys; never commit .env
+uv run pytest -q                                          # offline tests, no network
+uv run python scripts/fetch_public.py                     # LA lists, permits, USGS (cached in fixtures/public)
+uv run langgraph dev --host 127.0.0.1 --port 2024 --no-browser --n-jobs-per-worker 4
 cd web && cp .env.local.example .env.local && npm install && npm run dev   # http://localhost:3000
 ```
 
-Models are set in `.env`:
-- **Live answers:** `gemini-3.8-flash` (`RADAR_ORCH_MODEL`), thinking low.
-- **Live specialists:** `gemini-3.5-flash-lite` (`RADAR_FAST_MODEL`), thinking minimal.
-- **Background worker:** `gemini-4-argon` (`RADAR_WORKER_MODEL`) with `gemini-3.8-flash` specialists (`RADAR_SPEC_MODEL`), thinking low.
+Optional:
+- **iMessage:** `cd photon && npm install && npm start`. This is the Photon Spectrum bridge; it needs `SPECTRUM_PROJECT_ID`, `SPECTRUM_PROJECT_SECRET`, `PHOTON_OWNER_PHONE` and `PHOTON_BRIDGE_TOKEN`, and each phone number must be added as a Photon project user.
+- **Demo helpers:**
+  - `scripts/demo_reset.py` clears team notes, decisions and drafts between demos;
+  - `scripts/demo_flow.py --runs 5` runs the scripted demo and prints a timing table;
+  - `scripts/quake_alert.py` fires the labeled Northridge replay.
+- **Offline fallback:**
+  - record a good run with `RADAR_REPLAY=record:demo`;
+  - replay it with `RADAR_REPLAY=demo` (add `RADAR_REPLAY_STRICT=1` to forbid live model calls).
 
-All run on Vertex AI. Live calls get 8 s per attempt and then move to the other model; the worker has no timeout ([docs/ENGINEERING.md](docs/ENGINEERING.md) §4).
+  The tools, images and 3D view stay real, and the UI shows a REPLAY badge.
 
-## What's real and what isn't (yet)
+## Team
 
-| Piece | Status |
-|---|---|
-| Verifier, twin analysis, field-scan parsing | Real; 51 tests |
-| Live and worker graphs through `langgraph dev` | Real. Live answer in 22–31 s; worker tick writes dossiers. |
-| CoStar / Vexcel data | **Cached fixtures.** `TEST-A` is **synthetic**. The CoStar toolkit adapter is in progress. |
-| Matterport | Real read-only client on the HackPrinceton team token: picks the best twin the CoStar kit links to each property (nearest 250 m, largest scanned floor). |
-| Web app | One page: 3D world pane, plan, specialists, verifier card, approvals |
-| Photon texting | Outbound adapter written; not configured. Notifications land in the in-app outbox. |
-| Radar Field (iOS LiDAR field check) | Compiles for device; see [ios/RadarField/README.md](ios/RadarField/README.md) |
-
-## Limits we are honest about
-
-- Solar yield, building electricity use, grid emissions and a few geometry constants are **placeholders** until sourced. Every result lists them.
-- Footprint × stories approximates gross area; listed figures follow other conventions. That is why the verifier reports a **band**, not a point.
-- A phone scan measures rooms, not buildings: its ceiling height only caps the floor count.
-- Data from CoStar, Vexcel and Matterport is licensed for the event and is not in this repository.
+[TEAM: names, Discord usernames]. Built at HackPrinceton Fall 2026 (Nov 13-15).

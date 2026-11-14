@@ -1,8 +1,32 @@
 # Retrofit Radar engineering plan
 
-Fri Nov 13, 11:15 pm ET. Reviewed by four independent passes (integration, sponsor fit, scope, reliability/security); every blocker they found is fixed in code or listed under "Open". Everything marked **verified** was run on this machine tonight.
+**Current frame (Sat Nov 14, from 9:11 am): the AI auditor for CoStar's records.** The agent opens a *case* wherever a
+CoStar record disagrees with another source, chooses the evidence that would settle it, weighs it in code, and hands back
+a draft correction for a person to approve. Case types and their code:
 
-## 1. What we are building
+| Case | Disagreement | Code |
+|---|---|---|
+| material_conflict | LA's non-ductile concrete list vs CoStar's recorded material | `app/retrofit_lists.py`, `app/evidence.py` |
+| stale_entry | a city retrofit list still names a replaced building | `app/retrofit_lists.py`, `app/evidence.py` |
+| ghost_tenant | a tenant on record in a suite that is listed for lease | `app/tenants.py`, `app/evidence.py` |
+
+- **Evidence:** reusable checks return `{finding, effects: [{hypothesis, delta}], why}` (`app/evidence.py`). Vision checks
+  (`app/vision.py`: Vexcel ortho/oblique/dated captures, Matterport panoramas) need a confirming second pass and are capped
+  at ±0.2. Human reports (`record_note` → `human_report`) are capped at +0.35 and flagged when they contradict the records.
+- **Tools:** `open_case`, `check_evidence`, `weigh_case`, `record_note`, `seismic_status`, `find_retrofit_targets`,
+  `quake_replay`, plus the earlier verifier and scene tools. The live answer takes 3 model turns, plus 2 when a case is open.
+- **UI:** queue (`GET /cases/queue`), 3D view, case file with live confidence bars, evidence images
+  (`GET /evidence/image/{name}`) and Approve/Reject (`POST /cases/decision`, recorded only).
+- **Demo:** `scripts/demo_reset.py`, `scripts/demo_flow.py`, and the labelled replay fallback (`app/replay.py`).
+- Sections below are the original Friday plan (solar headline). The engineering rules still hold: the model never types a
+  number, the data layers load by property ID, and licensed data stays local.
+
+---
+
+*Original plan, Fri Nov 13, 11:15 pm ET. Reviewed by four independent passes (integration, sponsor fit, scope,
+reliability/security).*
+
+## 1. What we were building (Friday)
 
 Retrofit Radar checks a commercial building's listed area and stories (CoStar records) against what the aerial (Vexcel) and the interior twin (Matterport) measure. When they disagree, it tests explanations before flagging anything: basement, mezzanine, floor count, setback, merged footprint. Then it sizes a solar and roof retrofit on numbers it trusts and shows it in 3D. A background worker keeps screening the watchlist.
 
@@ -43,7 +67,7 @@ Judging is at your table. Special-track judges come only in round 1 (9:30–12:3
 | Graphs, prompts, models | `app/agent.py`, `app/prompts.py` | A | Both graphs run through `langgraph dev`. Live run 39.7 s with no tool errors. Worker tick finished, wrote a dossier and marked the queue item done. |
 | Tools | `app/tools.py` | A | Numbers loaded by property ID; tool errors become messages (ToolErrorMiddleware) |
 | Data layers | `app/layers.py`, `app/matterport.py` | **C** | CoStar data kit + live Vexcel (cached) + Matterport twins via the team token (read-only, best linked twin within 250 m), all with provenance. |
-| Verifier | `app/verify.py`, `app/interior.py`, `app/field.py` | C | 51 tests, including a regression test for every reviewer finding |
+| Verifier | `app/verify.py`, `app/interior.py`, `app/field.py` | C | Covered by the test suite (142 tests), including a regression test for every reviewer finding |
 | Scene verbs + confirmations | `app/scene.py`, `web/src/lib/useSceneActions.ts`, `web/src/app/api/ack/route.ts` | B | Backend loop verified with a scripted frontend: 3 of 3 actions confirmed. Browser rendering not yet run. |
 | Web app | `web/` | B | Builds and type-checks. One page. |
 | HTTP routes | `app/routes.py` | D | Upload, token gate and Store writes verified through `langgraph dev` |
@@ -103,7 +127,7 @@ Schemas live in `contracts/`. Store namespaces:
 .venv/bin/python scripts/seed_store.py --queue TEST-A              # standing orders, skills, worker queue
 cd web && cp .env.local.example .env.local && npm run dev          # http://localhost:3000
 .venv/bin/python scripts/heartbeat.py tick                         # one worker tick now
-.venv/bin/python -m pytest -q                                      # 51 tests
+.venv/bin/python -m pytest -q                                      # 142 tests, offline
 ```
 
 `langgraph dev` runs one job at a time locally, so a worker tick and a live question queue behind each other. Don't tick during a demo.
