@@ -299,7 +299,8 @@ export function FootGame({ game, replay, agentOff = false }: { game: Game; repla
           setTip({ chosen: t.chosen, sentAt: g.messages.length });
         }
         const scoutBusy = g.phase === "scout" && !g.scoutDone;
-        const tipBusy = t.chosen !== null && (t.sentAt === null || g.isLoading);
+        // A report is required before the night: the replay covers scout -> tip -> wave, in that order.
+        const tipBusy = (!!hero.conflict && t.chosen === null) || (t.chosen !== null && (t.sentAt === null || g.isLoading));
         if (k.has("KeyE") && (agentOff || (!tipBusy && !scoutBusy && g.phase !== "dusk"))) {
           // Step out: the night begins.
           [p.x, p.z] = ctx.collide(heroDoor[0] + dirOf(hero.door?.facing ?? 180)[0] * 2.5, heroDoor[1] + dirOf(hero.door?.facing ?? 180)[1] * 2.5, 0.5);
@@ -336,7 +337,6 @@ export function FootGame({ game, replay, agentOff = false }: { game: Game; repla
         if (!g.decision && !g.outcome) {
           if (k.has("KeyH")) g.decide("hold");
           else if (k.has("KeyR")) g.decide("run");
-          else if (k.has("KeyN")) g.decide("none");
         }
         if (g.decision) {
           if (g.decision.action === "run") startEscape(ctx, false);
@@ -537,7 +537,7 @@ export function FootGame({ game, replay, agentOff = false }: { game: Game; repla
   const hints: Hint[] = [];
   if (step === "approach" || step === "escape" || step === "night") hints.push({ key: "WASD", label: "move" }, { key: "Shift", label: "sprint" }, { key: "Space", label: "shove" });
   if (step === "approach" && hud.nearDoor) hints.push({ key: "E", label: `go inside ${heroLabel}` });
-  if (step === "night" && !game.decision) hints.push({ key: "H", label: "hold" }, { key: "R", label: runLabel ? `run to ${runLabel}` : "run", disabled: !runLabel }, { key: "N", label: "no orders" });
+  if (step === "night" && !game.decision) hints.push({ key: "H", label: "hold" }, { key: "R", label: runLabel ? `run to ${runLabel}` : "run", disabled: !runLabel });
   if (step === "dawn") hints.push({ key: "Enter", label: "play again" });
 
   const objective =
@@ -563,7 +563,7 @@ export function FootGame({ game, replay, agentOff = false }: { game: Game; repla
 
   const insideMode: InsideMode = step === "hold" ? "barricade" : "look";
   const showInside = (step === "inside" || step === "hold") && !!hero;
-  const exitAllowed = step === "inside" && game.phase !== "dusk" && !(game.phase === "scout" && !game.scoutDone) && !(tip.chosen !== null && (tip.sentAt === null || game.isLoading));
+  const exitAllowed = step === "inside" && (agentOff || (game.phase !== "dusk" && !(game.phase === "scout" && !game.scoutDone) && !(!!hero?.conflict && tip.chosen === null) && !(tip.chosen !== null && (tip.sentAt === null || game.isLoading))));
   const tipStatus =
     tip.chosen === null ? "Your report is testimony: strong, capped, never final."
     : tip.sentAt === null ? "HQ is still on the radio. Your report goes when the line is clear."
@@ -602,7 +602,7 @@ export function FootGame({ game, replay, agentOff = false }: { game: Game; repla
           mode={insideMode}
           question={step === "inside" && hero.conflict ? { prompt: "What are the walls made of?", choices: TIP_CHOICES, chosen: tip.chosen, status: tipStatus } : null}
           note={step === "hold" ? (game.outcome ? "Something gives…" : "Barricaded. The horde is at the door. HQ is rolling the night…") : insideFaces.length ? "Real interior: this building's own 3D tour." : null}
-          exitHint={exitAllowed ? "[E] step outside" : step === "inside" ? "Wait for HQ…" : null}
+          exitHint={exitAllowed ? "[E] step outside" : step === "inside" ? (hero.conflict && tip.chosen === null ? "Answer first: what do the walls look like?" : "Wait for HQ…") : null}
           onChoose={(i) => tip.chosen === null && setTip({ chosen: i, sentAt: null })}
         />
       )}

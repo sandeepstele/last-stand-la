@@ -188,7 +188,7 @@ export function useGame(stub: boolean) {
       answered.current = agent.interruptKey;
       const d: HitlDecision = choice === "none" ? { type: "reject" }
         : choice === proposal.action ? { type: "approve" }
-        : { type: "edit", edited_action: { name: "commit_plan", args: choice === "run" ? { pid: proposal.pid, action: "run", to_pid: runTo } : { pid: proposal.pid, action: "hold" } } };
+        : { type: "edit", edited_action: { name: "commit_plan", args: choice === "run" ? { pid: proposal.pid, action: "run", to_pid: runTo } : { pid: proposal.pid, action: "hold", to_pid: null } } };
       setDecision({ action: choice, to_pid: choice === "run" ? runTo : undefined });
       setDecideError(null);
       agent.respond(d).catch((e: unknown) => {
