@@ -755,7 +755,7 @@ export function createHorde(ctx: FootCtx): System {
             gx = fbuf[0];
             gz = fbuf[1];
           }
-          sp = MARCH_SPEED * speedMul[i];
+          sp = ZOMBIE_CHASE * 0.95 * speedMul[i]; // drawn to the light: they hurry
         } else {
           mob[i] = 2; // crowd round it and sway
           sp = 0.35;

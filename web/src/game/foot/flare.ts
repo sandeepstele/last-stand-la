@@ -15,7 +15,7 @@ const FADE_S = 1.2;
 const FLIGHT_S = 0.85;
 const ARC_H = 2.8; // metres above the straight line at mid-flight
 const THROW_MIN = 14, THROW_MAX = 18;
-const LIGHT_I = 55, LIGHT_R = 18, LIGHT_DECAY = 1.6;
+const LIGHT_I = 80, LIGHT_R = 18, LIGHT_DECAY = 1.6;
 const SMOKE_N = 22, SMOKE_EVERY = 0.11, SMOKE_LIFE = 2.6;
 
 type Phase = "idle" | "flying" | "burning";
@@ -203,9 +203,9 @@ export function createFlare(ctx: FootCtx): System {
           m.s.position.x += m.vx * dt;
           m.s.position.z += m.vz * dt;
           m.s.position.y += (1.1 - a * 0.4) * dt;
-          m.s.scale.setScalar(0.5 + a * 2.4);
+          m.s.scale.setScalar(0.6 + a * 2.8);
           const mat = m.s.material;
-          mat.opacity = 0.32 * Math.sin(Math.min(1, a * 4) * Math.PI * 0.5) * (1 - a) * (0.4 + 0.6 * fade);
+          mat.opacity = 0.42 * Math.sin(Math.min(1, a * 4) * Math.PI * 0.5) * (1 - a) * (0.4 + 0.6 * fade);
           mat.color.copy(smokeRed).lerp(smokeGrey, Math.min(1, a * 1.6));
         }
         if (fade <= 0 && !anySmoke) douse(f);
