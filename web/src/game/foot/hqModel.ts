@@ -154,6 +154,8 @@ export type EffectView = { sign: "up" | "down"; text: string };
 export type EvidenceView = {
   id: string; at: number; name: string; finding: string | null; effects: EffectView[];
   pending: boolean; vision: boolean; human: boolean;
+  /** run_check's selection_reason: why the agent chose this check (code-computed stats behind it). */
+  why?: string | null;
 };
 export type BriefCase = {
   id: string; n: number | null; type: string; short: string; where: string; stakes: string | null; question: string | null;
@@ -178,7 +180,7 @@ export type HqView = {
 type Spec = { case: string; question: string; hypotheses: { key: string; claim: string; prior: number }[]; checks?: unknown[] };
 type OpenCase = { property_id?: unknown; suite?: unknown; tenant?: unknown; cases?: Spec[] };
 type Effect = { hypothesis: string; delta: number };
-type Check = { property_id?: unknown; suite?: unknown; case?: string; check?: string; finding?: string; effects?: Effect[]; status?: string };
+type Check = { property_id?: unknown; suite?: unknown; case?: string; check?: string; finding?: string; effects?: Effect[]; status?: string; selection_reason?: string };
 type Weighed = {
   property_id?: unknown; suite?: unknown; case?: string; posterior?: Record<string, number>; checks_used?: string[];
   trail?: { check: string; finding?: string; effects?: Effect[] }[];
@@ -437,6 +439,7 @@ export function hqModel(messages: readonly unknown[], heroPid: string | null, bu
         cards.push({
           id: `c-${c.check}`, at, name: checkName(c.check!), finding: c.finding ? clean(c.finding, 140) : null,
           effects: effectsOf(c.effects, short), pending: false, vision: VISION.has(c.check!), human: c.check === "human_report",
+          why: c.selection_reason ? clean(c.selection_reason, 130) : null,
         });
       }
       if (busy) {

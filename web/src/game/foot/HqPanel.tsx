@@ -236,6 +236,7 @@ function EvidenceCard({ e }: { e: EvidenceView }) {
         )}
       </div>
       {e.finding && <p>{e.finding}</p>}
+      {e.why && <p style={{ color: "#f5a524", opacity: 0.85, fontStyle: "italic" }}>Why HQ chose it: {e.why}</p>}
     </li>
   );
 }

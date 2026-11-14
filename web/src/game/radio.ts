@@ -45,12 +45,17 @@ export function report(content: unknown): string {
 }
 
 export function parse<T>(m: Msg): T | null {
-  try {
-    const v = JSON.parse(text(m.content)) as unknown;
-    return v && typeof v === "object" ? (v as T) : null;
-  } catch {
-    return null;
-  }
+  const raw = text(m.content);
+  const tryParse = (s: string): T | null => {
+    try {
+      const v = JSON.parse(s) as unknown;
+      return v && typeof v === "object" ? (v as T) : null;
+    } catch {
+      return null;
+    }
+  };
+  // After an edited HOLD/RUN, the server prefixes the tool result with "Note: a human reviewer replaced this tool call…".
+  return tryParse(raw) ?? (raw.indexOf("{") > 0 ? tryParse(raw.slice(raw.indexOf("{"))) : null);
 }
 
 /** Index of the newest human message, or -1. */

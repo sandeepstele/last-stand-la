@@ -43,8 +43,9 @@ function useLiveAgent(): AgentView {
   }, [stream]);
   const respond = useCallback((d: HitlDecision) => stream.respond({ decisions: [d] }), [stream]);
   const reset = useCallback(() => setStale(stream.threadId), [stream.threadId]);
+  const messages = useMemo(() => (hidden ? [] : normalizeTools(stream.messages as unknown[])), [hidden, stream.messages]);
   return {
-    messages: hidden ? [] : stream.messages,
+    messages,
     isLoading: stream.isLoading,
     interruptValue: hidden ? null : ((stream.interrupt?.value as HitlValue | undefined) ?? null),
     interruptKey: stream.interrupt,
@@ -52,6 +53,25 @@ function useLiveAgent(): AgentView {
     threadId: hidden ? null : stream.threadId,
     submit, respond, reset,
   };
+}
+
+// The game agent's evidence tool is `run_check` (it states why it chose the check); everything on the page reads
+// `check_evidence`. Present one name, keep every other field (incl. selection_reason).
+const TOOL_ALIAS: Record<string, string> = { run_check: "check_evidence" };
+function normalizeTools(ms: unknown[]): unknown[] {
+  return ms.map((raw) => {
+    const m = raw as Msg & { tool_calls?: { name?: string }[] };
+    const alias = (n?: string) => (n ? TOOL_ALIAS[n] : undefined);
+    const renameSelf = !!alias(m.name);
+    const renameCalls = !!m.tool_calls?.some((c) => alias(c.name));
+    if (!renameSelf && !renameCalls) return raw;
+    return {
+      ...m,
+      type: kind(m),
+      ...(renameSelf ? { name: alias(m.name) } : {}),
+      ...(renameCalls ? { tool_calls: m.tool_calls!.map((c) => (alias(c.name) ? { ...c, name: alias(c.name) } : c)) } : {}),
+    };
+  });
 }
 
 async function getJson<T>(url: string, init?: RequestInit): Promise<T> {
