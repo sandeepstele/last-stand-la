@@ -50,14 +50,14 @@ void main() {
     uv.x += (hash(vec2(floor(uv.y * res.y / 3.0), floor(time * 12.0))) - 0.5) * 0.0025;
     vec3 s = texture2D(map, uv).rgb;
     float l = dot(s, vec3(0.299, 0.587, 0.114));
-    l = pow(max(l, 0.0), 0.75) * 1.9 + 0.012;
+    l = pow(max(l, 0.0), 0.85) * 1.45 + 0.01;
     c = vec3(l * 0.80, l, l * 0.84);
     c *= 0.86 + 0.14 * sin(uv.y * res.y * 3.14159);
     c += (hash(uv * res + fract(time) * 91.0) - 0.5) * 0.025;
     c *= 1.0 - dot(q, q) * 1.3;
   } else {
     vec3 s = texture2D(map, uv).rgb;
-    c = pow(max(s, vec3(0.0)), vec3(0.85)) * 1.8 + vec3(0.004, 0.006, 0.008);
+    c = pow(max(s, vec3(0.0)), vec3(0.9)) * 1.5 + vec3(0.004, 0.006, 0.008);
     c *= 1.0 - dot(q, q) * 0.7;
     // thin centre reticle
     vec2 px = abs(q * res);

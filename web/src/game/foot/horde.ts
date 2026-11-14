@@ -18,20 +18,27 @@ const MAX = 260; // hard cap on live zombies
 const WAVE_CAP = 220;
 
 // states
-const FREE = 0, PENDING = 1, WANDER = 2, MARCH = 3, CHASE = 4, ATTACK = 5, STAGGER = 6, LEAVING = 7;
+const FREE = 0, PENDING = 1, WANDER = 2, MARCH = 3, CHASE = 4, ATTACK = 5, STAGGER = 6, LEAVING = 7, STUN = 8, LURED = 9;
 // kinds
 const AMBIENT = 0, WAVE = 1, PACK = 2;
 
-const HIT_R = 1.1, HIT_DAMAGE = 7, HIT_CD = 1;
+const HIT_R = 1.1, HIT_DAMAGE = 4, HIT_CD = 1; // forgiving for first-time players (was 7)
 // Playability: however big the crowd, at most this many hits land on the player per second (the rest jostle).
-const PLAYER_HITS_PER_S = 3;
+const PLAYER_HITS_PER_S = 2;
+// Flares: zombies within LURE_R that aren't in contact walk to the flare, crowd it and sway until it burns out.
+const LURE_R = 35, LURE_NOTICE = 4, LURE_CROWD = 3.2, FLARE_SLOTS = 3, LURE_FIELD_CELLS = 24;
+// On its way to the flare (and for its first LURE_GRACE s) a lured zombie only snaps back on contact, so a flare can pull
+// a crowd off you or the door; once it's crowding the flare, anyone within LURE_NOTICE breaks the spell.
+const LURE_GRACE = 3, LURE_CONTACT = 1.0;
+// Flashlight stun: hold the beam (within STUN_R, +-STUN_HALF of the aim, line of sight) on a zombie for STUN_HOLD s.
+const STUN_R = 14, STUN_HALF = (12 * Math.PI) / 180, STUN_HOLD = 1.2, STUN_S = 2.5, STUN_CD = 6;
 const SHOVE_R = 2.8, SHOVE_COS = Math.cos((70 * Math.PI) / 180), SHOVE_DIST = 3, KB_TAU = 0.25, STAGGER_S = 1.2;
 const CLOSE_NOTICE = 6, SPRINT_NOTICE = 1.6, LOSE_R = NOTICE_R * 2.4;
 const CELL = 3, GRID_BITS = 6, GRID_MASK = (1 << GRID_BITS) - 1, NB = 1 << (GRID_BITS * 2);
 const SEP_D = ZOMBIE_R * 2.15, SEP_D2 = SEP_D * SEP_D;
 const RISE_S = 1.2, SINK_S = 4, SINK_DEPTH = 2.1;
 const WANDER_SPEED = ZOMBIE_WALK * 0.6;
-const MARCH_SPEED = ZOMBIE_WALK * 1.75; // ~2.5 m/s: the wave reaches the door in ~30-45 s
+const MARCH_SPEED = ZOMBIE_WALK * 1.65; // ~2.5 m/s: the wave reaches the door in ~30-45 s
 const MOB_R = 7; // marchers this close to the target crowd and pound on it
 const AMBIENT_MIN = 45, AMBIENT_MAX = 100, AMBIENT_RECYCLE = 170;
 const TRICKLE_S = 8;
@@ -86,7 +93,7 @@ export function createHorde(ctx: FootCtx): System {
       );
     };
   }
-  const matEyes = new THREE.MeshBasicMaterial({ color: 0xc8ff7a, fog: false });
+  const matEyes = new THREE.MeshBasicMaterial({ color: 0xffffff, fog: false }); // the eye colour is per instance
   const matDisc = new THREE.MeshBasicMaterial({ color: 0xffffff, depthTest: false, depthWrite: false, fog: false });
 
   const mk = (g: THREE.BufferGeometry, m: THREE.Material, n: number) => {
@@ -129,6 +136,9 @@ export function createHorde(ctx: FootCtx): System {
   const wx = new Float32Array(MAX), wz = new Float32Array(MAX);
   const mob = new Uint8Array(MAX);
   const los = new Uint8Array(MAX);
+  const lit = new Float32Array(MAX), stunCd = new Float32Array(MAX); // flashlight: seconds held in the beam, cooldown
+  const lure = new Int8Array(MAX).fill(-1); // flare slot a LURED zombie walks to
+  const lureAt = new Float32Array(MAX); // when it was lured
   const hx = new Float32Array(MAX), hz = new Float32Array(MAX); // a pack's home (the survivor it guards) // chasers: can they see the player (refreshed a few times a second)
   // looks (fixed per zombie)
   const scale = new Float32Array(MAX), seed = new Float32Array(MAX), hunch = new Float32Array(MAX);
@@ -147,6 +157,9 @@ export function createHorde(ctx: FootCtx): System {
   const grid = createFlowGrid(ctx.colliders, ctx.bounds);
   const toTarget = grid.makeField(Infinity);
   const toPlayer = grid.makeField(PLAYER_RADIUS_CELLS);
+  // lit road flares (slots recycled; flEnd = burn-out time)
+  const flX = new Float64Array(FLARE_SLOTS), flZ = new Float64Array(FLARE_SLOTS), flEnd = new Float64Array(FLARE_SLOTS).fill(-1);
+  const flField = Array.from({ length: FLARE_SLOTS }, () => grid.makeField(LURE_FIELD_CELLS));
   let playerFieldT = 0, needPlayerField = false;
   const cbuf = new Float64Array(2), fbuf = new Float64Array(2);
   let hasTarget = false, tx = 0, tz = 0;
@@ -157,6 +170,7 @@ export function createHorde(ctx: FootCtx): System {
 
   const col = new THREE.Color();
   const markColor = { calm: new THREE.Color(0xc21d1d), hot: new THREE.Color(0xff3b30) };
+  const eyeBase = new THREE.Color(0xc8ff7a), eyeHot = new THREE.Color(1.6, 1.6, 1.3), eyeDim = new THREE.Color(0x1d2a12), eyeTmp = new THREE.Color();
 
   function paint(i: number) {
     const skin = col.setHSL(0.2 + Math.random() * 0.11, 0.14 + Math.random() * 0.16, 0.36 + Math.random() * 0.16);
@@ -211,6 +225,9 @@ export function createHorde(ctx: FootCtx): System {
     wz[i] = pz;
     mob[i] = 0;
     los[i] = 1;
+    lit[i] = 0;
+    stunCd[i] = 0;
+    lure[i] = -1;
     scale[i] = 0.9 + Math.random() * 0.2;
     seed[i] = Math.random();
     hunch[i] = 0.12 + Math.random() * 0.3;
@@ -361,6 +378,31 @@ export function createHorde(ctx: FootCtx): System {
         hx[i] = e.x;
         hz[i] = e.z;
         timer[i] = Math.random() * 2;
+      }
+    }),
+  );
+
+  offs.push(
+    bus.on("flare:lit", (e) => {
+      // take an expired slot, else the one burning out soonest (its crowd resumes, or is re-lured below)
+      let k = 0;
+      for (let j = 1; j < FLARE_SLOTS; j++) if (flEnd[j] < flEnd[k]) k = j;
+      for (let i = 0; i < MAX; i++) if (st[i] === LURED && lure[i] === k) st[i] = fallbackState(i);
+      flX[k] = e.x;
+      flZ[k] = e.z;
+      flEnd[k] = ctx.time + Math.max(0.5, Number(e.secs) || 8);
+      flField[k].build(e.x, e.z);
+      for (let i = 0; i < MAX; i++) {
+        const s = st[i];
+        if (s !== WANDER && s !== MARCH && s !== CHASE && s !== LURED) continue; // attacking, stunned, staggered: busy
+        const fd = Math.hypot(x[i] - e.x, z[i] - e.z);
+        if (fd > LURE_R) continue;
+        if (s === CHASE && Math.hypot(x[i] - P.x, z[i] - P.z) < HIT_R + 0.6) continue; // in contact: not distracted
+        if (s === LURED && lure[i] >= 0 && Math.hypot(x[i] - flX[lure[i]], z[i] - flZ[lure[i]]) < fd) continue; // a nearer flare
+        st[i] = LURED;
+        lure[i] = k;
+        lureAt[i] = ctx.time;
+        slideT[i] = 0;
       }
     }),
   );
@@ -525,6 +567,9 @@ export function createHorde(ctx: FootCtx): System {
     const kbDecay = Math.exp(-dt / KB_TAU);
     const noticeR = NOTICE_R * (P.sprinting ? SPRINT_NOTICE : 1);
     let alive = 0, chasing = 0, nearest = Infinity, pressing = 0;
+    // the player's flashlight (on at night, not inside): aim = yaw (+ pitch, leniently)
+    const beamOn = ctx.dawn < 0.5 && !P.hidden;
+    const afx = Math.sin(P.yaw), afz = -Math.cos(P.yaw), beamPitch = P.pitch - 0.1;
     let qn = 0;
     if (seen) {
       qX[0] = P.x;
@@ -581,7 +626,33 @@ export function createHorde(ctx: FootCtx): System {
       hitCd[i] -= dt;
       mob[i] = 0;
 
+      // flashlight: held on a zombie long enough, it's dazzled (stunned) for a moment
+      stunCd[i] -= dt;
+      let inBeam = false;
+      if (beamOn && s !== STUN && s !== LEAVING && stunCd[i] <= 0 && pd < STUN_R && pd > 0.3) {
+        const cosH = -(pdx * afx + pdz * afz) / pd; // the zombie is at -pd from the player
+        const half = STUN_HALF + Math.atan(0.35 / pd); // its body has width: easier up close
+        if (cosH > Math.cos(half) && Math.abs(beamPitch - Math.atan2(-0.1, pd)) < half + 0.25) inBeam = !blocked(P.x, P.z, zx, zz, cols);
+      }
+      lit[i] = inBeam ? lit[i] + dt : Math.max(0, lit[i] - dt * 2);
+      if (lit[i] >= STUN_HOLD) {
+        s = STUN;
+        timer[i] = STUN_S;
+        lit[i] = 0;
+        stunCd[i] = STUN_S + STUN_CD;
+        vx[i] = vz[i] = 0;
+        bus.emit("zombie:stunned", { x: zx, z: zz });
+      }
+
       // noticing / losing the player
+      if (s === LURED) {
+        // mesmerised: only someone right next to it breaks the spell
+        const atFlare = lure[i] >= 0 && Math.hypot(flX[lure[i]] - zx, flZ[lure[i]] - zz) < LURE_CROWD + 1.5;
+        if (qk >= 0 && d < (atFlare && now - lureAt[i] >= LURE_GRACE ? LURE_NOTICE : LURE_CONTACT)) {
+          s = CHASE;
+          los[i] = 1;
+        } else if (lure[i] < 0 || now >= flEnd[lure[i]]) s = fallbackState(i);
+      }
       if (s === WANDER || s === MARCH) {
         noticeT[i] -= dt;
         if (noticeT[i] <= 0) {
@@ -680,6 +751,24 @@ export function createHorde(ctx: FootCtx): System {
             bus.emit("player:hit", { damage: HIT_DAMAGE, fromX: zx, fromZ: zz });
           }
         }
+      } else if (s === LURED) {
+        const k = lure[i];
+        const fdx = flX[k] - zx, fdz = flZ[k] - zz, fd = Math.hypot(fdx, fdz) || 1e-3;
+        gx = fdx / fd;
+        gz = fdz / fd;
+        if (fd > LURE_CROWD) {
+          if (fd > 6 && flField[k].dir(zx, zz, fbuf)) {
+            gx = fbuf[0];
+            gz = fbuf[1];
+          }
+          sp = ZOMBIE_CHASE * 0.95 * speedMul[i]; // drawn to the light: they hurry
+        } else {
+          mob[i] = 2; // crowd round it and sway
+          sp = 0.35;
+        }
+      } else if (s === STUN) {
+        timer[i] -= dt;
+        if (timer[i] <= 0) s = d < NOTICE_R ? CHASE : fallbackState(i);
       } else if (s === STAGGER) {
         timer[i] -= dt;
         if (timer[i] <= 0) s = d < NOTICE_R ? CHASE : fallbackState(i);
@@ -697,6 +786,7 @@ export function createHorde(ctx: FootCtx): System {
         }
       }
       st[i] = s;
+      if (lit[i] > 0) sp *= 1 - 0.45 * Math.min(1, lit[i] / STUN_HOLD); // flinching in the beam
 
       // stuck against a wall? slide along it (tangent) for a while
       if (sp > 0.3 && !mob[i] && s !== ATTACK) {
@@ -757,7 +847,8 @@ export function createHorde(ctx: FootCtx): System {
       // facing
       let want = yaw[i];
       if ((s === CHASE || s === ATTACK || s === STAGGER) && qk >= 0) want = Math.atan2(dx, -dz);
-      else if (mob[i]) want = Math.atan2(tx - zx, -(tz - zz));
+      else if (mob[i] === 1) want = Math.atan2(tx - zx, -(tz - zz));
+      else if (mob[i] === 2) want = Math.atan2(flX[lure[i]] - zx, -(flZ[lure[i]] - zz));
       else if (spd[i] > 0.15) want = Math.atan2(vx[i], -vz[i]);
       let dy = want - yaw[i];
       dy -= Math.round(dy / (Math.PI * 2)) * Math.PI * 2;
@@ -808,7 +899,8 @@ export function createHorde(ctx: FootCtx): System {
       const hr = headRoll[i] + Math.sin(now * 1.2 + sd * 4) * 0.12;
       let legA = swing, legB = -swing;
       let y = bob;
-      if (s === ATTACK || mob[i]) {
+      let zL = -0.07, zR = 0.07;
+      if (s === ATTACK || mob[i] === 1) {
         // pounding / grabbing (PG): arms rise and fall, alternating
         const t = now * (s === ATTACK ? 9 : 6) + sd * 10;
         aL = 1.3 + Math.sin(t) * 0.55;
@@ -822,6 +914,24 @@ export function createHorde(ctx: FootCtx): System {
         aR = 1.9 + Math.sin(now * 13 + sd * 5) * 0.4;
         roll += Math.sin(now * 11 + sd) * 0.14;
         hp += 0.25 * k;
+      } else if (s === STUN) {
+        // dazzled: stagger back, hands over the eyes, face turned down
+        const k = Math.min(1, (STUN_S - timer[i]) / 0.25);
+        lean = (0.2 + Math.sin(now * 7 + sd * 5) * 0.06) * k + lean * (1 - k);
+        aL = 2.05 * k + aL * (1 - k) + Math.sin(now * 17 + sd) * 0.05;
+        aR = 2.0 * k + aR * (1 - k) + Math.sin(now * 15 + sd * 3) * 0.05;
+        zL = 0.42 * k - 0.07 * (1 - k);
+        zR = -0.42 * k + 0.07 * (1 - k);
+        hp -= 0.35 * k;
+        roll += Math.sin(now * 9 + sd * 2) * 0.08;
+        legA = legB = 0;
+      } else if (mob[i] === 2) {
+        // round the flare: arms lowered, swaying, gazing at the light
+        aL = 0.75 + Math.sin(now * 1.3 + sd * 4) * 0.15;
+        aR = 0.7 + Math.sin(now * 1.1 + sd * 7) * 0.15;
+        roll += Math.sin(now * 1.6 + sd * 6) * 0.14;
+        lean -= 0.04;
+        hp += 0.3;
       } else if (s === LEAVING) {
         aL = 0.35 + Math.sin(ph) * 0.1;
         aR = 0.3 - Math.sin(ph) * 0.1;
@@ -849,9 +959,16 @@ export function createHorde(ctx: FootCtx): System {
       mH.multiplyMatrices(mT, local(mL, 0, TORSO_H + 0.03, -0.02, hp, hr));
       head.setMatrixAt(i, mH);
       eyes.setMatrixAt(i, mH);
-      mO.multiplyMatrices(mT, local(mL, -SHOULDER_X, TORSO_H - 0.07, 0, aL, -0.07));
+      // eyes: green glow; in the beam they flare white and flicker faster as the stun builds; dazzled = dim
+      if (s === STUN) eyes.setColorAt(i, eyeDim);
+      else if (lit[i] > 0) {
+        const k = Math.min(1, lit[i] / STUN_HOLD);
+        const flick = Math.sin(now * (14 + 26 * k) + sd * 9) > 0.15 - 0.6 * k ? 1 : 0.35;
+        eyes.setColorAt(i, eyeTmp.copy(eyeBase).lerp(eyeHot, k).multiplyScalar(flick * (1 + k)));
+      } else eyes.setColorAt(i, eyeBase);
+      mO.multiplyMatrices(mT, local(mL, -SHOULDER_X, TORSO_H - 0.07, 0, aL, zL));
       arms.setMatrixAt(i * 2, mO);
-      mO.multiplyMatrices(mT, local(mL, SHOULDER_X, TORSO_H - 0.07, 0, aR, 0.07));
+      mO.multiplyMatrices(mT, local(mL, SHOULDER_X, TORSO_H - 0.07, 0, aR, zR));
       arms.setMatrixAt(i * 2 + 1, mO);
       mO.multiplyMatrices(mB, local(mL, -HIP_X, HIP_Y, 0, legA, 0));
       legs.setMatrixAt(i * 2, mO);
@@ -867,6 +984,7 @@ export function createHorde(ctx: FootCtx): System {
     }
     for (const m of meshes) m.instanceMatrix.needsUpdate = true;
     discs.instanceColor!.needsUpdate = true;
+    eyes.instanceColor!.needsUpdate = true;
   }
 
   ctx.horde.alive = 0;
@@ -874,7 +992,7 @@ export function createHorde(ctx: FootCtx): System {
   ctx.horde.nearest = Infinity;
   ctx.horde.pressing = 0;
   // dev only: test scripts read the horde's state (window.__horde)
-  if (process.env.NODE_ENV !== "production") (window as unknown as { __horde?: unknown }).__horde = { st, kind, x, z, target: () => (hasTarget ? [tx, tz] : null) };
+  if (process.env.NODE_ENV !== "production") (window as unknown as { __horde?: unknown }).__horde = { st, kind, x, z, lit, target: () => (hasTarget ? [tx, tz] : null) };
 
   return {
     update,
