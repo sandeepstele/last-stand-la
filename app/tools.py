@@ -269,6 +269,10 @@ async def _outbox(runtime: ToolRuntime, kind: str, payload: dict[str, Any], deli
 @tool
 async def notify_me(text: str, runtime: ToolRuntime) -> str:
     """Text the user (their own number) a short finding. Not gated."""
+    if ((getattr(runtime, "config", None) or {}).get("configurable") or {}).get("channel") == "imessage":
+        # The run came from a text: the bridge texts its answer back, so don't send a second text.
+        await _outbox(runtime, "notify_me", {"text": text[:600]}, {"status": "inbox_only_imessage_run"})
+        return "Saved to the in-app inbox; your final answer is what gets texted back."
     delivery = await photon.send(text[:600])
     await _outbox(runtime, "notify_me", {"text": text[:600]}, delivery)
     if delivery["status"] == "sent":

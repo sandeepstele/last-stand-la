@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { describeActions, lastAiText, normalizePhone, parseDecision, plain, resumeFor, threadFor } from "./lib.ts";
+import { allowedSender, describeActions, inboundText, lastAiText, normalizePhone, parseDecision, plain, resumeFor, threadFor } from "./lib.ts";
 
 test("normalizePhone accepts the formats people type", () => {
   assert.equal(normalizePhone("5551234567"), "+15551234567");
@@ -17,15 +17,30 @@ test("threadFor is a stable UUID per sender", () => {
   assert.notEqual(a, threadFor("+15551234568"));
 });
 
-test("parseDecision reads YES/NO and nothing else", () => {
+test("parseDecision accepts only a whole-message YES or NO", () => {
   assert.equal(parseDecision("YES"), "approve");
-  assert.equal(parseDecision(" yes please "), "approve");
-  assert.equal(parseDecision("ok"), "approve");
-  assert.equal(parseDecision("No"), "reject");
-  assert.equal(parseDecision("cancel that"), "reject");
+  assert.equal(parseDecision(" yes! "), "approve");
+  assert.equal(parseDecision("No."), "reject");
+  assert.equal(parseDecision("ok, but change the wording first"), null);
+  assert.equal(parseDecision("yes please"), null);
+  assert.equal(parseDecision("no wait, approve it"), null);
   assert.equal(parseDecision("yesterday's building?"), null);
-  assert.equal(parseDecision("is 235279 worth it?"), null);
-  assert.equal(parseDecision("nothing"), null);
+});
+
+test("allowedSender is exact, E.164 and iMessage only", () => {
+  const allowed = new Set(["+15551234567"]);
+  assert.equal(allowedSender("+15551234567", "iMessage", allowed), true);
+  assert.equal(allowedSender("+15551234567", undefined, allowed), true);
+  assert.equal(allowedSender("+15551234567", "SMS", allowed), false);
+  assert.equal(allowedSender("5551234567@outlook.com", "iMessage", allowed), false);
+  assert.equal(allowedSender("+15551234568", "iMessage", allowed), false);
+});
+
+test("inboundText reads texts and swipe-replies, ignores tapbacks and receipts", () => {
+  assert.equal(inboundText({ type: "text", text: " YES " }), "YES");
+  assert.equal(inboundText({ type: "reply", content: { type: "text", text: "no" } }), "no");
+  assert.equal(inboundText({ type: "reaction" }), null);
+  assert.equal(inboundText({ type: "read" }), null);
 });
 
 test("resumeFor sends one decision per action request", () => {
@@ -40,7 +55,7 @@ test("describeActions names what will happen", () => {
     { name: "send_outreach", args: { to: "owner@example.com", text: "Hi" } },
     { name: "watch_building", args: { property_id: "TEST-A", reason: "re-roof soon" } },
   ]);
-  assert.match(text, /send owner@example.com this message: "Hi"/);
+  assert.match(text, /record a message to owner@example.com \(a draft in the app; nothing is sent to them\): "Hi"/);
   assert.match(text, /start watching building TEST-A \(re-roof soon\)/);
 });
 
@@ -60,5 +75,5 @@ test("lastAiText takes only this run's final answer", () => {
 });
 
 test("plain drops markdown iMessage would show literally", () => {
-  assert.equal(plain("**2,775 kW** on `235279`\n## Verdict"), "2,775 kW on 235279\nVerdict");
+  assert.equal(plain("**1,234 kW** on `TEST-A`\n## Verdict"), "1,234 kW on TEST-A\nVerdict");
 });

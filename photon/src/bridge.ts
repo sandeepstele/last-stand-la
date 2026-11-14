@@ -16,13 +16,17 @@ import { env, optionalEnv } from "./env.ts";
 import {
   type ActionRequest,
   type PendingInterrupt,
+  QUAKE_ALERT,
+  allowedSender,
   describeActions,
   frame,
+  inboundText,
   lastAiText,
   normalizePhone,
   parseDecision,
   plain,
   resumeFor,
+  sameIds,
   tail,
   threadFor,
 } from "./lib.ts";
@@ -86,6 +90,20 @@ const server = http.createServer(async (req, res) => {
     res.end(JSON.stringify(body));
   };
   if (req.method === "GET" && req.url === "/healthz") return reply(200, { ok: true, assistant: ASSISTANT, numbers: ALLOWED.size });
+  if (req.method === "POST" && req.url === "/trigger") {
+    if (!authorized(req.headers.authorization)) return reply(401, { status: "unauthorized" });
+    let body: Record<string, unknown>;
+    try {
+      body = await readJson(req);
+    } catch (err) {
+      return reply(400, { status: "error", detail: errMsg(err) });
+    }
+    const eventId = typeof body.event_id === "string" && /^[a-z0-9]{4,20}$/.test(body.event_id) ? body.event_id : "ci3144585";
+    const owner = { send: async (t: string) => (await dm(OWNER)).send(t) };
+    void enqueue(OWNER, () => runAndReport(OWNER, { input: { messages: [{ role: "user", content: QUAKE_ALERT(eventId) }] } }, owner, owner));
+    console.log(`[trigger] quake replay ${eventId} -> owner ${tail(OWNER)}`);
+    return reply(202, { status: "started", event_id: eventId });
+  }
   if (req.method !== "POST" || req.url !== "/send") return reply(404, { status: "not_found" });
   if (!authorized(req.headers.authorization)) return reply(401, { status: "unauthorized" });
   let body: Record<string, unknown>;
@@ -111,8 +129,16 @@ const server = http.createServer(async (req, res) => {
 
 // ---------- inbound: texts -> agent runs ----------
 
+const texted = new Map<string, string[]>(); // thread -> ids of the interrupts whose approval prompt we texted
+
 async function pendingInterrupts(threadId: string): Promise<PendingInterrupt[]> {
-  const state = await lg.threads.getState(threadId);
+  let state;
+  try {
+    state = await lg.threads.getState(threadId);
+  } catch (err) {
+    if ((err as { status?: number })?.status === 404) return []; // new thread
+    throw err;
+  }
   return state.tasks.flatMap((t) => t.interrupts ?? []).map((it) => ({
     id: it.id,
     actions: (it.value as { action_requests?: ActionRequest[] } | undefined)?.action_requests ?? [],
@@ -123,66 +149,89 @@ async function messageCount(threadId: string): Promise<number> {
   try {
     const state = await lg.threads.getState(threadId);
     return ((state.values as { messages?: unknown[] })?.messages ?? []).length;
-  } catch {
-    return 0; // new thread
+  } catch (err) {
+    if ((err as { status?: number })?.status === 404) return 0;
+    throw err;
+  }
+}
+
+const ids = (p: PendingInterrupt[]) => p.map((x) => x.id ?? "");
+
+async function textApproval(threadId: string, pending: PendingInterrupt[], to: Sendable): Promise<void> {
+  texted.set(threadId, ids(pending));
+  await to.send(`Approval needed: ${describeActions(pending.flatMap((p) => p.actions))}\nReply YES to approve or NO to reject.`);
+}
+
+type Reply = { send(content: string): Promise<unknown> };
+
+/** Start or resume a run on the sender's thread, then text the answer or the approval it stopped at. */
+async function runAndReport(from: string, payload: Record<string, unknown>, reply: Reply, chat: Sendable,
+                            fallback?: string): Promise<void> {
+  const threadId = threadFor(from);
+  try {
+    const before = await messageCount(threadId);
+    const values = await lg.runs.wait(threadId, ASSISTANT, {
+      ...payload,
+      ifNotExists: "create",
+      metadata: { trigger: "imessage" },
+      config: { configurable: { channel: "imessage" } }, // notify_me stays in the inbox for these runs
+      signal: AbortSignal.timeout(RUN_TIMEOUT_MS),
+    });
+    const next = await pendingInterrupts(threadId);
+    if (next.length) return await textApproval(threadId, next, chat);
+    const answer = lastAiText(values, before);
+    await reply.send(answer ? plain(answer) : fallback ?? "Done.");
+  } catch (err) {
+    console.error(`[run] failed: ${errMsg(err)}`);
+    // A run can outlive our wait (it keeps going on the server): if it stopped at an approval, say so.
+    const pending = await pendingInterrupts(threadId).catch(() => []);
+    if (pending.length) return await textApproval(threadId, pending, chat);
+    const offline = /fetch failed|ECONNREFUSED|ENOTFOUND/i.test(errMsg(err));
+    await reply.send(offline ? "Radar's agent server isn't reachable right now. Try again in a minute."
+                             : "That one is taking longer than expected or failed; it's in the logs.");
+  }
+}
+
+async function handleInbound(from: string, space: InboundSpace, message: Inbound, text: string): Promise<void> {
+  console.log(`[inbound] ${text.length} chars from ${tail(from)}`);
+  await message.react("👍").catch(() => {}); // instant acknowledgement
+  const threadId = threadFor(from);
+  const reply = { send: (t: string) => message.reply(t) };
+  const work = async () => {
+    const pending = await pendingInterrupts(threadId);
+    if (pending.length) {
+      const decision = parseDecision(text);
+      if (!decision || !sameIds(ids(pending), texted.get(threadId) ?? [])) {
+        // Not a clear YES/NO, or not the approval we showed (e.g. the bridge restarted): show it again.
+        return await textApproval(threadId, pending, space);
+      }
+      texted.delete(threadId);
+      return await runAndReport(from, { command: { resume: resumeFor(pending, decision) } }, reply, space,
+                                decision === "reject" ? "Rejected. Nothing was recorded." : "Approved.");
+    }
+    await runAndReport(from, { input: { messages: [{ role: "user", content: frame(text) }] } }, reply, space);
+  };
+  try {
+    await space.responding(work);
+  } catch (err) {
+    console.error(`[inbound] ${errMsg(err)}`); // e.g. the typing indicator failed: do the work without it
+    await work().catch((e) => console.error(`[inbound] ${errMsg(e)}`));
   }
 }
 
 type Inbound = {
-  content: { type: string; text?: string };
+  content: { type?: string; text?: string; content?: { type?: string; text?: string } };
+  sender?: { id?: string; service?: string };
   react(reaction: string): Promise<unknown>;
   reply(content: string): Promise<unknown>;
 };
-type InboundSpace = Sendable & { responding<T>(fn: () => T | Promise<T>): Promise<T> };
+type InboundSpace = Sendable & { type?: string; responding<T>(fn: () => T | Promise<T>): Promise<T> };
 
-async function handleInbound(from: string, space: InboundSpace, message: Inbound): Promise<void> {
-  if (message.content.type !== "text" || !message.content.text?.trim()) {
-    await message.reply("Radar reads text only for now.");
-    return;
-  }
-  const text = message.content.text.trim();
-  console.log(`[inbound] ${text.length} chars from ${tail(from)}`);
-  await message.react("👍").catch(() => {}); // instant acknowledgement
-  const threadId = threadFor(from);
-
-  await space.responding(async () => {
-    try {
-      let pending: PendingInterrupt[] = [];
-      try {
-        pending = await pendingInterrupts(threadId);
-      } catch {
-        pending = []; // thread doesn't exist yet
-      }
-      const decision = pending.length ? parseDecision(text) : null;
-      if (pending.length && !decision) {
-        await message.reply(`Still waiting on your approval to ${describeActions(pending.flatMap((p) => p.actions))}. Reply YES or NO.`);
-        return;
-      }
-      const before = await messageCount(threadId);
-      const payload = decision
-        ? { command: { resume: resumeFor(pending, decision) } }
-        : { input: { messages: [{ role: "user", content: frame(text) }] } };
-      const values = await lg.runs.wait(threadId, ASSISTANT, {
-        ...payload,
-        ifNotExists: "create",
-        metadata: { trigger: "imessage" },
-        signal: AbortSignal.timeout(RUN_TIMEOUT_MS),
-      });
-      const next = await pendingInterrupts(threadId);
-      if (next.length) {
-        await space.send(`Approval needed: ${describeActions(next.flatMap((p) => p.actions))}\nReply YES to approve or NO to reject.`);
-        return;
-      }
-      const answer = lastAiText(values, before);
-      await message.reply(answer ? plain(answer) : decision === "reject" ? "Rejected. Nothing was sent." : "Done.");
-    } catch (err) {
-      const offline = /fetch failed|ECONNREFUSED|ENOTFOUND/i.test(errMsg(err));
-      console.error(`[inbound] run failed: ${errMsg(err)}`);
-      await message.reply(offline
-        ? "Radar's agent server isn't reachable right now. Try again in a minute."
-        : "That one failed on my side; it's in the logs.");
-    }
-  });
+const chains = new Map<string, Promise<void>>(); // one request at a time per sender, senders in parallel
+function enqueue(from: string, job: () => Promise<void>): Promise<void> {
+  const next = (chains.get(from) ?? Promise.resolve()).then(job).catch((err) => console.error(`[queue] ${errMsg(err)}`));
+  chains.set(from, next);
+  return next;
 }
 
 server.listen(PORT, "127.0.0.1", () => {
@@ -197,17 +246,17 @@ const shutdown = async () => {
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
 
-const chains = new Map<string, Promise<void>>(); // one request at a time per sender, senders in parallel
 for await (const [space, message] of app.messages) {
   if (message.direction === "outbound") continue;
-  const from = normalizePhone(message.sender?.id ?? "");
-  if (!ALLOWED.has(from)) {
+  const m = message as unknown as Inbound;
+  const sp = space as unknown as InboundSpace;
+  const from = m.sender?.id ?? "";
+  if (!allowedSender(from, m.sender?.service, ALLOWED)) {
     console.log(`[inbound] ignored a message from an unknown sender ${tail(from)}`);
     continue;
   }
-  spaces.set(from, space);
-  const prev = chains.get(from) ?? Promise.resolve();
-  chains.set(from, prev.then(() => handleInbound(from, space, message as unknown as Inbound)).catch((err) => {
-    console.error(`[inbound] ${errMsg(err)}`);
-  }));
+  if (sp.type && sp.type !== "dm") continue; // never act inside group chats
+  const text = inboundText(m.content);
+  if (!text) continue; // tapbacks, read receipts, typing, attachments
+  void enqueue(from, () => handleInbound(from, sp, m, text));
 }

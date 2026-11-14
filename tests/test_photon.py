@@ -71,3 +71,14 @@ def test_notify_me_falls_back_to_inbox_when_bridge_is_down(monkeypatch):
     monkeypatch.setattr(photon, "send", fake_send)
     out = asyncio.run(tools.notify_me.coroutine(text="hi", runtime=SimpleNamespace(store=InMemoryStore())))
     assert "bridge is not running" in out
+
+
+def test_notify_me_does_not_double_text_on_imessage_runs(monkeypatch):
+    async def must_not_send(text, to="owner"):
+        raise AssertionError("notify_me texted during an iMessage-triggered run")
+
+    monkeypatch.setattr(photon, "send", must_not_send)
+    store = InMemoryStore()
+    rt = SimpleNamespace(store=store, config={"configurable": {"channel": "imessage"}})
+    out = asyncio.run(tools.notify_me.coroutine(text="hi", runtime=rt))
+    assert "inbox" in out and store.search(("outbox",))[0].value["delivery"]["status"] == "inbox_only_imessage_run"
