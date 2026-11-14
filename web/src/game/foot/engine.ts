@@ -74,6 +74,7 @@ export type SurvivorState = "trapped" | "following" | "safe" | "lost";
 export type MissionState = {
   boards: number; // carried
   medkits: number; // carried
+  flares: number; // carried road flares ([G] throws one; 3 per night)
   found: number; // crates picked up (score)
   survivors: { id: string; name: string; state: SurvivorState }[];
   barricade: { active: boolean; hp: number; max: number };
@@ -136,6 +137,10 @@ export type Events = {
   "mission:barricade-broken": Record<string, never>;
   /** director -> audio: a new radio line appeared (the agent's squads / HQ / you). Speak it, crackle. */
   "radio:line": { who: string; text: string; tone?: string };
+  /** flare -> horde: a lit road flare at (x, z). Zombies within ~35 m that aren't in contact are drawn to it for secs. */
+  "flare:lit": { x: number; z: number; secs: number };
+  /** horde -> fx/audio: a zombie was stunned by the flashlight (held on it), at (x, z). */
+  "zombie:stunned": { x: number; z: number };
   /** director -> mission: clear everything (play again). */
   "mission:reset": Record<string, never>;
 };

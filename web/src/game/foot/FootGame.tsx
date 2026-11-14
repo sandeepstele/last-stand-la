@@ -37,6 +37,7 @@ import { createHorde } from "./horde";
 import { createFeeds, type Feeds } from "./feeds";
 import { createMission } from "./mission";
 import { createAudio } from "./audio";
+import { createFlare } from "./flare";
 import { HqPanel } from "./HqPanel";
 import { mulberry32 } from "../prng";
 import { IntroOverlay } from "./IntroOverlay";
@@ -172,7 +173,8 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
   const heroLabel = hero?.label ?? "";
   const safeRoom = useMemo(() => district?.buildings.find((b) => b.door && b.pid !== hero?.pid) ?? null, [district, hero]);
   // The Night Shift needs the live agent (the briefing comes from the real queue). Stub / agent-off play case #6 only.
-  const nightShift = !!safeRoom && !game.stub && !agentOff;
+  const feats = district?.features;
+  const nightShift = !!safeRoom && !game.stub && !agentOff && (!feats || feats.includes("night_shift"));
   const office = nightShift ? safeRoom : null;
   const brief = useMemo(() => latestResult<{ total?: number; in_area?: number; cases?: NightCase[] }>(game.messages, "night_cases"), [game.messages]);
   const case7 = useMemo(() => (office ? brief?.cases?.find((c) => c.case === "ghost_tenant" && String(c.property_id) === office.pid && c.suite) ?? null : null), [brief, office]);
@@ -216,6 +218,9 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
   const suiteAsked = useRef(false);
   const suiteSending = useRef(false);
   const officeSpawned = useRef(false);
+  const downedCount = useRef(0);
+  const debriefAsked = useRef(false);
+  const debriefSent = useRef(false);
   const [suiteTip, setSuiteTip] = useState<{ chosen: number | null; sentAt: number | null }>({ chosen: null, sentAt: null });
   const suiteTipRef = useRef(suiteTip);
   useEffect(() => {
@@ -232,9 +237,9 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
   const debrisFired = useRef(false);
   const defendEnded = useRef(false);
   const [prog, setProg] = useState({ reached: false, checked: false, survived: false, filed: false });
-  const [mhud, setMhud] = useState({ boards: 0, medkits: 0, found: 0, crates: 0, survivors: [] as { name: string; state: SurvivorState }[], barricade: null as null | { hp: number; max: number }, timer: null as null | { label: string; secs: number; urgent: boolean } });
+  const [mhud, setMhud] = useState({ flares: 0, boards: 0, medkits: 0, found: 0, crates: 0, survivors: [] as { name: string; state: SurvivorState }[], barricade: null as null | { hp: number; max: number }, timer: null as null | { label: string; secs: number; urgent: boolean } });
   const cratesTotal = useRef(0);
-  const [score, setScore] = useState({ saved: 0, total: 0, found: 0, health: 100, secs: 0, points: 0, rank: "C" });
+  const [score, setScore] = useState({ saved: 0, total: 0, found: 0, health: 100, secs: 0, points: 0, rank: "C", downed: 0 });
 
   // ------------------------------------------------------------------ engine: created once per district
   useEffect(() => {
@@ -257,7 +262,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
       player: { x: 0, z: 0, yaw: 0, pitch: 0, speed: 0, sprinting: false, stamina: 1, health: 100, frozen: true, hidden: false },
       horde: { alive: 0, chasing: 0, nearest: Infinity, pressing: 0 },
       npcs: [],
-      mission: { boards: 0, medkits: 0, found: 0, survivors: [], barricade: { active: false, hp: 100, max: 100 } },
+      mission: { boards: 0, medkits: 0, flares: 0, found: 0, survivors: [], barricade: { active: false, hp: 100, max: 100 } },
       bus: createBus(),
       cameraOwner: "director",
       time: 0,
@@ -275,7 +280,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
 
     const feeds = createFeeds(ctx);
     feedsRef.current = feeds;
-    const systems = [safely("world", createWorld(ctx)), safely("player", createPlayer(ctx)), safely("horde", createHorde(ctx)), safely("mission", createMission(ctx)), safely("audio", createAudio(ctx)), safely("feeds", feeds)];
+    const systems = [safely("world", createWorld(ctx)), safely("player", createPlayer(ctx)), safely("horde", createHorde(ctx)), safely("mission", createMission(ctx)), safely("flare", createFlare(ctx)), safely("audio", createAudio(ctx)), safely("feeds", feeds)];
     ctx.bus.emit("world:beacon", { pid: hero.pid });
     const offDown = ctx.bus.on("player:downed", () => (downed.current = true));
     const offMission = [
@@ -426,6 +431,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
 
       if (downed.current) {
         downed.current = false;
+        downedCount.current += 1;
         const o = objectivePoint(ctx);
         const at = o?.at ?? heroDoor;
         [p.x, p.z] = ctx.collide(at[0] + 2, at[1] + 2, 0.5);
@@ -530,6 +536,12 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
         return;
       }
       if (s === "approach") {
+        if (office && !presenter && suiteTipRef.current.sentAt !== null) {
+          // The long cross between the two real cases: sprint never runs dry, and the route is drawn (Night Shift, ~3 min).
+          p.stamina = Math.max(p.stamina, 0.6);
+          if (dist(here, heroDoor) > 12) ctx.bus.emit("world:route", { pts: [here, heroDoor] });
+          else ctx.bus.emit("world:route", { pts: null });
+        }
         if (!scoutAsked.current && dist(here, heroDoor) < SCOUT_R && g.phase === "dusk") {
           scoutAsked.current = true;
           if (g.selected !== hero.pid) g.select(hero.pid);
@@ -664,15 +676,17 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
         if (since > 5) {
           ctx.bus.emit("horde:clear", {});
           if (!agentOff) g.goDawn();
+          // The AI drafts tonight's corrections live (citing your reports) while dawn comes up.
+          if (!agentOff && !g.stub && !debriefAsked.current && (g.district?.features ?? []).includes("debrief")) debriefAsked.current = true;
           const m = ctx.mission;
           const saved = m.survivors.filter((v) => v.state === "safe").length;
           const total = m.survivors.length;
           const secs = Math.round(ctx.time - startedAt.current);
           // Records verified (your reports logged as evidence on real cases) count most; then the people you brought in.
           const verified = (tipRef.current.sentAt !== null ? 1 : 0) + (suiteTipRef.current.sentAt !== null ? 1 : 0);
-          const points = verified * 300 + saved * 150 + m.found * 40 + Math.round(p.health) * 2 + Math.max(0, 300 - secs);
+          const points = Math.max(0, verified * 300 + saved * 150 + m.found * 40 + Math.round(p.health) * 2 + Math.max(0, 300 - secs) - downedCount.current * 100);
           const rank = points >= 900 ? "S" : points >= 700 ? "A" : points >= 450 ? "B" : "C";
-          setScore({ saved, total, found: m.found, health: p.health, secs, points, rank });
+          setScore({ saved, total, found: m.found, health: p.health, secs, points, rank, downed: downedCount.current });
           setProg((q) => ({ ...q, survived: true }));
           setStep("dawn");
         }
@@ -680,6 +694,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
       }
       if (s === "dawn") {
         ctx.dawn = Math.min(1, ctx.dawn + dt / 3);
+        if (debriefAsked.current && !debriefSent.current && g.runDone && g.say("Debrief the night shift")) debriefSent.current = true;
         if (k.has("Enter")) playAgain();
       }
     };
@@ -710,7 +725,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
       const st = stepRef.current;
       const left = nightfallAt.current - ctx.time;
       const timer = st === "office" || st === "suite" || st === "approach" || st === "inside" ? (nightFallen.current ? { label: "Night has fallen", secs: 0, urgent: true } : { label: "Nightfall", secs: Math.max(0, Math.round(left)), urgent: left < 30 }) : null;
-      const next = { boards: m.boards, medkits: m.medkits, found: m.found, crates: cratesTotal.current, survivors: m.survivors.map((v) => ({ name: v.name, state: v.state })), barricade: m.barricade.active ? { hp: Math.round(m.barricade.hp), max: m.barricade.max } : null, timer };
+      const next = { flares: m.flares, boards: m.boards, medkits: m.medkits, found: m.found, crates: cratesTotal.current, survivors: m.survivors.map((v) => ({ name: v.name, state: v.state })), barricade: m.barricade.active ? { hp: Math.round(m.barricade.hp), max: m.barricade.max } : null, timer };
       setMhud((c) => (JSON.stringify(c) === JSON.stringify(next) ? c : next));
       const f = feedsRef.current;
       if (f) setFeedCaps((c) => (c.drone === f.caption("drone") && c.cctv === f.caption("cctv") ? c : { drone: f.caption("drone"), cctv: f.caption("cctv") }));
@@ -787,6 +802,8 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
     plan.survivors = []; // survivors are the office on record (case #7), spawned only if the agent says they're still there
     cratesTotal.current = plan.supplies.length;
     ctx.bus.emit("mission:setup", plan);
+    ctx.mission.flares = 3;
+    downedCount.current = 0;
     for (const sv of plan.survivors) ctx.bus.emit("horde:pack", { x: sv.x, z: sv.z, count: 4 });
     nightfallAt.current = ctx.time + NIGHTFALL_S;
     nightFallen.current = false;
@@ -797,7 +814,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
       gRef.current.select(office.pid);
       ctx.bus.emit("world:beacon", { pid: office.pid });
       setStep("office");
-      setBanner({ title: "HQ is briefing the night shift", sub: `Tonight's cases come from CoStar's open-case queue. Start at ${office.label}.`, tone: "info" }, 5000);
+      setBanner({ title: "Settle tonight's cases and make it to dawn", sub: `HQ is briefing the night shift from CoStar's open-case queue. Start at ${office.label}.`, tone: "info" }, 5500);
       return;
     }
     gRef.current.select(hero.pid); // the fortress card loads while you walk
@@ -819,6 +836,8 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
     suiteAsked.current = false;
     suiteSending.current = false;
     officeSpawned.current = false;
+    debriefAsked.current = false;
+    debriefSent.current = false;
     setSuiteTip({ chosen: null, sentAt: null });
     setProg({ reached: false, checked: false, survived: false, filed: false });
     ctx.bus.emit("mission:reset", {});
@@ -863,6 +882,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
   if (step === "night" && !game.decision) hints.push({ key: "H", label: "hold" }, { key: "R", label: runLabel ? `run to ${runLabel}` : "run", disabled: !runLabel });
   if (step === "hold") hints.push({ key: "E", label: mhud.boards > 0 ? `nail boards (${mhud.boards})` : "no boards left", disabled: mhud.boards === 0 });
   if ((step === "approach" || step === "escape" || step === "hold" || step === "night") && mhud.medkits > 0) hints.push({ key: "Q", label: `medkit (${mhud.medkits})` });
+  if ((step === "approach" || step === "office" || step === "escape" || step === "hold" || step === "night") && mhud.flares > 0) hints.push({ key: "G", label: `flare (${mhud.flares})` });
   if (step === "dawn") hints.push({ key: "Enter", label: "play again" });
 
   const objective =
@@ -929,6 +949,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
   const outcomeLines = [
     ...(presenter && case7 && case7Weighed ? [`Case #${case7.n} was worked by HQ from the records while you ran: the lease, the listing and the suite's own tour.`] : []),
     ...(verifiedN ? [`Records checked tonight: ${verifiedN} open case${verifiedN === 1 ? "" : "s"} from CoStar's queue${queueTotal ? ` of ${queueTotal}` : ""}. Your reports are evidence in them now.`] : []),
+    ...(step === "dawn" && score.downed > 0 ? [`You went down ${score.downed}× (−${score.downed * 100} points). Your squad dragged you clear each time.`] : []),
     ...(game.outcome ? game.outcome.why.split("; ").map((x) => x.replace(/\.\s*Game outcome.*$/, "")) : []),
   ];
 
@@ -956,7 +977,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
           attribution={district.attribution ?? null}
           objectives={objectives}
           timer={mhud.timer}
-          supplies={{ boards: mhud.boards, medkits: mhud.medkits }}
+          supplies={{ boards: mhud.boards, medkits: mhud.medkits, flares: mhud.flares }}
           survivors={mhud.survivors}
           barricade={mhud.barricade}
           hq={<HqPanel messages={game.messages} busy={game.isLoading} heroPid={hero?.pid ?? null} compact={step === "approach" || step === "escape" || step === "hold"} />}

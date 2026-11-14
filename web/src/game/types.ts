@@ -57,6 +57,8 @@ export type District = {
   blocks?: Block[] | null;
   /** v1.3: "© OpenStreetMap contributors" when blocks/outlines came from OSM. Show it in the footer and credits. */
   attribution?: string | null;
+  /** Server capabilities for the on-foot game, e.g. ["night_shift", "debrief"]. The client only sends message types listed here. */
+  features?: string[] | null;
 };
 
 export type ScoreKey = "walls" | "quake" | "roof" | "people" | "space";

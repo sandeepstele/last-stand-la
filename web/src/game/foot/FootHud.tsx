@@ -42,7 +42,7 @@ export type HudProps = {
   // ---- missions (v2)
   objectives: Objective[]; // replaces the single objective line as the main top-left element (keep `objective` as the current hint under it)
   timer: { label: string; secs: number; urgent: boolean } | null; // "Nightfall" countdown; urgent = under 30 s or night has fallen
-  supplies: { boards: number; medkits: number }; // carried; [Q] uses a medkit
+  supplies: { boards: number; medkits: number; flares?: number }; // carried; [Q] uses a medkit; [G] throws a flare
   survivors: { name: string; state: SurvivorState }[];
   barricade: { hp: number; max: number } | null; // shown big, bottom-centre, during HOLD
   hq: ReactNode; // the HQ panel (the agent at work), rendered by the director; place it in the right column under the radio
