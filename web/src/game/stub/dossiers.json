@@ -1,0 +1,70 @@
+{
+  "syn-a": {
+    "pid": "syn-a",
+    "label": "Building A",
+    "scores": {
+      "walls": { "value": 41, "label": "unresolved", "why": "The listing records masonry; the city's retrofit list implies a concrete frame. The walls are a gamble until the records agree.", "source": "Synthetic listing record vs synthetic city list" },
+      "quake": { "value": 34, "label": "leaning", "why": "On the city's retrofit list; the order is unfinished and a step looks past its deadline.", "source": "Synthetic city retrofit list" },
+      "roof": { "value": 72, "label": "known", "why": "Flat roof, about 1,400 m² clear of equipment in the aerial read.", "source": "Synthetic aerial attributes" },
+      "people": { "value": 58, "label": "leaning", "why": "About 260 people on record across 8 floors.", "source": "Synthetic tenant roll" },
+      "space": { "value": 66, "label": "known", "why": "8 stories; floor-to-floor height looks generous.", "source": "Synthetic building record" }
+    },
+    "unknowns": ["No interior scan for this building", "The retrofit permit wording does not name the system"],
+    "images": { "drone": ["stub-drone-a.jpg"], "cctv": [] },
+    "case": {
+      "case": "material_conflict",
+      "question": "The listing says masonry, but the city lists this building as concrete. Which record is current?",
+      "hypotheses": [
+        { "key": "city_list_current", "claim": "The city's concrete list is current", "prior": 0.5 },
+        { "key": "costar_current", "claim": "The listing's masonry is current", "prior": 0.5 }
+      ]
+    },
+    "disclaimer": "Game outcome, not an engineering assessment"
+  },
+  "syn-h": {
+    "pid": "syn-h",
+    "label": "Building H",
+    "scores": {
+      "walls": { "value": 78, "label": "likely", "why": "Records agree on a concrete frame, and the aerial read matches.", "source": "Synthetic listing record and aerial attributes" },
+      "quake": { "value": 61, "label": "leaning", "why": "On the city's concrete list; the order looks unfinished but no step is past its deadline.", "source": "Synthetic city retrofit list" },
+      "roof": { "value": 55, "label": "known", "why": "Flat roof with some rooftop equipment.", "source": "Synthetic aerial attributes" },
+      "people": { "value": 90, "label": "known", "why": "About 12 people on record.", "source": "Synthetic tenant roll" },
+      "space": { "value": 81, "label": "known", "why": "An interior scan covers 3 levels.", "source": "Synthetic interior scan" }
+    },
+    "unknowns": ["Basement levels not scanned"],
+    "images": {
+      "drone": ["stub-drone-h.jpg"],
+      "cctv": ["stub-cctv-h.jpg"],
+      "pano": [
+        { "face": "f1", "name": "stub-pano-h-f1.jpg" },
+        { "face": "f2", "name": "stub-pano-h-f2.jpg" },
+        { "face": "f3", "name": "stub-pano-h-f3.jpg" },
+        { "face": "f4", "name": "stub-pano-h-f4.jpg" }
+      ]
+    },
+    "case": null,
+    "disclaimer": "Game outcome, not an engineering assessment"
+  },
+  "syn-k": {
+    "pid": "syn-k",
+    "label": "Building K",
+    "scores": {
+      "walls": { "value": 50, "label": "unresolved", "why": "The vision read can't tell the frame from above; the records don't settle it.", "source": "Synthetic aerial read" },
+      "quake": { "value": 29, "label": "leaning", "why": "On the city's concrete list; a step looks past its deadline.", "source": "Synthetic city retrofit list" },
+      "roof": { "value": 63, "label": "known", "why": "Flat roof, partly shaded.", "source": "Synthetic aerial attributes" },
+      "people": { "value": 70, "label": "leaning", "why": "About 85 people on record.", "source": "Synthetic tenant roll" },
+      "space": { "value": 74, "label": "known", "why": "11 stories.", "source": "Synthetic building record" }
+    },
+    "unknowns": ["The aerial read was inconclusive"],
+    "images": { "drone": ["stub-drone-k.jpg"], "cctv": [] },
+    "case": {
+      "case": "material_conflict",
+      "question": "The listing says steel, but the city lists this building as concrete. Which record is current?",
+      "hypotheses": [
+        { "key": "city_list_current", "claim": "The city's concrete list is current", "prior": 0.5 },
+        { "key": "costar_current", "claim": "The listing's steel is current", "prior": 0.5 }
+      ]
+    },
+    "disclaimer": "Game outcome, not an engineering assessment"
+  }
+}

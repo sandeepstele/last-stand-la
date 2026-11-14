@@ -553,7 +553,7 @@ def weigh_case(pid: str, case: str, checks: list[str], suite: str | None = None,
         if label in ("likely", "leaning") and lead in ("gone_dark", "moved_within", "listing_stale"):
             fix = {"gone_dark": "re-verify occupancy; the tenant record may be out of date",
                    "moved_within": "check whether the tenant moved to another suite in the building",
-                   "listing_stale": "the listing may have been leased; confirm and take it off market"}[lead]
+                   "listing_stale": "check whether the suite was leased and, if so, take the listing off market"}[lead]
             ticket = (f"DRAFT for a CoStar researcher: suite {f['suite']} at {rec.get('address')} is recorded as occupied by "
                       f"{t.get('tenant', 'a tenant')} since {t.get('tenant_since')}, and it has been listed for lease since {f['listed_since']}. "
                       f"Evidence: {'; '.join(x['finding'] for x in trail[:3])}. Please {fix}.")

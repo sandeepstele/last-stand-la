@@ -142,6 +142,9 @@ def ask(pid: str, key: str, images: list[Path], question: str, choices: list[str
     cached = CACHE / f"{pid}_{key}_{h}.json"
     if cached.exists():
         return json.loads(cached.read_text())
+    if os.environ.get("RADAR_REPLAY_STRICT") == "1":
+        # Strict replay promises no live model calls; vision reads are not chat-model replays, so refuse here too.
+        raise VisionUnavailable("strict replay: this vision question has no cached answer (not calling the model)")
     labels = ", ".join(choices + ["cant_tell"])
     first = _invoke(images, (
         f"{question}\nAnswer only from what is visible. Reply with JSON: "
@@ -171,6 +174,9 @@ def ask(pid: str, key: str, images: list[Path], question: str, choices: list[str
         "second_look": second.get("reason", ""),
         "images": [str(p) for p in images],
         "model": VISION_MODEL,
+        # 2 = the second look answers independently and must match (6f69a4d). The hash predates this field, so
+        # reads without it are the 8 older ones, each re-checked by hand on Sat Nov 14.
+        "protocol": 2,
     }
     tmp = cached.with_suffix(".tmp")
     tmp.write_text(json.dumps(result, indent=1))
@@ -184,7 +190,9 @@ def ask(pid: str, key: str, images: list[Path], question: str, choices: list[str
 def suite_panos(pid: str, suite: str, model_id: str, panos: int = 2) -> list[Path]:
     """Side faces of the first panoramas of a suite's Matterport tour (team token, read-only query).
     Cube faces come back as [up, four sides, down]; only the sides show the room."""
-    hits = sorted(CACHE.glob(f"{pid}_s{suite}_p*_f*.jpg"))
+    # side faces only: the game also caches the up/down faces (f0, f5) for its 360 view, and they must not change
+    # which images (and so which cached answer) the suite tour read uses
+    hits = sorted(p for p in CACHE.glob(f"{pid}_s{suite}_p*_f*.jpg") if p.stem[-3:] not in ("_f0", "_f5"))
     if hits:
         return hits
     from app import matterport

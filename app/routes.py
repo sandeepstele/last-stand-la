@@ -92,7 +92,7 @@ async def healthz(request: Request) -> JSONResponse:
                    "timeout_s": os.environ.get("RADAR_MODEL_TIMEOUT_S", "8")},
         "field_uploads_enabled": bool(os.environ.get("RADAR_FIELD_TOKEN")),
         "scene_mode": os.environ.get("RADAR_SCENE_MODE", "ack"),
-        "layers": {k: os.environ.get(f"RADAR_LAYER_{k.upper()}", "cached") for k in ("costar", "vexcel")},
+        "layers": {k: os.environ.get(f"RADAR_LAYER_{k.upper()}", "auto") for k in ("costar", "vexcel")},  # layers._mode's default
         "matterport": os.environ.get("RADAR_MATTERPORT", "auto"),
         "replay": _replay_label(),
     })
@@ -159,8 +159,54 @@ async def evidence_image(request: Request) -> Response:
     return Response(data, media_type="image/jpeg", headers={"cache-control": "private, max-age=3600"})
 
 
+# ------------------------------------------------------------------ Last Stand LA (app/fortress.py)
+
+PID = re.compile(r"^[0-9]{1,12}$")
+
+
+async def game_district(request: Request) -> JSONResponse:
+    from app import fortress
+
+    return JSONResponse(await asyncio.to_thread(fortress.district))
+
+
+async def game_dossier(request: Request) -> JSONResponse:
+    from app import fortress
+
+    pid = request.path_params["pid"]
+    if not PID.match(pid) or not await asyncio.to_thread(fortress.building, pid):
+        return JSONResponse({"error": "not a building in the district"}, status_code=404)
+    return JSONResponse(await asyncio.to_thread(fortress.dossier, pid))
+
+
+async def game_resolve(request: Request) -> JSONResponse:
+    """The fallback path when the agent is down: same code, same seeded rolls as commit_plan."""
+    from app import fortress
+
+    try:
+        body = json.loads(await request.body())
+        pid, wave = str(body["pid"]), int(body.get("wave") or 1)
+        seed = int(body.get("seed") or fortress.SEED)
+        action = "run" if body.get("action") == "run" else "hold"
+        to_pid = str(body["to_pid"]) if body.get("to_pid") else None
+        checks = [str(c) for c in (body.get("checks") or [])][:12]
+    except (json.JSONDecodeError, KeyError, TypeError, ValueError):
+        return JSONResponse({"error": "expected {pid, wave, seed, action, to_pid?, checks?}"}, status_code=400)
+    for p in (pid, to_pid):
+        if p is not None and (not PID.match(p) or not await asyncio.to_thread(fortress.building, p)):
+            return JSONResponse({"error": f"{p} is not a building in the district"}, status_code=404)
+    items = await _store(request).asearch(("notes", pid), limit=10)
+    notes = [i.value for i in items]
+    if notes and "human_report" not in checks:
+        checks.append("human_report")
+    return JSONResponse(await asyncio.to_thread(fortress.resolve, pid, wave, seed, action, to_pid, checks, notes))
+
+
 app = Starlette(
     routes=[
+        Route("/game/district", game_district, methods=["GET"]),
+        Route("/game/dossier/{pid}", game_dossier, methods=["GET"]),
+        Route("/game/resolve", game_resolve, methods=["POST"]),
         Route("/cases/queue", cases_queue, methods=["GET"]),
         Route("/cases/decision", cases_decision, methods=["POST"]),
         Route("/cases/inbox", cases_inbox, methods=["GET"]),
