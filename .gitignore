@@ -1,0 +1,30 @@
+# secrets
+.env
+.env.*
+!.env.example
+web/.env*
+!web/.env.local.example
+
+# licensed data: real CoStar / Vexcel / Matterport data never goes in the public repo
+fixtures/*/*
+!fixtures/*/.gitkeep
+!fixtures/costar/TEST-A.json
+!fixtures/vexcel/TEST-A.json
+
+# python / tooling
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.langgraph_api/
+
+# web
+node_modules/
+web/.next/
+web/out/
+
+# xcode
+xcuserdata/
+*.xcuserstate
+DerivedData/
+build/

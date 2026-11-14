@@ -1,0 +1,37 @@
+.main {
+  display: grid;
+  grid-template-columns: 62% 38%;
+  grid-template-rows: 1fr auto;
+  height: 100vh;
+  background: var(--bg);
+  color: var(--fg);
+}
+.worldPane { position: relative; grid-row: 1; grid-column: 1; min-height: 300px; }
+.agentPane { grid-row: 1; grid-column: 2; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.strip { grid-column: 1 / -1; display: flex; gap: 16px; align-items: center; justify-content: space-between; padding: 10px 16px; border-top: 1px solid var(--line); font-size: 15px; }
+.ask { display: flex; gap: 8px; }
+.ask input { flex: 1; padding: 10px; font-size: 16px; background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; }
+.ask button, .approval button { padding: 10px 16px; font-size: 16px; border-radius: 8px; border: 0; background: var(--accent); color: #fff; cursor: pointer; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+.card h2 { font-size: 18px; margin: 0 0 8px; }
+.card[data-verdict="worth_a_look"] { border-color: var(--amber); }
+.card[data-verdict="verified_inside_and_out"], .card[data-verdict="explained"], .card[data-verdict="consistent"] { border-color: var(--green); }
+.big { font-size: 22px; margin: 4px 0; }
+.muted { color: var(--muted); font-size: 14px; }
+.warning { color: var(--amber); font-size: 14px; }
+.badge { margin-left: 8px; font-size: 12px; padding: 2px 6px; border-radius: 6px; background: var(--amber); color: #111; }
+.todos, .hypotheses { margin: 0; padding-left: 18px; font-size: 15px; }
+.todos li[data-status="completed"] { color: var(--muted); text-decoration: line-through; }
+.todos li[data-status="in_progress"] { color: var(--accent); }
+.hypotheses li[data-status="supported"] { color: var(--green); }
+.hypotheses li[data-status="untested"] { color: var(--muted); }
+.cards { display: flex; gap: 8px; flex-wrap: wrap; }
+.subagent { padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line); font-size: 15px; }
+.subagent[data-status="running"] { border-color: var(--accent); }
+.subagent[data-status="complete"] { border-color: var(--green); }
+.approval { display: flex; gap: 8px; align-items: center; }
+
+@media (max-width: 900px) {
+  .main { grid-template-columns: 1fr; grid-template-rows: 50vh auto auto; height: auto; }
+  .agentPane { grid-row: 2; grid-column: 1; }
+}

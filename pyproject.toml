@@ -1,0 +1,21 @@
+[project]
+name = "retrofit-radar"
+version = "0.1.0"
+description = "HackPrinceton Fall 2026: a deep agent that ground-truths buildings across CoStar, Vexcel and Matterport"
+requires-python = ">=3.11"
+dependencies = [
+    "deepagents==0.7.37",
+    "langchain[mcp]>=1.4",
+    "langchain-anthropic>=1.7",
+    "httpx>=0.28",
+    "python-dotenv>=1.0",
+    "langchain-google-genai>=4.5",
+    "starlette>=0.40",
+]
+
+[dependency-groups]
+dev = ["pytest>=9", "langgraph-cli[inmem]>=0.4"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

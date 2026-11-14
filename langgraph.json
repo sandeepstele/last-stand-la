@@ -1,0 +1,13 @@
+{
+  "dependencies": [
+    "."
+  ],
+  "graphs": {
+    "radar": "./app/agent.py:live_agent",
+    "radar_worker": "./app/agent.py:worker_agent"
+  },
+  "env": ".env",
+  "http": {
+    "app": "./app/routes.py:app"
+  }
+}

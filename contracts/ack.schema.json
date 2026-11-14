@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "radar/ack",
+  "title": "ack (web -> Store), POSTed by the browser to web /api/ack, written to Store namespace [\"acks\"] key = id",
+  "type": "object",
+  "required": ["id", "ok"],
+  "properties": {
+    "id": {"type": "string"},
+    "ok": {"type": "boolean"},
+    "screenshot_jpeg_b64": {"type": "string", "description": "optional; keep it small (<= 640 px wide, quality 0.5)"},
+    "error": {"type": "string"}
+  }
+}
