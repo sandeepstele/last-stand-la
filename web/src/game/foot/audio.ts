@@ -28,6 +28,7 @@ type Graph = {
   windBP: BiquadFilterNode;
   whistle: GainNode;
   pad: GainNode;
+  tension: GainNode;
   crackle: GainNode;
   stop(): void;
 };
@@ -117,12 +118,20 @@ function buildGraph(ac: AudioContext): Graph {
   });
   tone("sine", 0.09, g(0.004, pad.gain)); // a slow shimmer
 
+  // Tension drone under chases, waves and the defence: detuned saws (A2/E3, audible on laptop speakers), slow tremolo.
+  const tension = g(0, amb);
+  const tenTrem = g(1, tension);
+  tone("sine", 0.23, g(0.35, tenTrem.gain));
+  const tenLP = f("lowpass", 520, 1.2, tenTrem);
+  tone("sine", 0.06, g(180, tenLP.frequency));
+  [110, 110.7, 164.8, 82.4].forEach((hz) => tone("sawtooth", hz, g(0.22, tenLP)));
+
   // Radio crackle bed (not ducked, not muffled indoors).
   const crackle = g(0, master);
   loop(noise.crackle, f("bandpass", 2300, 0.7, crackle));
 
   return {
-    ac, noise, sfx, master, muffle, outsideLP, amb, zom, fx, hum, wind, windBP, whistle, pad, crackle,
+    ac, noise, sfx, master, muffle, outsideLP, amb, zom, fx, hum, wind, windBP, whistle, pad, tension, crackle,
     stop() {
       sources.forEach((s) => {
         try {
@@ -153,6 +162,7 @@ const PROBES: Record<string, (s: Sfx, d: AudioNode) => void> = {
   step: (s, d) => s.step(d, 0.22),
   heartbeat: (s, d) => s.heartbeat(d, 0.6),
   whoosh: (s, d) => s.whoosh(d, 0.32),
+  breath: (s, d) => s.breath(d, 0.12, true),
   hit: (s, d) => s.hit(d, 0.55, 0.5),
   downed: (s, d) => s.downed(d, 0.55),
   siren: (s, d) => s.siren(d, 0.09),
@@ -183,6 +193,7 @@ async function probe(name: string) {
     a.wind.gain.value = dawn ? 0.025 : 0.11;
     a.whistle.gain.value = dawn ? 0 : 0.03;
     a.pad.gain.value = dawn ? 0.06 : 0;
+    if (name === "night") a.tension.gain.value = 0.05;
   } else {
     const f = PROBES[name];
     if (!f) return { error: `unknown; try ${Object.keys(PROBES).join(", ")}, night, dawn` };
@@ -217,6 +228,9 @@ export function createAudio(ctx: FootCtx): System {
   let groanT = 1.5;
   let bangT = 0.8;
   let birdT = 1;
+  let breathT = 0;
+  let breathOut = false;
+  let lastWave = -99;
   let defending = false;
   let ducked = false;
   let downedUntil = 0;
@@ -352,6 +366,7 @@ export function createAudio(ctx: FootCtx): System {
     m.exponentialRampToValueAtTime(20000, t + 3.6);
     downedUntil = ctx.time + 3.7;
   })));
+  on(bus.on("wave:start", () => (lastWave = ctx.time)));
   on(bus.on("wave:start", (e) => live((a) => {
     const d = dirOf(SECTOR_DEG[e.sector] ?? 0);
     const pan = panOf(ctx, ctx.player.x + d[0] * 100, ctx.player.z + d[1] * 100);
@@ -425,6 +440,8 @@ export function createAudio(ctx: FootCtx): System {
     a.windBP.frequency.setTargetAtTime(480 + 380 * night, t, 1);
     a.whistle.gain.setTargetAtTime(fade * 0.03 * night * night, t, 0.8);
     a.pad.gain.setTargetAtTime(0.06 * Math.pow(dawn, 1.5), t, 0.6);
+    const danger = Math.max(Math.min(1, ctx.horde.chasing / 6), defending ? 0.8 : 0, ctx.time - lastWave < 20 ? 0.6 : 0);
+    a.tension.gain.setTargetAtTime(fade * 0.05 * danger * night, t, danger > 0.3 ? 1.2 : 2.5);
     a.outsideLP.frequency.setTargetAtTime(p.hidden ? 650 : 18000, t, 0.25);
     applyDuck(t);
     if (ctx.time > downedUntil) a.muffle.frequency.setTargetAtTime(p.health > 0 && p.health < 20 ? 2600 : 20000, t, 0.3);
@@ -474,6 +491,16 @@ export function createAudio(ctx: FootCtx): System {
           a.sfx.step(a.fx, sprint ? 0.3 : 0.22, stepSide * 0.08, sprint);
         }
       } else stepT = 0.4;
+
+      // Breathing when out of stamina.
+      if (!p.frozen && !p.hidden && p.stamina < 0.3) {
+        breathT -= dt;
+        if (breathT <= 0) {
+          breathOut = !breathOut;
+          a.sfx.breath(a.fx, 0.09 * (1 - p.stamina / 0.3) + 0.03, breathOut);
+          breathT = breathOut ? 0.5 : 0.42;
+        }
+      } else breathT = 0;
 
       // Heartbeat under 40% health, faster under 20% (not once dawn is up).
       if (p.health > 0 && p.health < 40 && ctx.dawn < 0.5) {

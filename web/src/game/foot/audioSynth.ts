@@ -208,6 +208,16 @@ export function createSfx(ac: BaseAudioContext, noise: Noise) {
       thump(lp, t + 0.17, 108, 64, 0.11, 0.5, "triangle");
     },
 
+    /** One breath (in or out) when out of stamina. */
+    breath(dest: AudioNode, level: number, out: boolean) {
+      const t = now();
+      const dur = out ? 0.42 : 0.34;
+      const v = voice(dest, t + dur);
+      if (!v) return;
+      env(v.gain, t, dur * 0.45, level, 0, dur * 0.55, true);
+      noiseSrc(noise.white, t, dur + 0.05, filter("bandpass", out ? 900 : 1500, 0.9, filter("lowpass", 3000, 0.7, gain(2.2, v))));
+    },
+
     whoosh(dest: AudioNode, level: number) {
       const t = now();
       const dur = 0.34;
