@@ -85,6 +85,7 @@ You're a survivor in downtown LA at nightfall. Your squad commander is an AI on 
 | Interior 3D tour (Matterport) | The room you walk into and look around: what you report comes from what you see |
 | Aerial oblique and top-down (Vexcel) | The agent's vision check, shown on the DRONE feed |
 | Floors (CoStar stories) | Window rows on the facades (3.8 m per floor). The windows themselves are stylised, not real |
+| Supplies | **Game items, not data.** The kit's tenant industries are almost all "office", with no medical or hardware categories, so crates are placed by the game (seeded) and labelled "a crate (game item)". Never attach an "on record" reason to them |
 | People on record (CoStar) | Wave sizes scale with the district's real apartments (290 / 500 / 790). The lit-window pattern is stylised; don't present it as data |
 | Vexcel roof objects (skylights, AC units) | In the fortress card's ROOF score ("skylights are ways in"). Rendering them on the roof is a stretch goal |
 

@@ -110,7 +110,7 @@ function planMission(ctx: FootCtx, heroPid: string, door: Pt, spawn: Pt): { supp
     if (!at) continue;
     want[kind] -= 1;
     used.push(at);
-    supplies.push({ id: `crate-${supplies.length}`, x: at[0], z: at[1], kind, n: kind === "boards" ? 2 : 1, why: "scavenged", pid: null });
+    supplies.push({ id: `crate-${supplies.length}`, x: at[0], z: at[1], kind, n: kind === "boards" ? 2 : 1, why: "a crate (game item)", pid: null });
   }
   const survivors: SurvivorSpot[] = [];
   for (let i = 0; i < 2; i++) {
@@ -241,7 +241,7 @@ export function FootGame({ game, replay, agentOff = false }: { game: Game; repla
     ctx.bus.emit("world:beacon", { pid: hero.pid });
     const offDown = ctx.bus.on("player:downed", () => (downed.current = true));
     const offMission = [
-      ctx.bus.on("mission:pickup", (e) => setBanner({ title: e.kind === "boards" ? `+${e.n} boards` : "+1 medkit", sub: e.why === "scavenged" ? (e.kind === "medkit" ? "[Q] to use it." : "For the barricade.") : e.why, tone: "good" }, 2200)),
+      ctx.bus.on("mission:pickup", (e) => setBanner({ title: e.kind === "boards" ? `+${e.n} boards` : "+1 medkit", sub: e.kind === "medkit" ? "[Q] to use it." : "For the barricade.", tone: "good" }, 2200)),
       ctx.bus.on("mission:survivor", (e) =>
         setBanner(
           e.state === "following" ? { title: `${e.name} is with you`, sub: "Keep them close. Zombies go for them too.", tone: "good" }
