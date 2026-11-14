@@ -273,7 +273,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
       collide: makeCollide(colliders, bounds),
     };
     ctxRef.current = ctx;
-    if (process.env.NODE_ENV !== "production") (window as unknown as { __foot?: unknown }).__foot = { ctx, step: () => stepRef.current };
+    if (process.env.NODE_ENV !== "production") (window as unknown as { __foot?: unknown }).__foot = { ctx, step: () => stepRef.current, game: () => gRef.current, since: () => ctx.time - stepAt.current };
     const first = office?.door && !presenter ? office : hero;
     const door: Pt = first.door ? [first.door.x, first.door.z] : reachPoint(ctx, first.pid, [first.x, first.z + 40]) ?? [first.x, first.z];
     const sp = spawnFor(ctx, door, first.door?.facing ?? 180);

@@ -61,7 +61,9 @@ export function createInput(el: HTMLElement): Input {
   };
   const kd = (e: KeyboardEvent) => {
     if (typing(e)) return;
-    if (GAME_KEYS.has(e.code)) e.preventDefault();
+    // Claim every unmodified letter/digit key too (F = presenter fast-forward, V = mute): an unclaimed keydown stalled
+    // requestAnimationFrame in headless Chrome. Browser shortcuts (with Ctrl/Meta/Alt) are left alone.
+    if (GAME_KEYS.has(e.code) || (!e.ctrlKey && !e.metaKey && !e.altKey && /^(Key[A-Z]|Digit[0-9])$/.test(e.code))) e.preventDefault();
     if (!down.has(e.code)) pressed.add(e.code);
     down.add(e.code);
   };
