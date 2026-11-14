@@ -4,7 +4,7 @@
 
 import * as THREE from "three";
 import { FLOOR_M, type Pt } from "./engine";
-import { BAY_M, TILE } from "./worldTex";
+import { BAY_M, STYLES, TILE } from "./worldTex";
 
 export type Buf = { pos: number[]; nrm: number[]; uv: number[]; col: number[]; lit: number[] };
 export const newBuf = (): Buf => ({ pos: [], nrm: [], uv: [], col: [], lit: [] });
@@ -91,9 +91,9 @@ function chunks(y0: number, y1: number): [number, number, number][] {
 /**
  * Walls from y0 to y1 around a cleaned ring. u counts bays (each edge snapped to whole bays so windows never wrap a
  * corner), v counts floors from the ground (the ground floor is a storefront). uOff shifts the shared window grid
- * sideways so neighbours look different. UVs are in facade-tile units (TILE bays x TILE floors).
+ * sideways so neighbours look different. UVs are in atlas units (TILE bays across; STYLES tiles of TILE floors up).
  */
-export function addWalls(buf: Buf, ring: Pt[], y0: number, y1: number, color: THREE.Color, lit: number, uOff: number): void {
+export function addWalls(buf: Buf, ring: Pt[], y0: number, y1: number, color: THREE.Color, lit: number, uOff: number, style = 0): void {
   let u = uOff;
   const n = ring.length;
   const parts = chunks(y0, y1);
@@ -107,7 +107,7 @@ export function addWalls(buf: Buf, ring: Pt[], y0: number, y1: number, color: TH
     const ua = u / TILE, ub = (u + bays) / TILE;
     u = Math.ceil(u + bays);
     for (const [ya, yb, shift] of parts) {
-      const v0 = (ya / FLOOR_M - shift) / TILE, v1 = (yb / FLOOR_M - shift) / TILE;
+      const v0 = (ya / FLOOR_M - shift + style * TILE) / (TILE * STYLES), v1 = (yb / FLOOR_M - shift + style * TILE) / (TILE * STYLES);
       // (a0, a1, b1), (a0, b1, b0): counter-clockwise seen from outside
       buf.pos.push(ax, ya, az, ax, yb, az, bx, yb, bz, ax, ya, az, bx, yb, bz, bx, ya, bz);
       buf.uv.push(ua, v0, ua, v1, ub, v1, ua, v0, ub, v1, ub, v0);

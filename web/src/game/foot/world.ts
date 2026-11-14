@@ -213,7 +213,8 @@ export function createWorld(ctx: FootCtx): System {
   for (const k of blocks) {
     const tone = C(BLOCK_TONES[Math.floor(R() * BLOCK_TONES.length)]).multiplyScalar(0.85 + R() * 0.3);
     const lit = [0.15, 0.3, 0.6, 0.6, 1, 1, 1.3][Math.floor(R() * 7)];
-    addWalls(walls, k.ring, 0, k.h, tone, lit, Math.floor(R() * TILE));
+    const style = k.h > 45 ? (R() < 0.7 ? 1 : 0) : k.h > 28 && R() < 0.2 ? 1 : 0;
+    addWalls(walls, k.ring, 0, k.h, tone, lit, Math.floor(R() * TILE), style);
     addRoof(k.ring, k.h);
   }
 
@@ -222,6 +223,8 @@ export function createWorld(ctx: FootCtx): System {
     const { b, ring, h } = k;
     const lit = (b.people ?? 0) > 0 ? 2 : b.hero || b.door ? 1.6 : 1.1;
     const uOff = Math.floor(R() * TILE);
+    const mat0 = b.conflict?.costar ?? b.material;
+    const style = mat0 === "steel" || (mat0 === "concrete" && h > 45 && R() < 0.5) ? 1 : 0;
     if (b.conflict) {
       const costar = C(MATERIAL_COLOR[b.conflict.costar] ?? MATERIAL_COLOR.unknown);
       const city = C(MATERIAL_COLOR[b.conflict.city] ?? MATERIAL_COLOR.unknown);
@@ -231,8 +234,8 @@ export function createWorld(ctx: FootCtx): System {
       upper.color.copy(city);
       const lb = newBuf(), ub = newBuf(), sb = newBuf();
       const mid = Math.round(h / 2 / 3.8) * 3.8 || h / 2;
-      addWalls(lb, ring, 0, mid, C(0xffffff), lit, uOff);
-      addWalls(ub, ring, mid, h, C(0xffffff), lit, uOff);
+      addWalls(lb, ring, 0, mid, C(0xffffff), lit, uOff, style);
+      addWalls(ub, ring, mid, h, C(0xffffff), lit, uOff, style);
       addPlainWalls(sb, offsetRing(ring, 0.12), mid - 0.22, mid + 0.22, C(0xffffff));
       const seam = keep(new THREE.MeshBasicMaterial({ color: AMBER, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false }));
       for (const [buf, mat] of [[lb, lower], [ub, upper], [sb, seam]] as const) {
@@ -240,7 +243,7 @@ export function createWorld(ctx: FootCtx): System {
       }
       splits.set(b.pid, { lower, upper, seam, costar, city, from: [costar.clone(), city.clone()], to: [costar.clone(), city.clone()], t0: -1, leaned: false });
     } else {
-      addWalls(walls, ring, 0, h, C(MATERIAL_COLOR[b.material] ?? MATERIAL_COLOR.unknown), lit, uOff);
+      addWalls(walls, ring, 0, h, C(MATERIAL_COLOR[b.material] ?? MATERIAL_COLOR.unknown), lit, uOff, style);
     }
     addRoof(ring, h);
   }
@@ -444,23 +447,27 @@ export function createWorld(ctx: FootCtx): System {
   const grid = buildGrid(ctx.colliders, bounds, 2, 1);
   const route = createRoute(ctx, grid);
 
-  // ================================================================== streetlamps (near the hero and the doors)
+  // ================================================================== streetlamps (along the sidewalks of the walkable area, nearest the hero first)
   const glow = keep(glowTexture(128));
   const focus: Pt[] = kits.filter((k) => k.b.door || k.b.hero).map((k) => k.c);
   const heroFocus: Pt = heroK ? (heroK.b.door ? [heroK.b.door.x, heroK.b.door.z] : heroK.c) : focus[0] ?? [0, 0];
   const lamps: Pt[] = [];
   {
-    const near = (x: number, z: number) => focus.some((f) => Math.hypot(f[0] - x, f[1] - z) < 170);
-    const rings = [...kits.map((k) => k.ring), ...blocks.map((k) => k.ring)];
-    for (const ring of rings) {
-      if (lamps.length >= 140) break;
+    const MAX_LAMPS = 260;
+    const inB = (x: number, z: number) => x > bounds.x0 + 2 && x < bounds.x1 - 2 && z > bounds.z0 + 2 && z < bounds.z1 - 2;
+    const fd = (p: Pt) => Math.hypot(p[0] - heroFocus[0], p[1] - heroFocus[1]);
+    const rings = [...kits.map((k) => ({ ring: k.ring, c: k.c })), ...blocks.map((k) => ({ ring: k.ring, c: centroid(k.ring) }))]
+      .filter((r) => inB(r.c[0], r.c[1]) || fd(r.c) < 200)
+      .sort((a, b) => fd(a.c) - fd(b.c));
+    for (const { ring } of rings) {
+      if (lamps.length >= MAX_LAMPS) break;
       const o = offsetRing(ring, 3.4);
-      for (let i = 0; i < o.length && lamps.length < 140; i++) {
+      for (let i = 0; i < o.length && lamps.length < MAX_LAMPS; i++) {
         const a = o[i], b = o[(i + 1) % o.length];
         const L = Math.hypot(b[0] - a[0], b[1] - a[1]);
         for (let s = 9; s < L - 4; s += 26) {
           const p: Pt = [a[0] + ((b[0] - a[0]) * s) / L, a[1] + ((b[1] - a[1]) * s) / L];
-          if (!near(p[0], p[1]) || !walkableAt(grid, p[0], p[1])) continue;
+          if (!inB(p[0], p[1]) || !walkableAt(grid, p[0], p[1])) continue;
           if (lamps.some((q) => Math.hypot(q[0] - p[0], q[1] - p[1]) < 18)) continue;
           lamps.push(p);
         }
