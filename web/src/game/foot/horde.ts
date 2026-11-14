@@ -27,6 +27,9 @@ const HIT_R = 1.1, HIT_DAMAGE = 4, HIT_CD = 1; // forgiving for first-time playe
 const PLAYER_HITS_PER_S = 2;
 // Flares: zombies within LURE_R that aren't in contact walk to the flare, crowd it and sway until it burns out.
 const LURE_R = 35, LURE_NOTICE = 4, LURE_CROWD = 3.2, FLARE_SLOTS = 3, LURE_FIELD_CELLS = 24;
+// On its way to the flare (and for its first LURE_GRACE s) a lured zombie only snaps back on contact, so a flare can pull
+// a crowd off you or the door; once it's crowding the flare, anyone within LURE_NOTICE breaks the spell.
+const LURE_GRACE = 3, LURE_CONTACT = 1.0;
 // Flashlight stun: hold the beam (within STUN_R, +-STUN_HALF of the aim, line of sight) on a zombie for STUN_HOLD s.
 const STUN_R = 14, STUN_HALF = (12 * Math.PI) / 180, STUN_HOLD = 1.2, STUN_S = 2.5, STUN_CD = 6;
 const SHOVE_R = 2.8, SHOVE_COS = Math.cos((70 * Math.PI) / 180), SHOVE_DIST = 3, KB_TAU = 0.25, STAGGER_S = 1.2;
@@ -135,6 +138,7 @@ export function createHorde(ctx: FootCtx): System {
   const los = new Uint8Array(MAX);
   const lit = new Float32Array(MAX), stunCd = new Float32Array(MAX); // flashlight: seconds held in the beam, cooldown
   const lure = new Int8Array(MAX).fill(-1); // flare slot a LURED zombie walks to
+  const lureAt = new Float32Array(MAX); // when it was lured
   const hx = new Float32Array(MAX), hz = new Float32Array(MAX); // a pack's home (the survivor it guards) // chasers: can they see the player (refreshed a few times a second)
   // looks (fixed per zombie)
   const scale = new Float32Array(MAX), seed = new Float32Array(MAX), hunch = new Float32Array(MAX);
@@ -397,6 +401,7 @@ export function createHorde(ctx: FootCtx): System {
         if (s === LURED && lure[i] >= 0 && Math.hypot(x[i] - flX[lure[i]], z[i] - flZ[lure[i]]) < fd) continue; // a nearer flare
         st[i] = LURED;
         lure[i] = k;
+        lureAt[i] = ctx.time;
         slideT[i] = 0;
       }
     }),
@@ -642,7 +647,8 @@ export function createHorde(ctx: FootCtx): System {
       // noticing / losing the player
       if (s === LURED) {
         // mesmerised: only someone right next to it breaks the spell
-        if (qk >= 0 && d < LURE_NOTICE) {
+        const atFlare = lure[i] >= 0 && Math.hypot(flX[lure[i]] - zx, flZ[lure[i]] - zz) < LURE_CROWD + 1.5;
+        if (qk >= 0 && d < (atFlare && now - lureAt[i] >= LURE_GRACE ? LURE_NOTICE : LURE_CONTACT)) {
           s = CHASE;
           los[i] = 1;
         } else if (lure[i] < 0 || now >= flEnd[lure[i]]) s = fallbackState(i);
