@@ -164,3 +164,26 @@ def test_debrief_draft_is_built_in_code_and_cites_the_player(monkeypatch):
     assert seen == {"case": "ghost_tenant", "checks": ["suite_tour", "human_report"]}
     assert d["n"] == 1 and d["label"] == "suite 1100, TEST-B" and d["your_report"] == "empty"
     assert d["text"].startswith("No correction drafted yet.") and "Next check: a site visit" in d["text"]
+
+
+def test_dossier_walls_follow_the_evidence_so_far(monkeypatch):
+    from app import evidence
+
+    _stub(monkeypatch)
+    monkeypatch.setattr(fortress, "building", lambda pid: {"pid": "1"} if str(pid) == "1" else None)
+    monkeypatch.setattr(fortress, "dossier", lambda pid: {"pid": "1", "scores": {"walls": {"value": 68, "label": "unresolved", "why": "priors", "source": "s"}}})
+    seen = {}
+
+    def walls(pid, checks=(), notes=None):
+        seen.update(checks=list(checks), notes=notes)
+        return {"value": 76, "label": "likely", "why": "evidence", "source": "s", "posterior": {}}
+    monkeypatch.setattr(fortress, "walls", walls)
+    store = InMemoryStore()
+    store.put(("notes", "1"), "n1", {"note": "concrete", "source": "the player", "supports": "city_list_current"})
+    routes.app.state.store = store
+    c = TestClient(routes.app)
+    assert c.get("/game/dossier/1").json()["scores"]["walls"]["value"] == 68  # no checks param: unchanged
+    w = c.get("/game/dossier/1?checks=look_from_above,compliance_filings,bogus,human_report").json()["scores"]["walls"]
+    assert w == {"value": 76, "label": "likely", "why": "evidence", "source": "s"}
+    assert seen["checks"] == ["look_from_above", "compliance_filings", "human_report"] and seen["notes"][0]["note"] == "concrete"
+    assert "look_from_above" in evidence.CHECK_WHAT

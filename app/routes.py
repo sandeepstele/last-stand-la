@@ -173,10 +173,23 @@ async def game_district(request: Request) -> JSONResponse:
 async def game_dossier(request: Request) -> JSONResponse:
     from app import fortress
 
+    from app import evidence
+
     pid = request.path_params["pid"]
     if not PID.match(pid) or not await asyncio.to_thread(fortress.building, pid):
         return JSONResponse({"error": "not a building in the district"}, status_code=404)
-    return JSONResponse(await asyncio.to_thread(fortress.dossier, pid))
+    d = await asyncio.to_thread(fortress.dossier, pid)
+    raw = request.query_params.get("checks")
+    if raw is not None:
+        # ?checks=a,b: walls re-weighed with the evidence so far plus any player report (same as commit_plan), so the
+        # fortress card matches the case file. Unknown check names are ignored.
+        checks = [c for c in dict.fromkeys(x.strip() for x in raw.split(",")) if c in evidence.CHECK_WHAT and c != "human_report"]
+        notes = [i.value for i in await _store(request).asearch(("notes", pid), limit=10)]
+        if notes:
+            checks.append("human_report")
+        w = await asyncio.to_thread(fortress.walls, pid, checks, notes)
+        d["scores"]["walls"] = {k: w[k] for k in ("value", "label", "why", "source")}
+    return JSONResponse(d)
 
 
 async def game_resolve(request: Request) -> JSONResponse:
