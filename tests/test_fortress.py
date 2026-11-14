@@ -76,3 +76,15 @@ def test_game_routes(monkeypatch):
     assert r.status_code == 200 and r.json()["pid_final"] == "3"
     assert c.post("/game/resolve", json={"wave": 1}).status_code == 400
     assert c.post("/game/resolve", json={"pid": "1", "to_pid": "777", "action": "run"}).status_code == 404
+
+
+def test_strict_replay_refuses_uncached_vision(monkeypatch, tmp_path):
+    import pytest
+
+    from app import vision
+
+    monkeypatch.setattr(vision, "CACHE", tmp_path)
+    monkeypatch.setenv("RADAR_REPLAY_STRICT", "1")
+    monkeypatch.setattr(vision, "_invoke", lambda *a, **k: pytest.fail("strict replay must not call the vision model"))
+    with pytest.raises(vision.VisionUnavailable):
+        vision.ask("TEST-A", "facade", [], "TEST question", ["a", "b"])

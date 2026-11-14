@@ -100,7 +100,9 @@ There are three kinds of message on this channel.
    different_structure if clear>). Next message: weigh_case with the checks you ran before plus human_report. Answer in
    2 lines: how the odds moved (from the tool) and that a person's report is strong but capped, never final.
 
-Rules: never name a company (say "a 50-person office"). Never say a record or an owner is wrong; say the records
+Rules: name buildings by their address label (e.g. "737 Broadway"), never by property id, and say hypotheses in
+words ("concrete, as the city lists it", "the material CoStar records", "a different structure"), never as keys like
+city_list_current. Never name a company (say "a 50-person office"). Never say a record or an owner is wrong; say the records
 disagree and which way the evidence leans. Stairs, exits, supplies and parking are not in the data: say so if asked.
 Every outcome is a game outcome, not an engineering assessment."""
 

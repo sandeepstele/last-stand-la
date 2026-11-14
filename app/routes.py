@@ -92,7 +92,7 @@ async def healthz(request: Request) -> JSONResponse:
                    "timeout_s": os.environ.get("RADAR_MODEL_TIMEOUT_S", "8")},
         "field_uploads_enabled": bool(os.environ.get("RADAR_FIELD_TOKEN")),
         "scene_mode": os.environ.get("RADAR_SCENE_MODE", "ack"),
-        "layers": {k: os.environ.get(f"RADAR_LAYER_{k.upper()}", "cached") for k in ("costar", "vexcel")},
+        "layers": {k: os.environ.get(f"RADAR_LAYER_{k.upper()}", "auto") for k in ("costar", "vexcel")},  # layers._mode's default
         "matterport": os.environ.get("RADAR_MATTERPORT", "auto"),
         "replay": _replay_label(),
     })
