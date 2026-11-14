@@ -242,6 +242,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
   }, [sweep]);
   // Walk between the real scan spots inside a building (Matterport twin positions), when the dossier has them.
   const [hop, setHop] = useState(0);
+  const [hopHeading, setHopHeading] = useState(0);
   const hopCount = useRef(0);
   const visitFrom = useRef<Step>("approach");
   const [nearPhoto, setNearPhoto] = useState<{ src: string; caption: string } | null>(null);
@@ -506,10 +507,6 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
           if (at) [p.x, p.z] = ctx.collide(at[0], at[1], 0.5);
         }
         if (s === "hold") stepAt.current = ctx.time - DEFEND_MIN_S;
-      }
-      if ((s === "visit" || s === "inside") && hopCount.current > 1) {
-        if (k.has("KeyD") || k.has("ArrowRight")) setHop((h) => (h + 1) % hopCount.current);
-        if (k.has("KeyA") || k.has("ArrowLeft")) setHop((h) => (h - 1 + hopCount.current) % hopCount.current);
       }
       if (s === "visit") {
         if (k.has("KeyE") && visit) {
@@ -1208,6 +1205,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
           mode="look"
           question={null}
           note={visitFaces.length ? "Real interior: this building's own 3D tour." : "No 3D tour of this interior on file."}
+          walk={hops.length > 1 ? { hops, index: Math.min(hop, hops.length - 1), onIndex: setHop, onHeading: setHopHeading } : null}
           exitHint="[E] step outside"
           onChoose={() => {}}
         />
@@ -1227,6 +1225,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
       {step === "inside" && hero && (
         <InsideView
           faces={hopNow && step === "inside" ? hopNow.faces : insideFaces}
+          walk={step === "inside" && hops.length > 1 ? { hops, index: Math.min(hop, hops.length - 1), onIndex: setHop, onHeading: setHopHeading } : null}
           title={`${hero.label} · inside`}
           mode={insideMode}
           question={step === "inside" && hero.conflict ? { prompt: "What are the walls made of?", choices: TIP_CHOICES, chosen: tip.chosen, status: tipStatus } : null}
@@ -1236,7 +1235,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
         />
       )}
       {showInside && hops.length > 1 && (
-        <HopMap hops={hops} at={Math.min(hop, hops.length - 1)} onPick={setHop} />
+        <HopMap hops={hops} at={Math.min(hop, hops.length - 1)} heading={hopHeading} onPick={setHop} />
       )}
       {showInside && (
         // The agent keeps talking while you're inside: the radio stays on screen (top-right is kept free by InsideView).
@@ -1281,17 +1280,22 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
 }
 
 /** A tiny floor plan of the real scan spots (Matterport twin positions). Click a dot, or A/D, to walk between them. */
-function HopMap({ hops, at, onPick }: { hops: { id: string; x: number; y: number }[]; at: number; onPick(i: number): void }) {
+function HopMap({ hops, at, heading, onPick }: { hops: { id: string; x: number; y: number }[]; at: number; heading: number; onPick(i: number): void }) {
   const xs = hops.map((h) => h.x), ys = hops.map((h) => h.y);
   const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
   const W = 260, H = Math.max(90, Math.min(200, (W * (y1 - y0 + 2)) / (x1 - x0 + 2)));
   const px = (x: number) => 14 + ((x - x0) / Math.max(1, x1 - x0)) * (W - 28);
-  const py = (y: number) => 14 + ((y - y0) / Math.max(1, y1 - y0)) * (H - 28);
+  const py = (y: number) => H - 14 - ((y - y0) / Math.max(1, y1 - y0)) * (H - 28); // plan +y is up
   return (
     <div style={{ position: "absolute", left: 16, top: "38%", zIndex: 36, background: "rgba(5,7,13,.72)", border: "1px solid rgba(245,165,36,.5)", padding: 8, color: "#e2e8f0", font: "600 11px/1.3 ui-monospace, monospace" }}>
-      <div style={{ marginBottom: 4, color: "#f5a524" }}>WALK THE REAL SCAN · {at + 1}/{hops.length} · [A]/[D] or click</div>
+      <div style={{ marginBottom: 4, color: "#f5a524" }}>WALK THE REAL SCAN · [W]/[S] walk · drag to look · click a spot</div>
       <svg width={W} height={H} style={{ display: "block" }}>
         <rect x={4} y={4} width={W - 8} height={H - 8} fill="none" stroke="rgba(226,232,240,.25)" />
+        {hops[at] && (() => {
+          // Heading arrow (plan +y points up the map, so flip y for screen coordinates).
+          const cx = px(hops[at].x), cy = py(hops[at].y), r = (heading * Math.PI) / 180;
+          return <line x1={cx} y1={cy} x2={cx + Math.sin(r) * 18} y2={cy - Math.cos(r) * 18} stroke="#f5a524" strokeWidth={3} />;
+        })()}
         {hops.map((h, i) => (
           <circle key={h.id} cx={px(h.x)} cy={py(h.y)} r={i === at ? 7 : 5} fill={i === at ? "#f5a524" : "rgba(226,232,240,.55)"}
             style={{ cursor: "pointer" }} onClick={() => onPick(i)} />
