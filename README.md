@@ -8,7 +8,7 @@ Decisions about buildings rest on their records: what a building is made of, who
 
 ## What it does
 
-The agent opens **cases** wherever independent sources disagree:
+The agent opens **cases** wherever independent sources disagree. An overnight sweep works the queue on its own, and each morning it delivers a "case of the day", already investigated, with its correction draft waiting for approval:
 
 | Case | The disagreement | Found in the CoStar kit (Houston + Los Angeles) |
 |---|---|---|
@@ -42,6 +42,7 @@ live question ─▶ orchestrator (deepagents: todos, parallel specialists)
                    ├─ scene verbs ─▶ 3D view (three.js)
                    └─ draft correction ─▶ a person approves or rejects (recorded, never sent)
 texts (iMessage via Photon) ─▶ background worker ─▶ record_note ─▶ next investigation weighs it
+overnight sweep (cron) ─▶ top case ─▶ investigate ─▶ dossier ─▶ "case of the day" ─▶ file_correction waits for YES/NO
 ```
 
 - **Code holds the rules; the model holds the judgment.** Matching, deadlines, priors and evidence weights are deterministic and tested. The model chooses what to check, reads the images and explains. It never types a number a tool didn't return.
