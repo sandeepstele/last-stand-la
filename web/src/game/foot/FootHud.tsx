@@ -343,7 +343,7 @@ export function FootHud(p: HudProps) {
 
       {hints.length > 0 && (
         <div className={styles.hints}>
-          {hints.map((h) => (
+          {hints.filter((h) => h !== interact).map((h) => (
             <span key={`${h.key}-${h.label}`} className={styles.hint} data-disabled={!!h.disabled} data-key={h.key}>
               <Keycap k={h.key} />
               {h.label}
