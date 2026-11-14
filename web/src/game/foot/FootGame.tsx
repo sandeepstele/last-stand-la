@@ -268,7 +268,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
     };
     ctxRef.current = ctx;
     if (process.env.NODE_ENV !== "production") (window as unknown as { __foot?: unknown }).__foot = { ctx, step: () => stepRef.current };
-    const first = office?.door ? office : hero;
+    const first = office?.door && !presenter ? office : hero;
     const door: Pt = first.door ? [first.door.x, first.door.z] : reachPoint(ctx, first.pid, [first.x, first.z + 40]) ?? [first.x, first.z];
     const sp = spawnFor(ctx, door, first.door?.facing ?? 180);
     Object.assign(ctx.player, { x: sp.at[0], z: sp.at[1], yaw: sp.yaw });
@@ -337,7 +337,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
       ctxRef.current = null;
       feedsRef.current = null;
     };
-  }, [district, hero, office]);
+  }, [district, hero, office, presenter]);
 
   // ------------------------------------------------------------------ helpers the loop uses
   const doorOf = (ctx: FootCtx, b: Building | null): Pt | null => (b ? (b.door ? [b.door.x, b.door.z] : reachPoint(ctx, b.pid, [ctx.player.x, ctx.player.z])) : null);
@@ -461,8 +461,16 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
           setBanner({ title: `Reach ${hero.label}`, sub: "The records disagree about its walls.", tone: "info" }, 4000);
           return;
         }
-        if (c7 && !suiteAsked.current && g.runDone && dist(here, od) < SCOUT_R) {
+        if (c7 && !suiteAsked.current && g.runDone && (presenter || dist(here, od) < SCOUT_R)) {
           if (g.say(`Check suite ${c7.suite} at building ${office.pid}: is the tenant on record still there?`)) suiteAsked.current = true;
+        }
+        // The 2-minute stage cut (?demo=1): the agent works case #7 from the records while you head for case #6.
+        if (presenter && suiteAsked.current) {
+          g.select(hero.pid);
+          ctx.bus.emit("world:beacon", { pid: hero.pid });
+          setStep("approach");
+          setBanner({ title: `Reach ${hero.label}`, sub: `HQ is working case #${c7?.n ?? ""} from the records while you go.`, tone: "info" }, 4000);
+          return;
         }
         if (dist(here, od) < DOOR_R && k.has("KeyE") && suiteAsked.current) {
           p.frozen = true;
@@ -821,7 +829,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
     ctx.bus.emit("world:route", { pts: null });
     ctx.bus.emit("world:barricade", { pid: null });
     ctx.bus.emit("world:beacon", { pid: hero.pid });
-    const first = office ?? hero;
+    const first = office && !presenter ? office : hero;
     const door = doorOf(ctx, first)!;
     const sp = spawnFor(ctx, door, first.door?.facing ?? 180);
     Object.assign(ctx.player, { x: sp.at[0], z: sp.at[1], yaw: sp.yaw, health: 100, stamina: 1, frozen: false, hidden: false });
@@ -871,10 +879,16 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
 
   const saved = mhud.survivors.filter((v) => v.state === "safe").length;
   const withYou = mhud.survivors.filter((v) => v.state === "following").length;
+  const case7Weighed = !!office && game.messages.some((m) => {
+    if (kind(m as Msg) !== "tool" || (m as Msg).name !== "weigh_case") return false;
+    return String(parse<{ property_id?: string }>(m as Msg)?.property_id) === office.pid;
+  });
   const caseTag = (c: NightCase | null) => (c ? `Case #${c.n}${queueTotal ? ` of ${queueTotal}` : ""}: ` : "");
   const objectives: Objective[] = [
     ...(office
-      ? [{ id: "case7", kind: "main" as const, text: `${caseTag(case7)}is the office on record at ${office.label}${case7?.suite ? `, suite ${case7.suite},` : ""} still there?`, done: suiteTip.sentAt !== null }]
+      ? [presenter
+          ? { id: "case7", kind: "main" as const, text: `${caseTag(case7)}HQ works it from the records (lease, listing, the suite's own tour)`, done: case7Weighed }
+          : { id: "case7", kind: "main" as const, text: `${caseTag(case7)}is the office on record at ${office.label}${case7?.suite ? `, suite ${case7.suite},` : ""} still there?`, done: suiteTip.sentAt !== null }]
       : []),
     { id: "reach", kind: "main", text: `${caseTag(case6)}reach ${heroLabel}`, done: prog.reached },
     { id: "walls", kind: "main", text: "Check its walls inside: concrete or not?", done: prog.checked },
@@ -913,6 +927,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
 
   const verifiedN = (tip.sentAt !== null ? 1 : 0) + (suiteTip.sentAt !== null ? 1 : 0);
   const outcomeLines = [
+    ...(presenter && case7 && case7Weighed ? [`Case #${case7.n} was worked by HQ from the records while you ran: the lease, the listing and the suite's own tour.`] : []),
     ...(verifiedN ? [`Records checked tonight: ${verifiedN} open case${verifiedN === 1 ? "" : "s"} from CoStar's queue${queueTotal ? ` of ${queueTotal}` : ""}. Your reports are evidence in them now.`] : []),
     ...(game.outcome ? game.outcome.why.split("; ").map((x) => x.replace(/\.\s*Game outcome.*$/, "")) : []),
   ];
