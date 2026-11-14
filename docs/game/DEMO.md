@@ -1,18 +1,31 @@
 # Last Stand LA: demo script and ops
 
-## The 2-minute pitch: one engine, two doors (current)
+## The 2-minute stage cut (current; Entertainment track; `?demo=1` on strict replay)
+
+The user's decisions (1:50 pm): **Entertainment**; the deep agent is always visible and running; two doors stays (dawn flips to the auditor).
+
+- **Normal mode** is the full Night Shift (a judge who plays walks both cases).
+- **`?demo=1`** is the stage cut:
+  - case #7 is worked by the agent from the records right after the briefing, while you head for case #6;
+  - [F] fast-forwards the walk, the defence and the escape.
+- **Never** use `agent=off` or `stub=1` on stage.
 
 | Time | On screen | Say |
 |---|---|---|
-| 0:00 | The game starts; the HQ panel shows "Tonight's cases: #7 and #6 of 328" | "CoStar's records are only true if someone checks them. Our AI auditor works CoStar's real queue of 328 open cases, and tonight it sends you to two of them." |
-| 0:10 | Suite 1100's real tour: [1] "Empty" | "CoStar says three people work here, but the suite is listed for lease. I look: empty. That's evidence now." |
-| 0:20 | [F] to the fortress; the walls question; [1] Concrete; the odds move | "Case two: CoStar says masonry, the city says concrete. The agent looked at the aerial itself; I confirm from inside." |
-| 0:35 | The wave; "HQ proposes RUN"; [R]; [F] fast-forward; dawn | "It reads the horde and proposes, and I decide. Code rolls every number." |
-| 0:45 | **File the report** → the auditor on 737 Broadway, with "the player" as a human report in the case file | "What you just played is the real product: the same deep agent, as CoStar's auditor." |
-| 0:50-1:45 | The auditor: the queue (#6 with your note), a ghost-tenant case, case of the day from the overnight sweep, a texted correction moving a verdict | the auditor script (README) |
-| 1:45-2:00 | The numbers | "226 on retrofit lists, 61 unfinished, only 12 of 69 concrete records agree. Inside and out, the record should match the building." |
+| 0:00 | Intro camera over real downtown LA | "Building records go stale. CoStar's record of this building says masonry; the city's retrofit list says concrete. Nobody has gone to look. Our deep agent works CoStar's queue of 328 cases like this, and tonight you're its eyes." |
+| 0:12 | Enter. The HQ panel shows the agent's briefing (#6 and #7 from the real queue), then works #7. F to the door; scout radio; the drone shows the aerial it looked at | "It plans the night from the real queue, sends four squads in parallel, and looks at the aerial itself. Code weighs it." |
+| 0:35 | E: inside the building's real 3D tour. [1] Concrete; the odds move | "So I go in and look. My report is evidence: capped, never final." |
+| 0:55 | Step out; the horde; HQ proposes RUN or HOLD. Press the key; F | "The agent proposes; I decide. Code rolls the walls against the 1994 Northridge shaking at this block." |
+| 1:10 | Aftershock, dawn, "File the report" | "And the night produced something real." |
+| 1:15 | The auditor: the case file with your report as a person's report, the draft correction, the queue (#6 of 328; #7 already worked) | "Same agent, auditing CoStar's records: it worked case 7 from the data while I ran. The other 326 it works overnight." |
+| 1:50 | Close | "The zombies are fake. The weak spots are real." |
 
-Use `?demo=1` for the presenter fast-forward [F]. The judge can play the full game at the table afterwards.
+**Acceptance:**
+- `?demo=1` on strict replay, with F at approach and escape.
+- Enter → the auditor case file in ≤ 1:20.
+- 3 clean runs.
+- The HQ panel shows an active agent task at every beat except the escape.
+- The ≤ 2-minute video follows the same cut.
 
 ## The 2-minute table demo (on foot only, older script)
 
