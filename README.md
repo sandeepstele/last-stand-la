@@ -22,7 +22,7 @@ question ─▶ orchestrator (deep agent, todos)
              ├─ records · aerial · interior specialists (parallel subagents)
              ├─ verify_building(property_id)  ← pure Python, loads every number from the data layers
              ├─ scene verbs ─▶ 3D world pane (each action confirmed by the browser)
-             └─ retrofit(property_id, city)   ─▶ answer + approvals for anything that leaves the app
+             └─ retrofit(property_id)         ─▶ answer + approvals for anything that leaves the app
 heartbeat ─▶ background worker: queue → verify → dossier → notify
 ```
 

@@ -68,6 +68,14 @@ def test_deal_fit_uses_ownership_tenancy_and_leases():
     assert strong.priority > weak.priority
 
 
+def test_unknown_lease_terms_are_not_scored_as_short():
+    """Real kit: only ~16% of occupied space has an expiration on record."""
+    s = solar.screen(_costar(), _aerial(), {"share_leased_beyond_horizon": 0.0, "expiration_known_share": 0.04, "horizon_years": 10}, now=NOW)
+    assert s.deal_fit == "unknown" and "not scored" in s.deal_reasons[0]
+    s = solar.screen(_costar(), _aerial(), {"share_leased_beyond_horizon": 0.9, "expiration_known_share": 0.7, "horizon_years": 10}, now=NOW)
+    assert s.deal_fit == "moderate" and "of the 70% with terms on record" in s.deal_reasons[0]
+
+
 def test_los_angeles_yield_is_labeled_until_refreshed():
     s = solar.screen(_costar(city="Los Angeles"), _aerial(), now=NOW)
     assert s.inputs_status["yield"] in ("sourced", "placeholder")

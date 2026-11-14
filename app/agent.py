@@ -82,12 +82,15 @@ def _errors() -> ToolErrorMiddleware:
 
 class RecordsOut(BaseModel):
     property_id: str
+    property_type: str | None = None
+    address: str | None = None
+    gba_sqft: float | None = None
     rba_sqft: float | None = None
     stories: int | None = None
-    building_type: str | None = None
-    land_area_sqft: float | None = None
-    building_count: int | None = None
-    lease_expirations: list[str] = []
+    year_built: int | None = None
+    roof_renovation_years: list[int] = []
+    owner_occupied: bool | None = None
+    tenancy_type: str | None = None
     source: str | None = None
     synthetic: bool | None = None
     notes: str = ""
@@ -97,9 +100,13 @@ class AerialOut(BaseModel):
     property_id: str
     footprint_sqft: float | None = None
     height_m: float | None = None
-    roof_condition: str | None = None
-    roof_object_area_sqft: float | None = None
-    setback_detected: bool | None = None
+    roof_shape: str | None = None
+    roof_material: str | None = None
+    roof_condition_score: float | None = None
+    roof_objects: dict[str, int] = {}
+    existing_pv_sqft: float | None = None
+    capture_date: str | None = None
+    structure_chosen_by: str | None = None
     source: str | None = None
     synthetic: bool | None = None
     notes: str = ""
@@ -116,9 +123,9 @@ class InteriorOut(BaseModel):
 
 def _specialists() -> list[dict]:
     return [
-        {"name": "records", "description": "Pulls the CoStar building record for a property id: listed area, stories, land area, building count, owner, tenants, leases.",
+        {"name": "records", "description": "Pulls the CoStar building record for a property id: type, gross and rentable area, stories, year built, roof renovations, ownership, tenancy.",
          "system_prompt": prompts.RECORDS_PROMPT, "tools": [costar_record], "model": SPEC, "response_format": RecordsOut, "middleware": [_errors()]},
-        {"name": "aerial", "description": "Reads Vexcel attributes for a property id: footprint, height, roof condition, rooftop equipment, setbacks.",
+        {"name": "aerial", "description": "Reads Vexcel attributes for a property id: footprint, height, roof shape, material and condition score, rooftop equipment, existing solar.",
          "system_prompt": prompts.AERIAL_PROMPT, "tools": [vexcel_attributes], "model": SPEC, "response_format": AerialOut, "middleware": [_errors()]},
         {"name": "interior", "description": "Reads the Matterport twin for a property id: levels scanned, levels below the entrance, floor-to-floor height, coverage.",
          "system_prompt": prompts.INTERIOR_PROMPT, "tools": [twin_levels], "model": SPEC, "response_format": InteriorOut, "middleware": [_errors()]},

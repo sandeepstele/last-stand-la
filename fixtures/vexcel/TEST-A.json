@@ -7,8 +7,19 @@
  "roof_elevation_m": 19.5,
  "height_m": 7.5,
  "roof_condition": "fair",
+ "roof_condition_score": 3.4,
  "roof_material": "TPO membrane",
- "roof_objects": [{"type": "AC unit", "count": 6}, {"type": "skylight", "count": 4}],
+ "roof_shape": "flat",
+ "roof_objects": [
+  {
+   "type": "AC unit",
+   "count": 6
+  },
+  {
+   "type": "skylight",
+   "count": 4
+  }
+ ],
  "roof_object_area_sqft": 900,
  "setback_detected": false,
  "capture_date": "2026-03-14"

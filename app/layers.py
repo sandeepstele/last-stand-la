@@ -3,12 +3,18 @@
 Every loader returns data WITH provenance (`source`, `synthetic`), and the verifier loads
 numbers here by property id, never from numbers an LLM typed into a tool call.
 
-Modes (env): RADAR_LAYER_COSTAR / RADAR_LAYER_VEXCEL = cached | live (live = the CoStar
-toolkit, wired in spike S2), RADAR_MATTERPORT = cached | live.
+Modes (env), default auto:
+  RADAR_LAYER_COSTAR  cached = fixtures/costar/<id>.json only (the synthetic TEST-* records)
+                      kit    = the CoStar data kit (app/costar.py; COSTAR_KIT_DIR, outside the repo). "live" = kit
+                      auto   = the fixture if there is one, else the kit
+  RADAR_LAYER_VEXCEL  cached = fixtures/vexcel/<id>.json only
+                      live   = Vexcel property/extract at the CoStar coordinates (VEXCEL_API_KEY), then cached
+                      auto   = the cache if there is one, else live
+  RADAR_MATTERPORT    cached | live (app/matterport.py)
 Everything here blocks (files, HTTP): call it through asyncio.to_thread from async code.
 
 Licensing: real CoStar / Vexcel / Matterport data must not reach the public repo.
-.gitignore ignores fixtures/*/* except the synthetic TEST-* files.
+.gitignore ignores fixtures/*/* except the synthetic TEST-* files; the kit stays outside the repo.
 """
 
 from __future__ import annotations
@@ -20,11 +26,21 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from app import interior, matterport
+from app import costar, interior, matterport, solar, vexcel
 from app.verify import Aerial, Records
 
 FIXTURES = Path(__file__).resolve().parent.parent / "fixtures"
 PROPERTY_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
+_MODES = {"costar": ("cached", "kit", "auto"), "vexcel": ("cached", "live", "auto")}
+
+# CoStar property type -> the verifier's building_type (default floor-to-floor heights)
+VERIFIER_TYPE = {"Office": "office", "Industrial": "industrial", "Flex": "industrial", "GeneralRetail": "retail",
+                 "Multifamily": "multifamily"}
+# the synthetic fixtures' building_type -> CoStar property type (CBECS load intensity)
+SOLAR_TYPE = {"office": "Office", "industrial": "Industrial", "warehouse": "Industrial", "retail": "GeneralRetail",
+              "multifamily": "Multifamily"}
+_OBJECT_KIND = {"ac unit": "ac-unit", "hvac unit": "ac-unit", "skylight": "skylight", "chimney": "chimney",
+                "satellite dish": "satellite-dish", "roof vent": "roof-vent"}
 
 
 class LayerError(RuntimeError):
@@ -39,12 +55,21 @@ def check_property_id(property_id: str) -> str:
 
 
 def _mode(layer: str) -> str:
-    return os.environ.get(f"RADAR_LAYER_{layer.upper()}", "cached").strip().lower()
+    mode = os.environ.get(f"RADAR_LAYER_{layer.upper()}", "auto").strip().lower()
+    if layer == "costar" and mode == "live":
+        mode = "kit"
+    if mode not in _MODES[layer]:
+        raise LayerError(f"RADAR_LAYER_{layer.upper()} must be one of {', '.join(_MODES[layer])}")
+    return mode
+
+
+def _path(layer: str, pid: str) -> Path:
+    return FIXTURES / layer / f"{pid}.json"
 
 
 def _fixture(layer: str, property_id: str) -> dict[str, Any]:
     pid = check_property_id(property_id)
-    path = FIXTURES / layer / f"{pid}.json"
+    path = _path(layer, pid)
     if not path.exists():
         raise LayerError(f"no cached {layer} data for {pid}")
     data = json.loads(path.read_text())
@@ -54,20 +79,46 @@ def _fixture(layer: str, property_id: str) -> dict[str, Any]:
 
 
 def get_record(property_id: str) -> dict[str, Any]:
-    if _mode("costar") == "live":
-        raise LayerError("live CoStar toolkit is not wired yet (spike S2); use cached mode")
-    return _fixture("costar", property_id)
+    pid = check_property_id(property_id)
+    mode = _mode("costar")
+    if mode == "cached" or (mode == "auto" and _path("costar", pid).exists()):
+        return _fixture("costar", pid)
+    try:
+        rec = costar.get(pid)
+    except costar.CoStarError as e:
+        raise LayerError(str(e)) from e
+    models = rec.get("matterport_model_ids") or []
+    rec["matterport_model_id"] = models[0] if models else None
+    rec["building_type"] = VERIFIER_TYPE.get(rec.get("property_type"), str(rec.get("property_type") or "office").lower())
+    return rec
 
 
-def get_aerial(property_id: str) -> dict[str, Any]:
-    if _mode("vexcel") == "live":
-        raise LayerError("live Vexcel access is not wired yet (spike S2); use cached mode")
-    return _fixture("vexcel", property_id)
+def get_aerial(property_id: str, record: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Vexcel at the CoStar record's own coordinates. A live fetch is cached (gitignored)."""
+    pid = check_property_id(property_id)
+    mode = _mode("vexcel")
+    path = _path("vexcel", pid)
+    if mode == "cached" or (mode == "auto" and path.exists()):
+        return _fixture("vexcel", pid)
+    rec = record if record is not None else get_record(pid)
+    lat, lon = rec.get("latitude"), rec.get("longitude")
+    if rec.get("synthetic") or not isinstance(lat, (int, float)) or not isinstance(lon, (int, float)):
+        raise LayerError(f"{pid} has no real coordinates on its CoStar record, so Vexcel can't be queried")
+    try:
+        data = vexcel.normalize(vexcel.property_extract(lat, lon), pid, lat, lon)
+    except vexcel.VexcelError as e:
+        raise LayerError(f"Vexcel: {e}") from e
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(data))
+    tmp.replace(path)
+    data["synthetic"] = False
+    return data
 
 
-def get_twin(property_id: str) -> tuple[str | None, interior.InteriorProfile | None]:
+def get_twin(property_id: str, record: dict[str, Any] | None = None) -> tuple[str | None, interior.InteriorProfile | None]:
     """The Matterport twin linked to this property in its CoStar record, if any."""
-    model_id = get_record(property_id).get("matterport_model_id")
+    model_id = (record if record is not None else get_record(property_id)).get("matterport_model_id")
     if not model_id:
         return None, None
     return model_id, interior.profile(matterport.fetch_layout(model_id))
@@ -84,6 +135,7 @@ class Building:
     aerial_raw: dict[str, Any]
     provenance: dict[str, dict[str, Any]] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
+    link_problem: str | None = None  # set when Vexcel's structure can't be this building
 
     @property
     def synthetic(self) -> bool:
@@ -97,12 +149,36 @@ def _positive(raw: dict[str, Any], key: str, layer: str) -> float:
     return float(value)
 
 
+def _listed_area(rec: dict[str, Any]) -> tuple[float, str]:
+    """CoStar GBA when the record has it (same basis as footprint x stories), else RBA."""
+    gba = rec.get("gba_sqft")
+    if isinstance(gba, (int, float)) and gba > 0:
+        return float(gba), "gross"
+    return _positive(rec, "rba_sqft", "CoStar"), "rentable"
+
+
+def _link_problem(footprint: float, listed: float, basis: str, stories: int) -> str | None:
+    """A footprint far from the CoStar floor plate means the point hit another structure on the parcel."""
+    if basis != "gross":
+        return None
+    plate = listed / stories
+    lo, hi = solar.ASSUMPTIONS["footprint_to_floorplate_ok"][0]
+    ratio = footprint / plate
+    if lo <= ratio <= hi:
+        return None
+    return (f"Vexcel's structure at the CoStar point is {footprint:,.0f} sq ft against a CoStar floor plate of about "
+            f"{plate:,.0f} sq ft ({ratio:.2f}x): it is probably another structure on the parcel, not this building.")
+
+
 def load_building(property_id: str) -> Building:
     """Everything the verifier needs, validated. Raises LayerError with a readable message."""
     pid = check_property_id(property_id)
-    rec, aer = get_record(pid), get_aerial(pid)
+    rec = get_record(pid)
+    aer = get_aerial(pid, rec)
+    listed, basis = _listed_area(rec)
     records = Records(
-        rba_sqft=_positive(rec, "rba_sqft", "CoStar"),
+        rba_sqft=listed,
+        area_basis=basis,
         stories=int(_positive(rec, "stories", "CoStar")),
         building_type=str(rec.get("building_type") or "office"),
         land_area_sqft=rec.get("land_area_sqft"),
@@ -115,17 +191,18 @@ def load_building(property_id: str) -> Building:
         roof_condition=aer.get("roof_condition"),
         roof_object_area_sqft=float(aer.get("roof_object_area_sqft") or 0.0),
         setback_detected=aer.get("setback_detected"),
-        perimeter_ft=aer.get("perimeter_ft"),
+        perimeter_ft=aer.get("perimeter_ft") or aer.get("roof_perimeter_ft"),
     )
-    warnings: list[str] = []
+    warnings: list[str] = list(aer.get("warnings") or [])
     try:
-        twin_id, twin = get_twin(pid)
+        twin_id, twin = get_twin(pid, rec)
     except (matterport.MatterportError, LayerError) as e:
         twin_id, twin = rec.get("matterport_model_id"), None
         warnings.append(f"twin unavailable: {e}")
     provenance = {
-        "costar": {"source": rec["source"], "synthetic": rec["synthetic"]},
-        "vexcel": {"source": aer["source"], "synthetic": aer["synthetic"]},
+        "costar": {"source": rec["source"], "synthetic": rec["synthetic"], "area_basis": basis},
+        "vexcel": {"source": aer["source"], "synthetic": aer["synthetic"], "capture_date": aer.get("capture_date"),
+                   "structure_chosen_by": aer.get("structure_chosen_by")},
     }
     if twin_id:
         provenance["matterport"] = {
@@ -133,4 +210,49 @@ def load_building(property_id: str) -> Building:
             "synthetic": False,
             "linked_by": "costar record (synthetic link)" if rec["synthetic"] else "costar record",
         }
-    return Building(pid, records, aerial, twin_id, twin, rec, aer, provenance, warnings)
+    link = _link_problem(aerial.footprint_sqft, listed, basis, records.stories)
+    return Building(pid, records, aerial, twin_id, twin, rec, aer, provenance, warnings, link)
+
+
+# ------------------------------------------------------------------ solar (app/solar.py)
+
+
+def solar_inputs(b: Building) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any] | None, list[str]]:
+    """The CoStar, Vexcel and lease inputs solar.screen expects, from either the kit or a fixture."""
+    rec, aer = b.record_raw, b.aerial_raw
+    notes: list[str] = []
+    gba = rec.get("gba_sqft")
+    if not gba:
+        gba = b.records.rba_sqft
+        notes.append("building load estimated on the listed rentable area (no gross area on record)")
+    costar_in = {
+        "property_id": b.property_id,
+        "property_type": rec.get("property_type") or SOLAR_TYPE.get(b.records.building_type, "Office"),
+        "city": rec.get("city"),
+        "gba_sqft": gba,
+        "stories": b.records.stories,
+        "year_built": rec.get("year_built"),
+        "roof_renovation_years": rec.get("roof_renovation_years") or [],
+        "owner_occupied": rec.get("owner_occupied"),
+        "tenancy_type": rec.get("tenancy_type"),
+        "leed_end_years": rec.get("leed_end_years") or [],
+    }
+    objects = aer.get("roof_objects") or {}
+    if isinstance(objects, list):  # synthetic fixture format [{type, count}]
+        objects = {_OBJECT_KIND.get(str(o.get("type", "")).lower(), str(o.get("type", "")).lower()): int(o.get("count") or 0)
+                   for o in objects}
+    aerial_in = {**aer, "roof_objects": objects, "roof_perimeter_ft": aer.get("roof_perimeter_ft") or aer.get("perimeter_ft")}
+    lease = None
+    if str(rec.get("source", "")).startswith("costar-kit"):
+        try:
+            lease = costar.lease_profile(b.property_id)
+        except (costar.CoStarError, OSError):
+            notes.append("lease data unavailable")
+    return costar_in, aerial_in, lease, notes
+
+
+def screen_solar(b: Building) -> solar.SolarScreen:
+    costar_in, aerial_in, lease, notes = solar_inputs(b)
+    s = solar.screen(costar_in, aerial_in, lease)
+    s.warnings = notes + s.warnings
+    return s

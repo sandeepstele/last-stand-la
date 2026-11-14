@@ -34,7 +34,7 @@ Judging is at your table. Special-track judges come only in round 1 (9:30–12:3
  └───────────────────────────┘               │        outbox scene field/<pid>                   │
  iPhone: ios/RadarField ── POST /field/scan ▶│ http.app (app/routes.py): /field/scan /healthz   │
                                              └───────┬──────────────────────────────────────────┘
- app/layers.py: CoStar records · Vexcel attributes · Matterport twin (cached fixtures now; toolkit in S2)
+ app/layers.py: CoStar records · Vexcel attributes · Matterport twin (CoStar data kit + live Vexcel, cached after the first fetch; synthetic TEST-* fixtures)
  Models: live gemini-3.8-flash · worker gemini-4-argon · specialists gemini-3.8-flash (Vertex AI, thinking=low)
 ```
 
@@ -53,10 +53,10 @@ Judging is at your table. Special-track judges come only in round 1 (9:30–12:3
 ## 4. Flows
 
 **Live question** (target under 60 s; latency measured per model in §9):
-1. The user types "Is <PID> worth a solar and roof retrofit? City: houston".
+1. The user types "Is <PID> worth a solar and roof retrofit?" (PID = a CoStar property id; the city comes from the record).
 2. Turn 1: `write_todos`, plus `show_building(pid)`, plus `task` × 3 in parallel (records, aerial, interior).
 3. `verify_building(pid)` loads all layers itself, then reconciles, tests hypotheses and returns the verdict, provenance and assumption status.
-4. `ghost_compare(pid)`; `reveal_levels(pid)` if levels were found below the entrance; `retrofit(pid, city)`; `place_solar(pid, city)`.
+4. `ghost_compare(pid)`; `reveal_levels(pid)` if levels were found below the entrance; `retrofit(pid)`; `place_solar(pid)` (both run app/solar.py: Vexcel roof, PVWatts, CBECS, eGRID, CoStar leases).
 5. A three-sentence answer ending on kWh/yr and t CO2/yr, with "(illustrative data)" and "(placeholder inputs)" labels when they apply.
 6. Approvals (`send_outreach`, `watch_building`) appear as the approve/reject bar. `respond({decisions:[…]})` needs one decision per action request.
 
@@ -162,7 +162,7 @@ Decision: live = flash, worker = argon (`RADAR_ORCH_MODEL`, `RADAR_WORKER_MODEL`
 | `/field/scan` open without a token; `..` IDs; "false" read as true | Blocker | Token required (503 if unset), `compare_digest`, strict IDs and booleans, token on GET; tests |
 | Licensed data would be committed | Blocker | `.gitignore` covers `fixtures/*/*` except synthetic TEST-*; demo twin unstaged; pre-commit hook |
 | Story A depended on the first-scan guess; partial twins ruled things out; mezzanine double count; rounding invented floors | Blocker/Major | Rules 2–6 in §6, each with a regression test |
-| LLM typed the verifier's inputs | Major | `verify_building(pid)` and `retrofit(pid, city)` load layers themselves |
+| LLM typed the verifier's inputs | Major | `verify_building(pid)` and `retrofit(pid)` load layers themselves |
 | Writer and the auto general-purpose subagent inherited every tool | Major | Writer cut; explicit tool-less general-purpose |
 | Cron had no input; morning digest needed its own cron | Major | `heartbeat.py` passes input; digest cut (hourly tick plus manual tick) |
 | Field scans on local disk; blocking I/O under `langgraph dev` | Major | Store-backed scans; async handlers; verified with 0 blocking errors |

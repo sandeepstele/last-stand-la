@@ -7,7 +7,7 @@ Contract (contracts/frontend_action.schema.json, contracts/ack.schema.json):
      /api/ack, which writes Store ("acks",) key=id.
   3. stage() polls the Store up to RADAR_ACK_TIMEOUT_S, then gives up.
 
-Every verb takes only a property id (plus city for solar): the numbers come from the data
+Every verb takes only a property id: the numbers come from the data
 layers and the verifier, never from the model. After one timeout in a thread the scene drops to
 "dispatch" mode (send, don't wait) so a dead screen can't stall the demo. Tool results stay
 neutral; the agent never narrates what the screen shows.
@@ -18,13 +18,12 @@ from __future__ import annotations
 import asyncio
 import os
 import uuid
-from dataclasses import asdict
 from typing import Any
 
 from langchain.tools import ToolRuntime, tool
 
 from app import layers
-from app.verify import investigate, retrofit_math
+from app.verify import investigate
 
 ACK_POLL_S = 0.15
 
@@ -87,10 +86,13 @@ async def show_building(property_id: str, runtime: ToolRuntime) -> str | list:
 async def ghost_compare(property_id: str, runtime: ToolRuntime) -> str | list:
     """Overlay a translucent 'as listed' volume on the 'as measured' volume."""
     b = await asyncio.to_thread(_building, property_id)
+    if b.link_problem:
+        return "ghost_compare: nothing drawn (the aerial structure is not this building)."
     inv = investigate(b.records, b.aerial, b.twin)
     args = {
         "property_id": b.property_id,
         "listed_sqft": b.records.rba_sqft,
+        "area_basis": b.records.area_basis,
         "expected_low_sqft": inv.initial.expected_low_sqft,
         "expected_high_sqft": inv.initial.expected_high_sqft,
         "footprint_sqft": b.aerial.footprint_sqft,
@@ -114,11 +116,15 @@ async def reveal_levels(property_id: str, runtime: ToolRuntime) -> str | list:
 
 
 @tool
-async def place_solar(property_id: str, city: str, runtime: ToolRuntime) -> str | list:
-    """Lay the solar array on usable roof only (layout illustrative)."""
+async def place_solar(property_id: str, runtime: ToolRuntime) -> str | list:
+    """Lay the solar array on usable roof only, inside the fire-code setback (layout illustrative;
+    the sizing is the same screen retrofit returns)."""
     b = await asyncio.to_thread(_building, property_id)
-    r = retrofit_math(b.records, b.aerial, b.records.rba_sqft, city)
-    args = {"property_id": b.property_id, **{k: v for k, v in asdict(r).items() if k in ("usable_roof_sqft", "panels", "system_kw")}}
+    s = await asyncio.to_thread(layers.screen_solar, b)
+    if s.status != "screened":
+        return f"place_solar: nothing drawn ({s.status})."
+    args = {"property_id": b.property_id, "usable_roof_sqft": s.usable_roof_sqft, "panels": s.panels,
+            "system_kw": s.system_kw, "load_matched_kw": s.load_matched_kw, "setback_ft": s.roof_breakdown.get("setback_ft")}
     return await stage("place_solar", args, runtime)
 
 

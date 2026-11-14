@@ -23,6 +23,7 @@ from app.interior import SQFT_PER_M2, InteriorProfile
 
 ASSUMPTIONS: dict[str, Any] = {
     "efficiency_band": (0.80, 1.00),  # listed rentable area vs footprint x stories (gross)
+    "gross_band": (0.90, 1.10),  # listed GROSS area (CoStar GBA, outside face of walls) vs footprint x stories
     "stories_convention": "above-grade",  # listed stories count floors from the entrance up: VERIFY with CoStar
     "coverage_complete_share": 0.70,  # a twin must span this share of the footprint to rule anything out
     "mezzanine_share": 0.5,
@@ -37,7 +38,7 @@ ASSUMPTIONS: dict[str, Any] = {
     "grid_t_co2_per_mwh": {"houston": 0.37, "los_angeles": 0.22},  # EPA eGRID subregions
     "reroof_conditions": ("poor", "fair"),
 }
-_HEURISTIC = {"efficiency_band", "coverage_complete_share", "floor_height_tolerance", "reroof_conditions", "stories_convention"}
+_HEURISTIC = {"efficiency_band", "gross_band", "coverage_complete_share", "floor_height_tolerance", "reroof_conditions", "stories_convention"}
 SOURCED: dict[str, str] = {}  # e.g. {"yield_kwh_per_kw": "NREL PVWatts v8, run 2026-11-14"}
 
 
@@ -58,7 +59,8 @@ def placeholders(keys: list[str]) -> list[str]:
 
 @dataclass
 class Records:
-    """What the CoStar record claims."""
+    """What the CoStar record claims. `rba_sqft` is the listed area; `area_basis` says which kind:
+    "rentable" (RBA, compared with efficiency_band) or "gross" (GBA, compared with gross_band)."""
 
     rba_sqft: float
     stories: int
@@ -66,6 +68,11 @@ class Records:
     land_area_sqft: float | None = None
     building_count: int | None = None
     year_renovated: int | None = None
+    area_basis: str = "rentable"
+
+    @property
+    def band(self) -> tuple[float, float]:
+        return ASSUMPTIONS["gross_band" if self.area_basis == "gross" else "efficiency_band"]
 
 
 @dataclass
@@ -303,7 +310,7 @@ def twin_fits_height(interior: InteriorProfile, aerial: Aerial) -> bool:
     if span is None or aerial.height_m is None:
         return True
     return span <= aerial.height_m * (1 + ASSUMPTIONS["floor_height_tolerance"]) + ASSUMPTIONS["parapet_allowance_m"]
-_VERDICT_KEYS = ["efficiency_band", "coverage_complete_share", "mezzanine_share", "default_floor_to_floor_m",
+_VERDICT_KEYS = ["efficiency_band", "gross_band", "coverage_complete_share", "mezzanine_share", "default_floor_to_floor_m",
                  "floor_height_tolerance", "parapet_allowance_m", "stories_convention"]
 
 
@@ -315,7 +322,7 @@ def investigate(
 ) -> Investigation:
     """`field_scan` is an iPhone field check for THIS building. Stand-in scans are ignored here
     (they are previews), so a room scanned elsewhere can never change a verdict."""
-    initial = reconcile_area(records.rba_sqft, aerial.footprint_sqft, records.stories)
+    initial = reconcile_area(records.rba_sqft, aerial.footprint_sqft, records.stories, band=records.band)
     live_field = field_scan if field_scan is not None and not field_scan.stand_in else None
     warnings: list[str] = []
     if interior is not None and not twin_fits_height(interior, aerial):
@@ -346,7 +353,7 @@ def investigate(
         ):
             extra += h.extra_gross_sqft
             applied.append(h.key)
-            final = reconcile_area(records.rba_sqft, aerial.footprint_sqft, records.stories, extra)
+            final = reconcile_area(records.rba_sqft, aerial.footprint_sqft, records.stories, extra, band=records.band)
             if final.status == "within":
                 break
 

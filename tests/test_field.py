@@ -180,8 +180,8 @@ def test_verify_building_tool_loads_layers_and_the_latest_real_scan():
         assert statuses["floor_count"] == "ruled_out"
         assert out["synthetic_data"] is True and out["provenance"]["costar"]["synthetic"] is True
         assert "at most 2 floor(s)" in out["field_check"]
-        fix = await retrofit.coroutine(property_id="TEST-A", city="Houston, TX", runtime=runtime)
-        assert fix["placeholders"] and fix["synthetic_data"] is True
+        fix = await retrofit.coroutine(property_id="TEST-A", runtime=runtime)  # city comes from the record
+        assert fix["status"] == "screened" and fix["placeholders"] and fix["synthetic_data"] is True
         assert (await field_check.coroutine(property_id="TEST-A", runtime=runtime))["ceiling_height_m"] == 2.74
         assert (await field_check.coroutine(property_id="NOPE", runtime=runtime))["field_check"] is None
 

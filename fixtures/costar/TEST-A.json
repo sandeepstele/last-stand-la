@@ -3,6 +3,7 @@
  "note": "ILLUSTRATIVE test record for development. Not CoStar data.",
  "property_id": "TEST-A",
  "address": "Test Building A (synthetic), Houston TX",
+ "city": "Houston",
  "rba_sqft": 38000,
  "stories": 2,
  "building_type": "office",
@@ -11,7 +12,11 @@
  "year_built": 1998,
  "year_renovated": null,
  "owner": "Example Owner LLC (synthetic)",
- "tenants": ["Example Tenant A (synthetic)"],
- "lease_expirations": ["2027-06: anchor tenant (synthetic)"],
+ "tenants": [
+  "Example Tenant A (synthetic)"
+ ],
+ "lease_expirations": [
+  "2027-06: anchor tenant (synthetic)"
+ ],
  "matterport_model_id": "Phin78u7wQN"
 }

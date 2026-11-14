@@ -48,6 +48,7 @@ ASSUMPTIONS: dict[str, tuple[Any, str]] = {
     "roof_condition_ready_from": (4.0, "heuristic"),
     "roof_inspect_age_years": (20, "heuristic"),
     "lease_horizon_years": (10, "heuristic"),
+    "lease_terms_min_coverage": (0.5, "heuristic"),  # score lease terms only if this share of occupied space has them
     "footprint_to_floorplate_ok": ((0.3, 3.0), "heuristic"),  # outside this ratio the aerial found another building
 }
 TILT = {"flat": 10, "pitched": 20}
@@ -134,14 +135,21 @@ def _deal_fit(costar: dict[str, Any], lease: dict[str, Any] | None, now_year: in
     elif "Multi" in tenancy:
         reasons.append("multi-tenant: needs a landlord-paid or shared-solar structure")
     share = (lease or {}).get("share_leased_beyond_horizon")
-    if share is not None:
-        reasons.append(f"{share:.0%} of occupied space is leased beyond {lease['horizon_years']} years")
+    coverage = (lease or {}).get("expiration_known_share")
+    scored = len(reasons)  # ownership and tenancy are scored signals
+    if share is not None and (coverage is None or coverage >= _a("lease_terms_min_coverage")):
+        known = "" if coverage is None or coverage >= 0.995 else f" (of the {coverage:.0%} with terms on record)"
+        reasons.append(f"{share:.0%} of occupied space is leased beyond {lease['horizon_years']} years{known}")
         points += 2 if share >= 0.5 else (1 if share >= 0.2 else 0)
+        scored += 1
+    elif share is not None:
+        reasons.append(f"lease terms on record for only {coverage:.0%} of occupied space: not scored")
     if any((y or 0) >= now_year for y in costar.get("leed_end_years") or []):
         points += 1
+        scored += 1
         reasons.append("active LEED certification: a sustainability-minded owner")
-    if not reasons:
-        return "unknown", ["no ownership or lease data on record"]
+    if not scored:
+        return "unknown", reasons or ["no ownership or lease data on record"]
     return ("strong" if points >= 3 else "moderate" if points >= 1 else "weak"), reasons
 
 

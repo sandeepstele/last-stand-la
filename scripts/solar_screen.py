@@ -41,6 +41,7 @@ def aerial_for(rec: dict, refetch: bool = False) -> dict | None:
         return None
     CACHE.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data))
+    time.sleep(0.2)  # be gentle with the Vexcel rate limit (live fetches only)
     return data
 
 
@@ -87,7 +88,6 @@ def main() -> None:
         results.append({"costar": {k: rec[k] for k in ("property_id", "property_type", "city", "gba_sqft", "stories", "year_built")},
                         "screen": s.to_dict()})
         print(f"[{i}/{len(recs)}] {rec['property_id']:>9} {rec['property_type']:<13} {s.status:<11} {s.headline[:110]}")
-        time.sleep(0.2)  # be gentle with the Vexcel rate limit
     ranked = sorted(results, key=lambda r: -r["screen"]["priority"])
     OUT.mkdir(parents=True, exist_ok=True)
     (OUT / "ranking.json").write_text(json.dumps(ranked, indent=1))

@@ -2,9 +2,10 @@
 the data layers by property id (app/layers.py), never from values the model typed.
 
 Status of each seam:
-  data layers  CACHED fixtures with provenance; live CoStar/Vexcel toolkit is spike S2
+  data layers  REAL: CoStar data kit + live Vexcel (cached after the first fetch); synthetic TEST-* fixtures
   matterport   REAL read-only Model API client, live/cached
   verifier     REAL (app/verify.py)
+  solar        REAL (app/solar.py): Vexcel roof, NREL PVWatts, EIA CBECS load, EPA eGRID, CoStar leases
   field check  REAL (app/field.py, Store-backed)
   queue        REAL (Store namespace "queue")
   scene        app/scene.py (live graph only)
@@ -25,7 +26,7 @@ from typing import Any
 from langchain.tools import ToolRuntime, tool
 
 from app import field, layers, photon
-from app.verify import investigate, retrofit_math
+from app.verify import investigate
 
 FIELD_REQUEST = (
     "Field check: open Radar Field on a LiDAR iPhone, start in a room at the entrance level, scan one "
@@ -42,15 +43,18 @@ def _now() -> str:
 
 @tool
 def costar_record(property_id: str) -> dict:
-    """CoStar building record: rba_sqft, stories, building_type, land_area_sqft, building_count,
-    year_built, year_renovated, owner, tenants, lease_expirations, plus source and synthetic flags."""
+    """CoStar building record: property_type, address, city, gba_sqft (gross), rba_sqft (rentable),
+    stories, height_m, year_built, roof_renovation_years, owner_occupied, tenancy_type, building_class,
+    matterport_model_id, plus source and synthetic flags."""
     return layers.get_record(property_id)
 
 
 @tool
 def vexcel_attributes(property_id: str) -> dict:
-    """Vexcel building attributes: footprint_sqft, height_m, roof_condition, roof objects and their
-    area, setback_detected, capture date, plus source and synthetic flags."""
+    """Vexcel roof and building attributes at the CoStar coordinates: footprint_sqft, height_m,
+    roof_shape, roof_material, roof_condition_score (higher is better), roof_objects counts,
+    existing_pv_sqft, roof_tree_cover_pct, capture_date, which structure was chosen and why,
+    plus source and synthetic flags."""
     return layers.get_aerial(property_id)
 
 
@@ -76,6 +80,10 @@ async def verify_building(property_id: str, runtime: ToolRuntime) -> dict:
     reconcile listed area with footprint x stories, and test every explanation for a gap.
     Returns the verdict, confidence, evidence, next_checks, provenance and assumption status."""
     b = await asyncio.to_thread(layers.load_building, property_id)
+    if b.link_problem:  # comparing against the wrong structure would invent a gap
+        return {"property_id": b.property_id, "verdict": "check_link", "confidence": "high",
+                "headline": f"{b.link_problem} Not compared; re-point the aerial at the right structure first.",
+                "provenance": b.provenance, "synthetic_data": b.synthetic, "warnings": b.warnings}
     scan = await field.latest_scan(runtime.store, b.property_id)  # never a stand-in
     inv = investigate(b.records, b.aerial, b.twin, scan)
     out = inv.to_dict()
@@ -95,16 +103,29 @@ async def verify_building(property_id: str, runtime: ToolRuntime) -> dict:
     return out
 
 
+_SCREEN_KEYS = ("status", "headline", "usable_roof_sqft", "system_kw", "panels", "annual_kwh", "building_load_kwh",
+                "load_offset_pct", "load_matched_kw", "co2_t_per_year", "readiness", "readiness_reasons", "deal_fit",
+                "deal_reasons", "roof_breakdown", "warnings")
+
+
 @tool
-async def retrofit(property_id: str, city: str, runtime: ToolRuntime) -> dict:
-    """Size solar on usable roof only and return kWh/yr, % of building load, t CO2/yr, whether to
-    re-roof first, and which inputs are still placeholders. city: houston or los_angeles."""
+async def retrofit(property_id: str, runtime: ToolRuntime) -> dict:
+    """Screen the roof for solar from real inputs: Vexcel roof outline minus fire-code setbacks, rooftop
+    equipment, existing panels and tree shade; NREL PVWatts yield; building electricity use from CoStar
+    gross area x EIA CBECS; EPA eGRID CO2. Also roof readiness (ready / inspect / reroof_first from
+    Vexcel condition and roof age) and deal fit (ownership, tenancy, lease terms). The city comes from
+    the CoStar record. status check_link means the aerial found a different structure: nothing is sized."""
     b = await asyncio.to_thread(layers.load_building, property_id)
-    scan = await field.latest_scan(runtime.store, b.property_id)
-    inv = investigate(b.records, b.aerial, b.twin, scan)
-    area = inv.trusted_area_sqft or b.records.rba_sqft
-    out = asdict(retrofit_math(b.records, b.aerial, area, city))
-    out["area_basis"] = "listed area, explained by the verifier" if inv.trusted_area_sqft else "listed area, NOT verified"
+    s = await asyncio.to_thread(layers.screen_solar, b)
+    out = {k: v for k, v in s.to_dict().items() if k in _SCREEN_KEYS}
+    out["property_id"] = b.property_id
+    out["placeholders"] = sorted(k for k, v in s.inputs_status.items() if v == "placeholder")
+    out["sources"] = s.sources
+    if s.status == "screened" and b.link_problem is None:
+        scan = await field.latest_scan(runtime.store, b.property_id)
+        inv = investigate(b.records, b.aerial, b.twin, scan)
+        out["floor_area_check"] = (f"{inv.verdict}: the load estimate uses the listed area"
+                                   + ("" if inv.trusted_area_sqft else ", which the verifier has NOT explained"))
     out["synthetic_data"] = b.synthetic
     return out
 

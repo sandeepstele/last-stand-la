@@ -3,14 +3,31 @@
   "$id": "radar/frontend_action",
   "title": "frontend_action (agent -> web), emitted by app/scene.py:stage() on the LangGraph 'custom' stream channel",
   "type": "object",
-  "required": ["type", "id", "verb", "args"],
+  "required": [
+    "type",
+    "id",
+    "verb",
+    "args"
+  ],
   "properties": {
-    "type": {"const": "frontend_action"},
-    "id": {"type": "string", "description": "uuid hex; echo it back in the ack"},
-    "verb": {"enum": ["show_building", "ghost_compare", "reveal_levels", "place_solar"]},
+    "type": {
+      "const": "frontend_action"
+    },
+    "id": {
+      "type": "string",
+      "description": "uuid hex; echo it back in the ack"
+    },
+    "verb": {
+      "enum": [
+        "show_building",
+        "ghost_compare",
+        "reveal_levels",
+        "place_solar"
+      ]
+    },
     "args": {
       "type": "object",
-      "description": "Per verb (all numbers come from the data layers, never the model): show_building {property_id, footprint_sqft, height_m, stories, polygon_m?, synthetic}; ghost_compare {property_id, listed_sqft, expected_low_sqft, expected_high_sqft, footprint_sqft, height_m, stories}; reveal_levels {property_id, levels:[{label, offset_m}], floor_to_floor_m}; place_solar {property_id, usable_roof_sqft, panels, system_kw}"
+      "description": "Per verb (all numbers come from the data layers, never the model): show_building {property_id, footprint_sqft, height_m, stories, polygon_m?, synthetic}; ghost_compare {property_id, listed_sqft, area_basis (gross|rentable), expected_low_sqft, expected_high_sqft, footprint_sqft, height_m, stories}; reveal_levels {property_id, levels:[{label, offset_m}], floor_to_floor_m}; place_solar {property_id, usable_roof_sqft, panels, system_kw, load_matched_kw?, setback_ft}"
     }
   }
 }

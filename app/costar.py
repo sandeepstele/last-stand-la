@@ -129,18 +129,22 @@ def _tenancies() -> dict[str, list[dict[str, Any]]]:
 
 
 def lease_profile(property_id: str, horizon_years: int = 10, today: datetime | None = None) -> dict[str, Any]:
-    """How much of the occupied space is leased beyond the solar horizon (default 10 years)."""
+    """How much of the occupied space WITH A KNOWN EXPIRATION is leased beyond the solar horizon
+    (default 10 years), and how much of the occupied space that covers. Most kit tenancies have no
+    expiration on record, so unknown terms are never counted as short."""
     now = today or datetime.now(UTC)
     cutoff = f"{now.year + horizon_years:04d}-{now.month:02d}-{now.day:02d}"
     rows = _tenancies().get(str(property_id), [])
     total = sum(r["sqft"] for r in rows)
     known = [r for r in rows if r["expires"]]
+    known_sqft = sum(r["sqft"] for r in known)
     long = sum(r["sqft"] for r in known if r["expires"] >= cutoff)
     return {
         "current_tenancies": len(rows),
         "occupied_sqft": round(total),
         "with_known_expiration": len(known),
-        "share_leased_beyond_horizon": round(long / total, 2) if total else None,
+        "expiration_known_share": round(known_sqft / total, 2) if total else None,
+        "share_leased_beyond_horizon": round(long / known_sqft, 2) if known_sqft else None,
         "horizon_years": horizon_years,
         "latest_expiration": max((r["expires"] for r in known), default=None),
     }
