@@ -136,12 +136,20 @@ export function useGame(stub: boolean) {
     if (pid) loadDossier(pid);
   }, [loadDossier]);
 
-  const startScout = useCallback(() => {
+  /** fresh=false keeps the night's thread (on foot, the briefing and the suite case come first on the same thread). */
+  const startScout = useCallback((fresh = true) => {
     if (!selected || agent.isLoading) return;
     setFortress(selected);
     setPhase("scout");
-    agent.submit(`Scout property ${selected}`, true).catch(() => {});
+    agent.submit(`Scout property ${selected}`, fresh).catch(() => {});
   }, [selected, agent]);
+
+  /** Send an exact message to the laststand graph (on foot: "Brief the night shift", the suite check, suite tips). */
+  const say = useCallback((text: string, fresh = false): boolean => {
+    if (agent.isLoading) return false;
+    agent.submit(text, fresh).catch(() => {});
+    return true;
+  }, [agent]);
 
   /** Start wave n; returns the pid the horde comes for (null if it could not start). */
   const startNight = useCallback((n = 1): string | null => {
@@ -267,13 +275,16 @@ export function useGame(stub: boolean) {
   // Done once the agent has answered the scout prompt (an AI message after the newest human one), or failed.
   const scoutDone = phase === "scout" && !agent.isLoading && lastHumanIndex(messages) >= 0
     && (!!agent.error || messages.slice(lastHumanIndex(messages) + 1).some((m) => kind(m as Msg) === "ai"));
+  // Any run: finished once the agent has answered the newest human message (or failed).
+  const runDone = !agent.isLoading && lastHumanIndex(messages) >= 0
+    && (!!agent.error || messages.slice(lastHumanIndex(messages) + 1).some((m) => kind(m as Msg) === "ai"));
   const wave = district?.waves.find((w) => w.n === waveN) ?? district?.waves[0] ?? null;
 
   return {
     stub, district, districtError, retryDistrict,
     phase: shownPhase, selected, fortress, focusPid, dossier, wave, waveN,
     messages, isLoading: agent.isLoading, agentError: agent.error,
-    horde, fallback, proposal, decision, decideError, outcome, scoutDone,
+    horde, fallback, proposal, decision, decideError, outcome, scoutDone, runDone, say, dossiers,
     conflictMaterials,
     select, startScout, startNight, decide, goDawn, sendTip, reset,
   };

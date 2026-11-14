@@ -11,6 +11,9 @@
 //   escape  sprint along the agent's route to the fallback building, chased
 //   safe -> aftershock (code roll, Northridge shaking) -> dawn (the real case file + draft correction)
 //
+// The Night Shift (user decision 1:45): the agent BRIEFS the night from the real CoStar case queue ("Brief the night shift" ->
+// night_cases + write_todos). Case #7 first (a ghost tenant: is the office on record in suite 1100 still there? the player walks
+// into that suite's real tour and reports), then case #6 (the fortress walls), then the night. Reports are real evidence.
 // Missions ("Night 1"): a nightfall clock, trapped survivors to rescue and escort, supply crates (boards for the barricade,
 // medkits), an active door defence on HOLD, an escort run on RUN, aftershock debris zones (game outcome, not an engineering
 // assessment), a dawn score and "file the report". None of it adds an agent message: the recorded replay stays valid.
@@ -23,7 +26,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import type { Game } from "../useGame";
 import { evidenceUrl } from "../Pano";
-import { kind, parse, radioLines, type Msg } from "../radio";
+import { SECTOR_NAME, kind, latestResult, parse, radioLines, type Msg } from "../radio";
 import { DISCLAIMER, type Building } from "../types";
 import { boundsOf, buildColliders, createBus, dirOf, makeCollide, reachPoint, DOOR_R, SCOUT_R, type FootCtx, type Pt, type SupplySpot, type SurvivorSpot, type SurvivorState, type System } from "./engine";
 import { createInput, type Input } from "./input";
@@ -42,9 +45,18 @@ import { FootHud, type Banner, type Hint, type Objective } from "./FootHud";
 import { DawnView } from "./DawnView";
 import { RadioLog } from "../Hud";
 
-type Step = "intro" | "approach" | "inside" | "night" | "hold" | "escape" | "safe" | "result" | "dawn";
+type Step = "intro" | "office" | "suite" | "approach" | "inside" | "night" | "hold" | "escape" | "safe" | "result" | "dawn";
 
 const TIP_CHOICES = ["Concrete", "Brick", "Can't tell"];
+const SUITE_CHOICES = ["Empty: no one works here", "People are working here", "Can't tell"];
+// Exact strings: the replay covers these three (sent as "Tip: <text>").
+const suiteTips = (suite: string) => [
+  `I'm inside suite ${suite}. It's empty: no one is working here.`,
+  `I'm inside suite ${suite}. People are working here.`,
+  `I'm inside suite ${suite}. I can't tell if anyone works here.`,
+];
+// night_cases() (laststand graph): the open queue cases inside the play area, in queue order. Only those with imagery gathered.
+type NightCase = { n: number; case: string; property_id: string; suite: string | null; label: string; question?: string; stakes?: string };
 // Exact strings: the backend's replay recording covers these three (sent as "Tip: <text>"). No address in source code.
 const TIP_TEXTS = [
   "I'm inside the building. The walls and columns look like concrete.",
@@ -159,6 +171,13 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
   const hero = useMemo(() => (district ? pickHero(district.buildings) : null), [district]);
   const heroLabel = hero?.label ?? "";
   const safeRoom = useMemo(() => district?.buildings.find((b) => b.door && b.pid !== hero?.pid) ?? null, [district, hero]);
+  // The Night Shift needs the live agent (the briefing comes from the real queue). Stub / agent-off play case #6 only.
+  const nightShift = !!safeRoom && !game.stub && !agentOff;
+  const office = nightShift ? safeRoom : null;
+  const brief = useMemo(() => latestResult<{ total?: number; in_area?: number; cases?: NightCase[] }>(game.messages, "night_cases"), [game.messages]);
+  const case7 = useMemo(() => (office ? brief?.cases?.find((c) => c.case === "ghost_tenant" && String(c.property_id) === office.pid && c.suite) ?? null : null), [brief, office]);
+  const case6 = useMemo(() => (hero ? brief?.cases?.find((c) => c.case === "material_conflict" && String(c.property_id) === hero.pid) ?? null : null), [brief, hero]);
+  const queueTotal = brief?.total ?? null;
   const fallbackPid = game.fallback?.to_pid && district?.buildings.some((b) => b.pid === game.fallback?.to_pid) ? game.fallback.to_pid : safeRoom?.pid ?? null;
   const labelOf = (pid: string | null | undefined) => (pid ? district?.buildings.find((b) => b.pid === pid)?.label ?? game.fallback?.to_label ?? "the fallback" : "");
 
@@ -192,6 +211,20 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
   const nightAsked = useRef(false); // the loop outruns React: send "Wave 1 is coming" exactly once
   const shockFired = useRef(false);
   const tipSending = useRef(false);
+  // the Night Shift: briefing + case #7
+  const briefAsked = useRef(false);
+  const suiteAsked = useRef(false);
+  const suiteSending = useRef(false);
+  const officeSpawned = useRef(false);
+  const [suiteTip, setSuiteTip] = useState<{ chosen: number | null; sentAt: number | null }>({ chosen: null, sentAt: null });
+  const suiteTipRef = useRef(suiteTip);
+  useEffect(() => {
+    suiteTipRef.current = suiteTip;
+  }, [suiteTip]);
+  const case7Ref = useRef<NightCase | null>(null);
+  useEffect(() => {
+    case7Ref.current = case7;
+  }, [case7]);
   // missions
   const nightfallAt = useRef(Infinity);
   const nightFallen = useRef(false);
@@ -235,8 +268,9 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
     };
     ctxRef.current = ctx;
     if (process.env.NODE_ENV !== "production") (window as unknown as { __foot?: unknown }).__foot = { ctx, step: () => stepRef.current };
-    const door: Pt = hero.door ? [hero.door.x, hero.door.z] : reachPoint(ctx, hero.pid, [hero.x, hero.z + 40]) ?? [hero.x, hero.z];
-    const sp = spawnFor(ctx, door, hero.door?.facing ?? 180);
+    const first = office?.door ? office : hero;
+    const door: Pt = first.door ? [first.door.x, first.door.z] : reachPoint(ctx, first.pid, [first.x, first.z + 40]) ?? [first.x, first.z];
+    const sp = spawnFor(ctx, door, first.door?.facing ?? 180);
     Object.assign(ctx.player, { x: sp.at[0], z: sp.at[1], yaw: sp.yaw });
 
     const feeds = createFeeds(ctx);
@@ -302,12 +336,16 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
       ctxRef.current = null;
       feedsRef.current = null;
     };
-  }, [district, hero]);
+  }, [district, hero, office]);
 
   // ------------------------------------------------------------------ helpers the loop uses
   const doorOf = (ctx: FootCtx, b: Building | null): Pt | null => (b ? (b.door ? [b.door.x, b.door.z] : reachPoint(ctx, b.pid, [ctx.player.x, ctx.player.z])) : null);
   const objectivePoint = (ctx: FootCtx): { at: Pt; label: string } | null => {
     const s = stepRef.current;
+    if ((s === "office" || s === "suite") && office) {
+      const d = doorOf(ctx, office);
+      return d ? { at: d, label: office.label } : null;
+    }
     if ((s === "approach" || s === "inside") && hero) {
       const d = doorOf(ctx, hero);
       return d ? { at: d, label: hero.label } : null;
@@ -363,7 +401,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
       const since = ctx.time - stepAt.current;
 
       // The dusk clock: at nightfall the streets fill up (arcade pressure; the agent's wave still waits for your report).
-      if (!nightFallen.current && ctx.time > nightfallAt.current && (s === "approach" || s === "inside")) {
+      if (!nightFallen.current && ctx.time > nightfallAt.current && (s === "office" || s === "suite" || s === "approach" || s === "inside")) {
         nightFallen.current = true;
         ctx.bus.emit("horde:ambient", { count: 40 });
         setBanner({ title: "Night has fallen", sub: "The streets are crawling. Get inside.", tone: "bad" }, 3500);
@@ -408,6 +446,77 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
           if (at) [p.x, p.z] = ctx.collide(at[0], at[1], 0.5);
         }
         if (s === "hold") stepAt.current = ctx.time - DEFEND_MIN_S;
+      }
+      if (s === "office" && office) {
+        const od = doorOf(ctx, office)!;
+        const c7 = case7Ref.current;
+        // The briefing came back without a case here: straight to the fortress.
+        if (g.runDone && briefAsked.current && !c7 && since > 2) {
+          g.select(hero.pid);
+          ctx.bus.emit("world:beacon", { pid: hero.pid });
+          setStep("approach");
+          setBanner({ title: `Reach ${hero.label}`, sub: "The records disagree about its walls.", tone: "info" }, 4000);
+          return;
+        }
+        if (c7 && !suiteAsked.current && g.runDone && dist(here, od) < SCOUT_R) {
+          if (g.say(`Check suite ${c7.suite} at building ${office.pid}: is the tenant on record still there?`)) suiteAsked.current = true;
+        }
+        if (dist(here, od) < DOOR_R && k.has("KeyE") && suiteAsked.current) {
+          p.frozen = true;
+          p.hidden = true;
+          ctx.input.unlock();
+          setStep("suite");
+        } else if (dist(here, od) < DOOR_R && k.has("KeyE")) {
+          setBanner({ title: "HQ is still briefing", sub: "Give it a moment.", tone: "info" }, 1500);
+        }
+        return;
+      }
+      if (s === "suite" && office) {
+        const t = suiteTipRef.current;
+        const c7 = case7Ref.current;
+        for (const [code, i] of [["Digit1", 0], ["Digit2", 1], ["Digit3", 2]] as const) if (k.has(code) && t.chosen === null) setSuiteTip({ chosen: i, sentAt: null });
+        if (c7 && t.chosen !== null && t.sentAt === null && !suiteSending.current && g.runDone) {
+          if (g.say(`Tip: ${suiteTips(String(c7.suite))[t.chosen]}`)) {
+            suiteSending.current = true;
+            setSuiteTip({ chosen: t.chosen, sentAt: g.messages.length });
+          }
+        }
+        if (k.has("KeyE") && t.sentAt !== null && g.runDone) {
+          const od = doorOf(ctx, office)!;
+          const f = dirOf(office.door?.facing ?? 180);
+          [p.x, p.z] = ctx.collide(od[0] + f[0] * 2.5, od[1] + f[1] * 2.5, 0.5);
+          p.yaw = ((office.door?.facing ?? 180) * Math.PI) / 180;
+          p.frozen = false;
+          p.hidden = false;
+          ctx.input.lock();
+          // The agent's verdict decides whether the office on record is still here to be brought to safety.
+          let lean: string | null = null;
+          for (let i = g.messages.length - 1; i >= 0; i--) {
+            const m = g.messages[i] as Msg;
+            if (kind(m) !== "tool" || m.name !== "weigh_case") continue;
+            const w = parse<{ property_id?: string; verdict?: { hypothesis?: string; label?: string } }>(m);
+            if (String(w?.property_id) !== office.pid) continue;
+            lean = w?.verdict?.label && w.verdict.label !== "unresolved" ? w.verdict.hypothesis ?? null : null;
+            break;
+          }
+          const n = Math.min(4, Math.max(1, Number(/(\d+)-person/.exec(c7?.stakes ?? "")?.[1] ?? 3)));
+          if (lean === "still_there" && !officeSpawned.current) {
+            officeSpawned.current = true;
+            const names = ["Ana", "Ben", "Chen", "Dara"].slice(0, n);
+            const spots = names.map((name, i) => {
+              const [x, z] = ctx.collide(od[0] + f[0] * (3 + i), od[1] + f[1] * (3 + i) + (i % 2 ? 1.2 : -1.2), 0.5);
+              return { id: `office-${i}`, x, z, name };
+            });
+            ctx.bus.emit("mission:survivors", { survivors: spots });
+            setBanner({ title: "The office on record is still here", sub: `Bring them to ${hero.label}.`, tone: "good" }, 4500);
+          } else {
+            setBanner({ title: lean === "still_there" ? "They're with you" : "Nobody to bring", sub: lean === "still_there" ? "" : `CoStar records ${n} ${n === 1 ? "person" : "people"} in suite ${c7?.suite}. HQ will flag the record for a human to check.`, tone: "info" }, 5000);
+          }
+          g.select(hero.pid);
+          ctx.bus.emit("world:beacon", { pid: hero.pid });
+          setStep("approach");
+        }
+        return;
       }
       if (s === "approach") {
         if (!scoutAsked.current && dist(here, heroDoor) < SCOUT_R && g.phase === "dusk") {
@@ -461,7 +570,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
             if (w) {
               ctx.bus.emit("wave:start", { n: 1, sector: w.sector, size: w.size, targetX: heroDoor[0], targetZ: heroDoor[1] });
               ctx.bus.emit("horde:target", { x: heroDoor[0], z: heroDoor[1] });
-              setBanner({ title: "Night 1", sub: `The horde is coming from the ${w.sector}.`, tone: "warn" }, 4000);
+              setBanner({ title: "Night 1", sub: `The horde is coming from the ${SECTOR_NAME[w.sector] ?? w.sector}.`, tone: "warn" }, 4000);
             }
           }
         }
@@ -548,7 +657,9 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
           const saved = m.survivors.filter((v) => v.state === "safe").length;
           const total = m.survivors.length;
           const secs = Math.round(ctx.time - startedAt.current);
-          const points = saved * 250 + m.found * 40 + Math.round(p.health) * 2 + Math.max(0, 240 - secs);
+          // Records verified (your reports logged as evidence on real cases) count most; then the people you brought in.
+          const verified = (tipRef.current.sentAt !== null ? 1 : 0) + (suiteTipRef.current.sentAt !== null ? 1 : 0);
+          const points = verified * 300 + saved * 150 + m.found * 40 + Math.round(p.health) * 2 + Math.max(0, 300 - secs);
           const rank = points >= 900 ? "S" : points >= 700 ? "A" : points >= 450 ? "B" : "C";
           setScore({ saved, total, found: m.found, health: p.health, secs, points, rank });
           setProg((q) => ({ ...q, survived: true }));
@@ -572,7 +683,8 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
       const p = ctx.player;
       const o = objectivePoint(ctx);
       const here: Pt = [p.x, p.z];
-      const nearDoor = stepRef.current === "approach" && !!hero && dist(here, doorOf(ctx, hero)!) < DOOR_R;
+      const st0 = stepRef.current;
+      const nearDoor = (st0 === "approach" && !!hero && dist(here, doorOf(ctx, hero)!) < DOOR_R) || (st0 === "office" && !!office && dist(here, doorOf(ctx, office)!) < DOOR_R);
       const n = ctx.horde.nearest;
       const threat = n < 12 ? 3 : n < 35 ? 2 : ctx.horde.alive > 0 ? 1 : 0;
       setHud({
@@ -586,7 +698,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
       const m = ctx.mission;
       const st = stepRef.current;
       const left = nightfallAt.current - ctx.time;
-      const timer = st === "approach" || st === "inside" ? (nightFallen.current ? { label: "Night has fallen", secs: 0, urgent: true } : { label: "Nightfall", secs: Math.max(0, Math.round(left)), urgent: left < 30 }) : null;
+      const timer = st === "office" || st === "suite" || st === "approach" || st === "inside" ? (nightFallen.current ? { label: "Night has fallen", secs: 0, urgent: true } : { label: "Nightfall", secs: Math.max(0, Math.round(left)), urgent: left < 30 }) : null;
       const next = { boards: m.boards, medkits: m.medkits, found: m.found, crates: cratesTotal.current, survivors: m.survivors.map((v) => ({ name: v.name, state: v.state })), barricade: m.barricade.active ? { hp: Math.round(m.barricade.hp), max: m.barricade.max } : null, timer };
       setMhud((c) => (JSON.stringify(c) === JSON.stringify(next) ? c : next));
       const f = feedsRef.current;
@@ -598,7 +710,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
   // Scout: once the hero is selected (dossier loading), start the scout run.
   useEffect(() => {
     if (agentOff) return;
-    if (scoutAsked.current && hero && game.selected === hero.pid && game.phase === "dusk" && !game.isLoading) game.startScout();
+    if (scoutAsked.current && hero && game.selected === hero.pid && game.phase === "dusk" && !game.isLoading) game.startScout(!briefAsked.current);
   }, [game, hero, agentOff]);
 
   // New radio lines go on the bus (spoken + crackle by the audio system).
@@ -661,12 +773,22 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
     ctx.bus.emit("horde:ambient", { count: 14 });
     const door = doorOf(ctx, hero)!;
     const plan = planMission(ctx, hero.pid, door, [ctx.player.x, ctx.player.z]);
+    plan.survivors = []; // survivors are the office on record (case #7), spawned only if the agent says they're still there
     cratesTotal.current = plan.supplies.length;
     ctx.bus.emit("mission:setup", plan);
     for (const sv of plan.survivors) ctx.bus.emit("horde:pack", { x: sv.x, z: sv.z, count: 4 });
     nightfallAt.current = ctx.time + NIGHTFALL_S;
     nightFallen.current = false;
     startedAt.current = ctx.time;
+    if (office) {
+      // The Night Shift: the agent briefs the night from the real queue (fresh thread), then case #7 at the office.
+      briefAsked.current = gRef.current.say("Brief the night shift", true);
+      gRef.current.select(office.pid);
+      ctx.bus.emit("world:beacon", { pid: office.pid });
+      setStep("office");
+      setBanner({ title: "HQ is briefing the night shift", sub: `Tonight's cases come from CoStar's open-case queue. Start at ${office.label}.`, tone: "info" }, 5000);
+      return;
+    }
     gRef.current.select(hero.pid); // the fortress card loads while you walk
     setStep("approach");
     setBanner({ title: `Reach ${hero.label}`, sub: "The records disagree about its walls. Find out before dark.", tone: "info" }, 5000);
@@ -682,6 +804,11 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
     tipSending.current = false;
     debrisFired.current = false;
     defendEnded.current = false;
+    briefAsked.current = false;
+    suiteAsked.current = false;
+    suiteSending.current = false;
+    officeSpawned.current = false;
+    setSuiteTip({ chosen: null, sentAt: null });
     setProg({ reached: false, checked: false, survived: false, filed: false });
     ctx.bus.emit("mission:reset", {});
     routeTo.current = null;
@@ -691,8 +818,9 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
     ctx.bus.emit("world:route", { pts: null });
     ctx.bus.emit("world:barricade", { pid: null });
     ctx.bus.emit("world:beacon", { pid: hero.pid });
-    const door = doorOf(ctx, hero)!;
-    const sp = spawnFor(ctx, door, hero.door?.facing ?? 180);
+    const first = office ?? hero;
+    const door = doorOf(ctx, first)!;
+    const sp = spawnFor(ctx, door, first.door?.facing ?? 180);
     Object.assign(ctx.player, { x: sp.at[0], z: sp.at[1], yaw: sp.yaw, health: 100, stamina: 1, frozen: false, hidden: false });
     setTimeout(() => begin(), 0);
   }
@@ -718,15 +846,18 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
   const runLabel = fallbackPid ? labelOf(fallbackPid) : null;
 
   const hints: Hint[] = [];
-  if (step === "approach" || step === "escape" || step === "night") hints.push({ key: "WASD", label: "move" }, { key: "Shift", label: "sprint" }, { key: "Space", label: "shove" });
+  if (step === "office" || step === "approach" || step === "escape" || step === "night") hints.push({ key: "WASD", label: "move" }, { key: "Shift", label: "sprint" }, { key: "Space", label: "shove" });
   if (step === "approach" && hud.nearDoor) hints.push({ key: "E", label: `go inside ${heroLabel}` });
+  if (step === "office" && hud.nearDoor && office) hints.push({ key: "E", label: `go up to suite ${case7?.suite ?? ""} at ${office.label}` });
   if (step === "night" && !game.decision) hints.push({ key: "H", label: "hold" }, { key: "R", label: runLabel ? `run to ${runLabel}` : "run", disabled: !runLabel });
   if (step === "hold") hints.push({ key: "E", label: mhud.boards > 0 ? `nail boards (${mhud.boards})` : "no boards left", disabled: mhud.boards === 0 });
   if ((step === "approach" || step === "escape" || step === "hold" || step === "night") && mhud.medkits > 0) hints.push({ key: "Q", label: `medkit (${mhud.medkits})` });
   if (step === "dawn") hints.push({ key: "Enter", label: "play again" });
 
   const objective =
-    step === "approach" ? (game.phase === "scout" ? `Get to ${heroLabel}. Your squads are reading its records.` : `Reach ${heroLabel}.`)
+    step === "office" ? (case7 ? `Case #${case7.n}: is the office on record in suite ${case7.suite} still there? Go and look.` : "HQ is briefing the night shift…")
+    : step === "suite" ? "Look around. Is anyone still working here?"
+    : step === "approach" ? (game.phase === "scout" ? `Get to ${heroLabel}. Your squads are reading its records.` : `Reach ${heroLabel}.`)
     : step === "inside" ? "Look at the walls. Tell HQ what you see."
     : step === "night" ? (game.decision ? "Orders sent." : game.proposal ? "HQ made a call. Yours is final." : "HQ is weighing HOLD or RUN…")
     : step === "hold" ? "Hold the door until the roll comes in."
@@ -737,13 +868,19 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
 
   const saved = mhud.survivors.filter((v) => v.state === "safe").length;
   const withYou = mhud.survivors.filter((v) => v.state === "following").length;
+  const caseTag = (c: NightCase | null) => (c ? `Case #${c.n}${queueTotal ? ` of ${queueTotal}` : ""}: ` : "");
   const objectives: Objective[] = [
-    { id: "reach", kind: "main", text: `Reach ${heroLabel}`, done: prog.reached },
-    { id: "walls", kind: "main", text: "Check the walls inside", done: prog.checked },
+    ...(office
+      ? [{ id: "case7", kind: "main" as const, text: `${caseTag(case7)}is the office on record at ${office.label}${case7?.suite ? `, suite ${case7.suite},` : ""} still there?`, done: suiteTip.sentAt !== null }]
+      : []),
+    { id: "reach", kind: "main", text: `${caseTag(case6)}reach ${heroLabel}`, done: prog.reached },
+    { id: "walls", kind: "main", text: "Check its walls inside: concrete or not?", done: prog.checked },
     { id: "night", kind: "main", text: "Survive the night: HOLD or RUN", done: prog.survived },
     { id: "report", kind: "main", text: "File the report at dawn", done: prog.filed },
-    { id: "survivors", kind: "side", text: "Rescue the survivors", done: mhud.survivors.length > 0 && saved === mhud.survivors.length, progress: `${saved + withYou}/${mhud.survivors.length}` },
-    { id: "crates", kind: "side", text: "Scavenge supplies", done: mhud.crates > 0 && mhud.found >= mhud.crates, progress: `${mhud.found}/${mhud.crates}` },
+    ...(mhud.survivors.length
+      ? [{ id: "survivors", kind: "side" as const, text: "Bring the office on record to safety", done: saved === mhud.survivors.length, progress: `${saved + withYou}/${mhud.survivors.length}` }]
+      : []),
+    { id: "crates", kind: "side", text: "Scavenge boards for the barricade", done: mhud.crates > 0 && mhud.found >= mhud.crates, progress: `${mhud.found}/${mhud.crates}` },
   ];
 
   const decision =
@@ -758,14 +895,24 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
       : null;
 
   const insideMode: InsideMode = "look";
-  const showInside = step === "inside" && !!hero;
+  const showInside = (step === "inside" && !!hero) || (step === "suite" && !!office);
+  const officeDossier = office ? game.dossiers[office.pid] : undefined;
+  const officeFaces = officeDossier && officeDossier !== "loading" && officeDossier !== "error" ? officeDossier.images.inside ?? officeDossier.images.pano ?? [] : [];
+  const suiteStatus =
+    suiteTip.chosen === null ? (game.isLoading ? "HQ is checking the lease and the listing. Look around while it works." : "Your report is testimony: strong, capped, never final.")
+    : suiteTip.sentAt === null ? "HQ is still on the radio. Your report goes when the line is clear."
+    : game.isLoading ? "Sent. HQ is weighing it." : "HQ logged it.";
   const exitAllowed = step === "inside" && (agentOff || (game.phase !== "dusk" && !(game.phase === "scout" && !game.scoutDone) && !(!!hero?.conflict && tip.chosen === null) && !(tip.chosen !== null && (tip.sentAt === null || game.isLoading))));
   const tipStatus =
     tip.chosen === null ? "Your report is testimony: strong, capped, never final."
     : tip.sentAt === null ? "HQ is still on the radio. Your report goes when the line is clear."
     : game.isLoading ? "Sent. HQ is weighing it." : "HQ logged it.";
 
-  const outcomeLines = game.outcome ? game.outcome.why.split("; ").map((x) => x.replace(/\.\s*Game outcome.*$/, "")) : [];
+  const verifiedN = (tip.sentAt !== null ? 1 : 0) + (suiteTip.sentAt !== null ? 1 : 0);
+  const outcomeLines = [
+    ...(verifiedN ? [`Records checked tonight: ${verifiedN} open case${verifiedN === 1 ? "" : "s"} from CoStar's queue${queueTotal ? ` of ${queueTotal}` : ""}. Your reports are evidence in them now.`] : []),
+    ...(game.outcome ? game.outcome.why.split("; ").map((x) => x.replace(/\.\s*Game outcome.*$/, "")) : []),
+  ];
 
   return (
     <main style={{ position: "fixed", inset: 0, background: "#05070d", overflow: "hidden" }}>
@@ -797,7 +944,18 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
           hq={<HqPanel messages={game.messages} busy={game.isLoading} heroPid={hero?.pid ?? null} compact={step === "approach" || step === "escape" || step === "hold"} />}
         />
       )}
-      {showInside && hero && (
+      {step === "suite" && office && (
+        <InsideView
+          faces={officeFaces}
+          title={`${office.label} · suite ${case7?.suite ?? ""}`}
+          mode="look"
+          question={{ prompt: case7?.question ?? "CoStar records a tenant in this suite, and the suite is listed for lease right now. Is the tenant still there?", choices: SUITE_CHOICES, chosen: suiteTip.chosen, status: suiteStatus }}
+          note={officeFaces.length ? "Real interior: this suite's own 3D tour." : null}
+          exitHint={suiteTip.sentAt !== null && game.runDone ? "[E] step outside" : suiteTip.chosen === null ? "Answer first: is anyone working here?" : "Wait for HQ…"}
+          onChoose={(i) => suiteTip.chosen === null && setSuiteTip({ chosen: i, sentAt: null })}
+        />
+      )}
+      {step === "inside" && hero && (
         <InsideView
           faces={insideFaces}
           title={`${hero.label} · inside`}
@@ -811,7 +969,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
       {showInside && (
         // The agent keeps talking while you're inside: the radio stays on screen (top-right is kept free by InsideView).
         <div style={{ position: "absolute", top: 16, right: 16, width: 360, maxHeight: 260, overflow: "hidden", zIndex: 30, pointerEvents: "none" }}>
-          <RadioLog lines={radio.slice(-5)} busy={game.isLoading} />
+          <RadioLog lines={radio.slice(-4)} busy={game.isLoading} />
         </div>
       )}
       {step === "intro" && <IntroOverlay heroLabel={heroLabel} ready={!!district} stub={game.stub} replay={replay} attribution={district.attribution ?? null} onStart={begin} />}
