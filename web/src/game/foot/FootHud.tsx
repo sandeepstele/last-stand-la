@@ -54,6 +54,19 @@ const clock = (secs: number) => {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 };
 
+/** "Case #7 of 328: is the office ...?" -> a small amber tag + the question. */
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+function ObjText({ text }: { text: string }) {
+  const m = text.match(/^(Case #\d+(?: of [\d,]+)?)\s*:\s*(.*)$/);
+  if (!m) return <span className={styles.objText}>{cap(text)}</span>;
+  return (
+    <span className={styles.objText}>
+      <span className={styles.caseTag}>{m[1]}</span>
+      {cap(m[2])}
+    </span>
+  );
+}
+
 function Missions({ objectives, now, timer, survivors, badges }: { objectives: Objective[]; now: string; timer: HudProps["timer"]; survivors: HudProps["survivors"]; badges: HudProps["badges"] }) {
   return (
     <section className={`${styles.panel} ${styles.missions}`}>
@@ -61,6 +74,7 @@ function Missions({ objectives, now, timer, survivors, badges }: { objectives: O
         <span className={styles.tag}>Missions</span>
         <Badges stub={badges.stub} replay={badges.replay} />
       </div>
+      <p className={styles.goal}>Settle tonight&apos;s cases · make it to dawn</p>
       {timer && (
         <div className={styles.timer} data-urgent={timer.urgent}>
           <span>{timer.label}</span>
@@ -71,7 +85,7 @@ function Missions({ objectives, now, timer, survivors, badges }: { objectives: O
         {objectives.map((o) => (
           <li key={o.id} data-kind={o.kind} data-done={o.done}>
             <span className={styles.objMark}>{o.done ? <ObjIcon name="check" /> : <ObjIcon name={o.kind === "main" ? "star" : "diamond"} />}</span>
-            <span className={styles.objText}>{o.text}</span>
+            <ObjText text={o.text} />
             {o.progress && <b className={styles.objProg}>{o.progress}</b>}
           </li>
         ))}
@@ -96,11 +110,18 @@ function Missions({ objectives, now, timer, survivors, badges }: { objectives: O
   );
 }
 
-function ObjIcon({ name, size = 14 }: { name: "star" | "diamond" | "check" | "plank" | "cross"; size?: number }) {
+function ObjIcon({ name, size = 14 }: { name: "star" | "diamond" | "check" | "plank" | "cross" | "flare"; size?: number }) {
   const p = { width: size, height: size, viewBox: "0 0 24 24", "aria-hidden": true } as const;
   if (name === "star") return <svg {...p}><path fill="currentColor" d="M12 2.5l2.9 6.1 6.6.8-4.9 4.6 1.3 6.6L12 17.3l-5.9 3.3 1.3-6.6-4.9-4.6 6.6-.8z" /></svg>;
   if (name === "diamond") return <svg {...p}><path fill="none" stroke="currentColor" strokeWidth="2.4" d="M12 3l9 9-9 9-9-9z" /></svg>;
   if (name === "check") return <svg {...p}><path fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" d="M4 12.5l5 5L20 6.5" /></svg>;
+  if (name === "flare")
+    return (
+      <svg {...p}>
+        <rect x="9" y="9" width="6" height="13" rx="1.5" fill="#e5484d" stroke="#ff9b9e" strokeWidth="1" />
+        <path fill="#ffd27a" d="M12 1.5c2.2 2.4 2.9 4.2 2 6H10c-.9-1.8-.2-3.6 2-6z" />
+      </svg>
+    );
   if (name === "plank") return <svg {...p}><rect x="2" y="8" width="20" height="8" rx="1.5" fill="#8a5a32" stroke="#c9915a" strokeWidth="1.2" /><circle cx="6" cy="12" r="1.2" fill="#222" /><circle cx="18" cy="12" r="1.2" fill="#222" /></svg>;
   return <svg {...p}><rect x="2.5" y="2.5" width="19" height="19" rx="4" fill="#f4f4f5" /><path fill="#e5484d" d="M10 6h4v4h4v4h-4v4h-4v-4H6v-4h4z" /></svg>;
 }
@@ -453,6 +474,12 @@ export function FootHud(p: HudProps) {
             <ObjIcon name="cross" size={16} />
             <b>{p.supplies.medkits}</b> medkits
           </span>
+          {p.supplies.flares !== undefined && (
+            <span data-empty={p.supplies.flares === 0} title="Flares">
+              <ObjIcon name="flare" size={16} />
+              <b>{p.supplies.flares}</b> flares
+            </span>
+          )}
         </div>
       </section>
 

@@ -112,7 +112,7 @@
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
 .tag { font: 600 11px/1 var(--mono); letter-spacing: 0.2em; color: var(--muted); text-transform: uppercase; }
 
-.leftCol { position: absolute; top: 16px; left: 16px; width: 300px; display: flex; flex-direction: column; gap: 10px; max-height: calc(100vh - 140px); }
+.leftCol { position: absolute; top: 16px; left: 16px; width: 320px; display: flex; flex-direction: column; gap: 10px; max-height: calc(100vh - 140px); }
 
 .fortress { padding: 10px 12px 12px; min-height: 0; overflow: hidden; }
 .fortressHead { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
@@ -188,7 +188,7 @@
 .st span { display: block; height: 100%; background: #6fb6ff; transition: width 0.2s linear; }
 .st[data-low="true"] span { background: #8a94a6; }
 
-.hints { position: absolute; bottom: 30px; left: 312px; right: 580px; display: flex; gap: 8px 14px; flex-wrap: wrap; justify-content: center; align-content: flex-end; }
+.hints { position: absolute; bottom: 30px; left: 336px; right: 580px; display: flex; gap: 8px 14px; flex-wrap: wrap; justify-content: center; align-content: flex-end; }
 .hint { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600; white-space: nowrap; }
 .hint[data-disabled="true"] { opacity: 0.4; }
 .hint[data-key="E"] { color: var(--amber); }
@@ -390,9 +390,9 @@
 .timer b { font-family: var(--display); font-weight: 800; font-size: 32px; line-height: 1; letter-spacing: 0.03em; font-variant-numeric: tabular-nums; }
 .timer[data-urgent="true"] { color: var(--red); background: rgba(229, 72, 77, 0.16); box-shadow: inset 0 0 0 1px rgba(229, 72, 77, 0.6); animation: wavePulse 0.9s ease-in-out infinite; }
 .objList { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
-.objList li { display: grid; grid-template-columns: 16px 1fr auto; gap: 8px; align-items: center; font-size: 14.5px; line-height: 1.25; padding: 2px 0; }
+.objList li { display: grid; grid-template-columns: 16px 1fr auto; gap: 8px; align-items: start; font-size: 14.5px; line-height: 1.25; padding: 2px 0; }
 .objList li[data-kind="main"] { font-weight: 700; font-size: 15.5px; }
-.objMark { display: grid; place-items: center; color: var(--muted); }
+.objMark { display: grid; place-items: center; height: 1.25em; color: var(--muted); }
 .objList li[data-kind="main"] .objMark { color: var(--amber); }
 .objList li[data-done="true"] .objMark { color: var(--green); }
 .objList li[data-done="true"] .objText { color: var(--muted); text-decoration: line-through; text-decoration-color: rgba(76, 195, 138, 0.7); }
@@ -414,7 +414,7 @@
 .supplies b { color: #fff; font: 700 14px/1 var(--mono); }
 .supplies span[data-empty="true"] { opacity: 0.45; }
 
-.barricadeWrap { position: absolute; left: 312px; right: 580px; bottom: 72px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.barricadeWrap { position: absolute; left: 336px; right: 580px; bottom: 72px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
 .barricade { width: 100%; max-width: 560px; padding: 8px 12px 10px; border-radius: 10px; background: var(--panel-solid); border: 2px solid #c9915a; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5); }
 .barricade[data-hit="true"] { animation: barHit 0.35s ease; }
 @keyframes barHit { 20% { transform: translate(-7px, 2px); } 40% { transform: translate(6px, -2px); } 60% { transform: translate(-4px, 1px); } 80% { transform: translate(2px, 0); } }
@@ -457,3 +457,21 @@
 @keyframes lowPulse { 50% { box-shadow: inset 0 0 170px 44px rgba(229, 72, 77, 0.5); } }
 .hitFlash { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse at center, rgba(229, 72, 77, 0) 45%, rgba(229, 72, 77, 0.45) 100%); animation: hitFlash 0.45s ease-out both; }
 @keyframes hitFlash { from { opacity: 1; } to { opacity: 0; } }
+
+/* ------------------------------------------------------------------ round 2: the night's goal, case tags, flares */
+.goal { margin: 7px 0 2px; font-family: var(--display); font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; font-size: 16px; line-height: 1.15; color: #fff; }
+.objText { min-width: 0; overflow-wrap: anywhere; }
+.caseTag { display: inline-block; margin-right: 6px; padding: 2px 5px 1px; border-radius: 3px; vertical-align: 1px; white-space: nowrap;
+  font: 700 10.5px/1.2 var(--mono); letter-spacing: 0.06em; color: #111; background: var(--amber); text-decoration: none; }
+.objList li[data-done="true"] .caseTag { background: rgba(76, 195, 138, 0.8); }
+.supplies { flex-wrap: wrap; gap: 4px 12px; }
+.recordsLine { padding: 16px 20px; border-radius: 14px; background: rgba(8, 40, 26, 0.72); border: 2px solid var(--green); box-shadow: 0 0 30px rgba(76, 195, 138, 0.25); animation: fadeUp 0.8s 0.5s ease both; }
+.recordsLine p { margin: 6px 0 0; font-family: var(--display); font-weight: 700; font-size: 26px; line-height: 1.2; color: #fff; }
+.outcome li[data-tone="hq"]::before { background: var(--amber); }
+.outcome li[data-tone="hq"] { color: #ffe2b0; }
+.outcome li[data-tone="down"]::before { background: var(--red); }
+.outcome li[data-tone="down"] { color: #ffc2c4; }
+.drafting { margin: 0; padding: 10px 14px; border-radius: 10px; background: rgba(40, 24, 6, 0.6); border: 1px dashed var(--amber); color: #ffe2b0; font-size: 15px; }
+/* The dawn screen files the report itself; hide the case file's own approve/reject buttons here (the auditor keeps them). */
+.caseWrap button { display: none !important; }
+.fileBtn { max-width: 100%; white-space: normal; }
