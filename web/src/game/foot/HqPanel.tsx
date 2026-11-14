@@ -106,7 +106,7 @@ function Full({ view, busy }: { view: HqView; busy: boolean }) {
         </div>
       )}
 
-      {view.brief && <Brief brief={view.brief} busy={busy} />}
+      {view.brief && <Brief brief={view.brief} busy={busy} hasOdds={!!view.caseView?.weighed} />}
 
       {(view.squadsSent || !view.brief) && (
         <div className={styles.section}>
@@ -234,7 +234,7 @@ function EvidenceCard({ e }: { e: EvidenceView }) {
 
 const STATE_WORDS: Record<BriefCase["state"], string> = { open: "open", checking: "being checked", report: "report logged", weighed: "weighed" };
 
-function Brief({ brief, busy }: { brief: BriefView; busy: boolean }) {
+function Brief({ brief, busy, hasOdds }: { brief: BriefView; busy: boolean; hasOdds: boolean }) {
   return (
     <div className={styles.section}>
       <h4 className={styles.h}>
@@ -257,7 +257,8 @@ function Brief({ brief, busy }: { brief: BriefView; busy: boolean }) {
                 {c.where}
                 {c.stakes && <span> · {c.stakes}</span>}
               </div>
-              {c.verdict && (
+              {/* the active case's odds are drawn in full just below: its row keeps the state only */}
+              {c.verdict && !(c.active && hasOdds) && (
                 <div className={styles.caseVerdict}>
                   <span className={styles.label} data-label={c.verdict.label}>{c.verdict.label}</span>
                   <span className={styles.caseLead}>{c.verdict.label === "unresolved" ? "not settled yet" : c.verdict.words}</span>
