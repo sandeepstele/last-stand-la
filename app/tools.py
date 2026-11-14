@@ -26,7 +26,7 @@ from typing import Any
 
 from langchain.tools import ToolRuntime, tool
 
-from app import field, layers, photon
+from app import field, layers, photon, search
 from app.verify import investigate
 
 FIELD_REQUEST = (
@@ -37,6 +37,25 @@ FIELD_REQUEST = (
 
 def _now() -> str:
     return datetime.now(UTC).isoformat()
+
+
+# ------------------------------------------------------------------ search (questions without a property id)
+
+
+@tool
+def find_buildings(city: str | None = None, property_type: str | None = None, readiness: str | None = None,
+                   deal_fit: str | None = None, min_kw: float | None = None, sort: str = "priority",
+                   limit: int = 5) -> dict:
+    """Search last night's solar screen of every non-apartment CoStar building (Houston and Los Angeles).
+    Use it when the question names no property id. Filters (all optional): city ("houston", "los angeles");
+    property_type (office, industrial or warehouse, retail, flex, hotel, healthcare); readiness (ready,
+    inspect, reroof_first, unknown); deal_fit (strong, moderate, weak, unknown, or "workable" = strong or
+    moderate); min_kw. "Could we sign now" means readiness="ready" and deal_fit="workable".
+    sort: priority (default), system_kw, annual_kwh or co2. limit: up to 10.
+    Returns matched (how many of the screened buildings match) and the top results with property_id,
+    address, kW, MWh/yr, t CO2/yr and the readiness and deal reasons."""
+    return search.find(city=city, property_type=property_type, readiness=readiness, deal_fit=deal_fit,
+                       min_kw=min_kw, sort=sort, limit=limit)
 
 
 # ------------------------------------------------------------------ data layers (specialists)
