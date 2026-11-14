@@ -25,6 +25,7 @@ from app.tools import (
     SIDE_EFFECT_TOOLS,
     costar_record,
     field_check,
+    find_buildings,
     retrofit,
     twin_levels,
     verify_building,
@@ -149,7 +150,7 @@ def build(mode: str, store=None, checkpointer=None):
     """On Agent Server leave store/checkpointer as None (the server provides Postgres).
     For local runs pass an InMemoryStore and InMemorySaver."""
     live = mode == "live"
-    tools = [verify_building, retrofit, field_check, *SIDE_EFFECT_TOOLS, *(SCENE_TOOLS if live else QUEUE_TOOLS)]
+    tools = [find_buildings, verify_building, retrofit, field_check, *SIDE_EFFECT_TOOLS, *(SCENE_TOOLS if live else QUEUE_TOOLS)]
     return create_deep_agent(
         model=ORCH if live else WORKER,
         tools=tools,
