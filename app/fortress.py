@@ -286,7 +286,8 @@ def district() -> dict[str, Any]:
                               "z": sum(p[1] for p in k["ring"]) / len(k["ring"]), "w": 2 * math.sqrt(_area(k["ring"]) / math.pi),
                               "d": 2 * math.sqrt(_area(k["ring"]) / math.pi)} for i, k in enumerate(backdrop)]
     for b in buildings:
-        b["door"] = _door(b, obstacles) if b["pid"] in ENTERABLE else None
+        # enterable: tonight's two buildings, plus any building whose interior scan was fetched for the feeds
+        b["door"] = _door(b, obstacles) if b["pid"] in ENTERABLE or _feeds(b["pid"])["inside"] else None
     waves = [{"n": w["n"], "sector": w["sector"], "arrive_s": w["arrive_s"], "size": max(50, round(units * w["share"] / 10) * 10)}
              for w in WAVES]
     return {"center": {"lat": round(lat0, 6), "lon": round(lon0, 6)}, "radius_m": RADIUS_M, "seed": SEED,
