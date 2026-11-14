@@ -412,6 +412,12 @@ def with_feeds(d: dict[str, Any]) -> dict[str, Any]:
     images["drone"] = images["drone"] + [n for n in f["drone"] if n not in images["drone"]]
     if not images.get("inside") and f["inside"]:
         images["inside"] = [{"face": n.rsplit("_", 1)[-1].split(".")[0], "name": n} for n in f["inside"]]
+    hops = VISION / f"feed_{pid}_hops.json"  # scan spots to walk between (scripts/fetch_hops.py), floor-plan metres
+    if hops.exists():
+        try:
+            images["inside_hops"] = json.loads(hops.read_text())
+        except ValueError:
+            pass
     return d | {"images": images}
 
 
@@ -518,6 +524,9 @@ def resolve(pid: str, wave: int, seed: int = SEED, action: str = "hold", to_pid:
 # ------------------------------------------------------------------ the night shift (real cases in the play area)
 
 PLAY_PAD_M = 80
+# Tonight's recorded cases. Pinned so newly cached imagery elsewhere can never add a case to the briefing (and break
+# the recorded nights); if either case leaves the queue, night_cases falls back to "imagery gathered, in queue order".
+NIGHT_PIN = {("6375735", None), ("254167", "1100")}
 
 
 def night_cases(limit: int = 3) -> dict[str, Any]:
@@ -527,13 +536,16 @@ def night_cases(limit: int = 3) -> dict[str, Any]:
 
     g = GROUND
     ordered = cases.ordered()
+    pinned = [(n, c) for n, c in enumerate(ordered, 1) if (str(c["property_id"]), c.get("suite")) in NIGHT_PIN]
     inside = []
     for n, c in enumerate(ordered, 1):
         b = building(c["property_id"])
         if b and g["x0"] - PLAY_PAD_M <= b["x"] <= g["x1"] + PLAY_PAD_M and g["z0"] - PLAY_PAD_M <= b["z"] <= g["z1"] + PLAY_PAD_M:
             inside.append((n, c, b))
     tonight = []
-    for n, c, b in [x for x in inside if x[1].get("imagery")][:limit]:
+    picked = [x for x in inside if (str(x[1]["property_id"]), x[1].get("suite")) in NIGHT_PIN] if NIGHT_PIN and \
+        len(pinned) == len(NIGHT_PIN) else [x for x in inside if x[1].get("imagery")][:limit]
+    for n, c, b in picked:
         suite = c.get("suite")
         case = next((k for k in evidence.open_case(c["property_id"], suite).get("cases") or [] if k["case"] == c["case"]), None)
         if c["case"] == "ghost_tenant":
