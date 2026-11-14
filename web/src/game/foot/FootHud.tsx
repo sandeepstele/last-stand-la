@@ -45,7 +45,9 @@ export type HudProps = {
   supplies: { boards: number; medkits: number; flares?: number }; // carried; [Q] uses a medkit; [G] throws a flare
   survivors: { name: string; state: SurvivorState }[];
   barricade: { hp: number; max: number } | null; // shown big, bottom-centre, during HOLD
-  hq: ReactNode; // the HQ panel (the agent at work), rendered by the director; place it in the right column under the radio
+  hq: ReactNode;
+  /** Where the nearest chaser is, relative to the view: degrees, 0 = ahead, 90 = right, ±180 = behind. null = nobody close. */
+  threatDir?: number | null; // the HQ panel (the agent at work), rendered by the director; place it in the right column under the radio
 };
 
 // ------------------------------------------------------------------ top-left: missions, clock, survivors, fortress card

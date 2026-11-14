@@ -263,7 +263,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
     const ctx: FootCtx = {
       scene, camera, renderer, district, byPid, colliders, colliderOf, bounds, input,
       player: { x: 0, z: 0, yaw: 0, pitch: 0, speed: 0, sprinting: false, stamina: 1, health: 100, frozen: true, hidden: false },
-      horde: { alive: 0, chasing: 0, nearest: Infinity, pressing: 0 },
+      horde: { alive: 0, chasing: 0, nearest: Infinity, pressing: 0, nearestX: NaN, nearestZ: NaN },
       npcs: [],
       mission: { boards: 0, medkits: 0, flares: 0, found: 0, survivors: [], barricade: { active: false, hp: 100, max: 100 } },
       bus: createBus(),

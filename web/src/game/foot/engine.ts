@@ -58,6 +58,8 @@ export type HordeInfo = {
   chasing: number; // of those, how many are chasing the player
   nearest: number; // metres to the nearest zombie (Infinity when none)
   pressing: number; // zombies within 2.5 m of the current horde:target point (drains the barricade during HOLD)
+  nearestX: number; // position of the nearest zombie that is chasing (NaN when none): the HUD's red edge glow points at it
+  nearestZ: number;
 };
 
 // ------------------------------------------------------------------ missions (v2: "Night 1")
