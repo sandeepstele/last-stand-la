@@ -116,7 +116,11 @@ def quake_replay(event_id: str = "ci3144585", limit: int = 8) -> dict:
 
 
 def _note_key(property_id: str, suite: str | None) -> str:
-    return f"{property_id}#{suite}" if suite else str(property_id)
+    from app import tenants
+
+    pid = str(property_id).strip()
+    su = tenants.norm_suite(suite) if suite else None  # "Suite 300" and "300" are the same suite
+    return f"{pid}#{su}" if su else pid
 
 
 @tool
@@ -164,8 +168,8 @@ async def _notes(runtime: ToolRuntime, property_id: str, suite: str | None) -> l
 @tool
 async def check_evidence(property_id: str, case: str, check: str, runtime: ToolRuntime, suite: str | None = None) -> dict:
     """Run one check for an open case and get what it found and how it shifts each hypothesis (+ supports,
-    - weakens). Checks: compliance_filings, permit_text, replacement_permits, era_and_height, site_structures
-    for building cases; listing_timeline, lease_terms, tenancy_trail, lot_activity, suite_tour for ghost_tenant (pass
+    - weakens). Checks: compliance_filings, permit_text, replacement_permits, era_and_height, site_structures,
+    look_from_above (a vision read of the facade) and compare_captures (oldest vs newest aerial) for building cases; listing_timeline, lease_terms, tenancy_trail, lot_activity, suite_tour for ghost_tenant (pass
     suite); human_report when open_case shows team_notes. Run the ones most likely to separate the hypotheses, in parallel."""
     notes = await _notes(runtime, property_id, suite)
     return await asyncio.to_thread(evidence.run_check, property_id, check, case, suite, notes)

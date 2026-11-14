@@ -70,7 +70,7 @@ list ("which LA buildings haven't finished their retrofit?"), or is about an ear
    (suite_tour when the case shows the suite has a tour; tenancy_trail and listing_timeline are cheap and often
    decisive). Turn 3: weigh_case with exactly those checks and the suite. Then answer in at most four sentences:
    the tenant exactly as the tools describe it (industry and headcount; never a company name), the listing, what
-   each check showed, and weigh_case's verdict (its plain-language claim, never the internal key), confidence and
+   each check showed, and weigh_case's verdict.text exactly (hedged; never the internal key or the raw claim) and
    label; mention the correction only as a draft
    awaiting approval. Say "worth a look", never that a tenant "left" or "is gone" as a fact.
 Every tool loads its own data by property id, so a building takes three turns. Make all the calls listed for a
@@ -132,8 +132,8 @@ WORKER_PROMPT = """You are Retrofit Radar's background worker. Each run is one t
    d. Call notify_me with the case-of-the-day line from step e (it lands in the in-app inbox and is texted when
       texting is set up). Then, if weigh_case returned a correction_draft, call file_correction with it (it waits
       for a person's approval).
-   e. Your final answer is texted as is: "Case of the day: <address, and suite if any>. <the verdict's plain claim>
-      (<label>, <confidence>)." plus one short sentence of evidence. No markdown. Never name a company.
+   e. Your final answer is texted as is: "Case of the day: <address, and suite if any>. <weigh_case's verdict.text
+      exactly>" plus one short sentence of evidence. No markdown. Never name a company or say a record is wrong.
    If the input is an EARTHQUAKE ALERT, do only this, then stop:
    a. quake_replay(event_id from the alert). It is a labeled replay of a past quake: say so in everything you write.
    b. For the top three buildings: seismic_status and verify_building, then write a dated dossier to

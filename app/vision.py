@@ -146,6 +146,8 @@ def ask(pid: str, key: str, images: list[Path], question: str, choices: list[str
     first = _invoke(images, (
         f"{question}\nAnswer only from what is visible. Reply with JSON: "
         f'{{"answer": one of [{labels}], "observed": "one sentence on what you see that decides it"}}.'))
+    if "answer" not in first:
+        raise VisionUnavailable("the model returned no usable answer (not cached)")
     answer = first.get("answer") if first.get("answer") in choices else "cant_tell"
     second: dict[str, Any] = {"confirmed": False, "reason": "no claim to check"}
     if answer != "cant_tell":
@@ -154,6 +156,8 @@ def ask(pid: str, key: str, images: list[Path], question: str, choices: list[str
             f'"{answer}" because "{first.get("observed", "")}". The question was: {question}\n'
             "Confirm only if the images clearly show it; low resolution, shadows, roofs-only views or ambiguity mean no. "
             'Reply with JSON: {"confirmed": true or false, "reason": "one sentence"}.'))
+        if not isinstance(second.get("confirmed"), bool):
+            raise VisionUnavailable("the second look returned no usable answer (not cached)")
     result = {
         "answer": answer if second.get("confirmed") is True else "cant_tell",
         "first_answer": answer,
@@ -163,7 +167,9 @@ def ask(pid: str, key: str, images: list[Path], question: str, choices: list[str
         "images": [str(p) for p in images],
         "model": VISION_MODEL,
     }
-    cached.write_text(json.dumps(result, indent=1))
+    tmp = cached.with_suffix(".tmp")
+    tmp.write_text(json.dumps(result, indent=1))
+    tmp.replace(cached)  # atomic: a crash never leaves a half-written answer
     return result
 
 

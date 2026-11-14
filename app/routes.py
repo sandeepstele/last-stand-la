@@ -136,8 +136,8 @@ async def cases_decision(request: Request) -> JSONResponse:
 
 async def cases_inbox(request: Request) -> JSONResponse:
     store = _store(request)
-    out = await store.asearch(("outbox",), limit=50)
-    dec = await store.asearch(("corrections",), limit=50)
+    out = await store.asearch(("outbox",), limit=1000)
+    dec = await store.asearch(("corrections",), limit=1000)
     items = sorted(({"kind": i.value.get("kind"), "text": i.value.get("text"), "at": i.value.get("at")} for i in out),
                    key=lambda x: x["at"] or "", reverse=True)[:5]
     decisions = sorted(({k: i.value.get(k) for k in ("property_id", "suite", "case", "decision", "at", "via")} for i in dec),

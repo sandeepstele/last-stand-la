@@ -162,10 +162,21 @@ const ids = (p: PendingInterrupt[]) => p.map((x) => x.id ?? "");
 
 async function textApproval(threadId: string, pending: PendingInterrupt[], to: Sendable): Promise<void> {
   texted.set(threadId, ids(pending));
-  await to.send(`Approval needed: ${describeActions(pending.flatMap((p) => p.actions))}\nReply YES to approve or NO to reject.`);
+  await to.send(`${await replayPrefix()}Approval needed: ${describeActions(pending.flatMap((p) => p.actions))}\nReply YES to approve or NO to reject.`);
 }
 
 type Reply = { send(content: string): Promise<unknown> };
+
+/** "[REPLAY] " when the agent server is replaying recorded model answers, so a text never passes as live. */
+async function replayPrefix(): Promise<string> {
+  try {
+    const r = await fetch(`${LANGGRAPH_URL}/healthz`, { signal: AbortSignal.timeout(3000) });
+    const h = (await r.json()) as { replay?: string | null };
+    return h.replay && !h.replay.startsWith("recording") ? "[REPLAY] " : "";
+  } catch {
+    return "";
+  }
+}
 
 /** Start or resume a run on the sender's thread, then text the answer or the approval it stopped at. */
 async function runAndReport(from: string, payload: Record<string, unknown>, reply: Reply, chat: Sendable,
@@ -183,7 +194,7 @@ async function runAndReport(from: string, payload: Record<string, unknown>, repl
     const next = await pendingInterrupts(threadId);
     if (next.length) return await textApproval(threadId, next, chat);
     const answer = lastAiText(values, before);
-    await reply.send(answer ? plain(answer) : fallback ?? "Done.");
+    await reply.send((await replayPrefix()) + (answer ? plain(answer) : fallback ?? "Done."));
   } catch (err) {
     console.error(`[run] failed: ${errMsg(err)}`);
     // A run can outlive our wait (it keeps going on the server): if it stopped at an approval, say so.

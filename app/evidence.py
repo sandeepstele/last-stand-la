@@ -67,6 +67,20 @@ CHECK_WHAT = {
     "compare_captures": "The oldest vs newest Vexcel capture of the site: same building, or replaced?",
 }
 
+# What a verdict may say out loud: hedged, never "the record is wrong" (shown in the UI and texted by the worker).
+HEDGED = {
+    "city_list_current": "the building may be concrete, as the city lists it; CoStar's material is worth a look",
+    "costar_current": "the building may be the material CoStar records; the city's list entry is worth a look",
+    "different_structure": "the city and CoStar may be describing different structures at this address; worth a look",
+    "replaced": "the listed building may have been replaced; the city's list entry is worth a look",
+    "year_is_renovation": "it may be the same building, with CoStar's year built reflecting a renovation; the retrofit may still be owed",
+    "still_there": "the tenant may still be there, with the suite marketed ahead of the lease ending",
+    "gone_dark": "the tenant may have left; CoStar's occupancy record is worth a look",
+    "subleasing": "the tenant may be subleasing its own space",
+    "moved_within": "the tenant may have moved to another suite in the building",
+    "listing_stale": "the listing may be stale (the suite may already be leased); worth a look",
+}
+
 VISION_CAP = 0.2  # vision is evidence, never a verdict on its own
 
 
@@ -453,6 +467,8 @@ def open_case(pid: str, suite: str | None = None) -> dict[str, Any]:
         from app import tenants as _t
 
         return {"property_id": pid, "suite": f["suite"], "tenant": _t.who(f["tenants"]), "cases": [_spec("ghost_tenant")],
+                "tour": {"available": bool(f["tour"]), "date": (f["tour"] or {}).get("date"),
+                         "after_listing": bool(f["tour"] and f["listed_since"] and f["tour"]["date"] >= f["listed_since"])},
                 "note": "Pick the checks most likely to separate the hypotheses."}
     found = [c for c in cases_for(pid) if c != "ghost_tenant"]
     try:
@@ -542,7 +558,9 @@ def weigh_case(pid: str, case: str, checks: list[str], suite: str | None = None,
                   f"(CoStar year built {rec.get('year_built')}); the list entry may be stale.")
     return {"property_id": pid, **({"suite": suite} if suite else {}), "case": case, "checks_used": used, "trail": trail,
             "priors": {k: v[1] for k, v in spec["hypotheses"].items()}, "posterior": post,
-            "verdict": {"hypothesis": lead, "claim": claim, "confidence": conf, "label": label},
+            "verdict": {"hypothesis": lead, "claim": claim, "confidence": conf, "label": label,
+                        "text": ("Unresolved: the evidence doesn't separate the explanations yet" if label == "unresolved"
+                                 else f"{label.capitalize()}: {HEDGED.get(lead, claim)}") + f" ({round(conf * 100)}%)"},
             "next_check": ("a fresh tour or a site visit to settle it: the person's report and the records disagree" if conflict
                            else remaining[0] if remaining and label != "likely" else ("a researcher's look at the twin or drawings" if label != "likely" else None)),
             "report_conflicts_with_records": conflict,

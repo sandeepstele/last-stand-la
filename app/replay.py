@@ -18,6 +18,8 @@ team note) is a different key from the first check.
 from __future__ import annotations
 
 import hashlib
+import re
+import uuid
 import logging
 import json
 import os
@@ -32,6 +34,7 @@ from langchain_core.outputs import ChatGeneration, ChatResult
 
 DIR = Path(__file__).resolve().parent.parent / "fixtures" / "replay"
 SCENE = {"show_building", "ghost_compare", "reveal_levels", "place_solar"}
+DATE = re.compile(r"\d{4}-\d{2}-\d{2}(T[\d:.+-]+Z?)?")  # today's date in notes and trails must not break a recording
 _lock = threading.Lock()
 log = logging.getLogger("radar.replay")
 
@@ -56,7 +59,7 @@ def key(messages: list[BaseMessage]) -> str:
     tail = messages[last_h + 1:]
     question = _text(messages[last_h]) if last_h >= 0 else ""
     turns = sum(isinstance(m, AIMessage) for m in tail)
-    data = [f"{m.name}:{_text(m)}" for m in tail if isinstance(m, ToolMessage) and m.name not in SCENE]
+    data = [f"{m.name}:{DATE.sub('<date>', _text(m))}" for m in tail if isinstance(m, ToolMessage) and m.name not in SCENE]
     raw = json.dumps([system, question, turns, data], sort_keys=True)
     return hashlib.sha256(raw.encode()).hexdigest()[:24]
 
@@ -114,7 +117,11 @@ class ReplayChatModel(BaseChatModel):
             return None
         time.sleep(float(os.environ.get("RADAR_REPLAY_DELAY_S", "1.0")))
         msg = messages_from_dict([rec])[0]
-        return msg if isinstance(msg, AIMessage) else AIMessage(content=msg.content)
+        msg = msg if isinstance(msg, AIMessage) else AIMessage(content=msg.content)
+        # fresh ids: a recorded id would make the reducer replace an earlier message instead of appending, and
+        # repeated tool_call ids are rejected by some providers
+        calls = [dict(tc, id=f"call_{uuid.uuid4().hex[:24]}") for tc in msg.tool_calls]
+        return msg.model_copy(update={"id": None, "tool_calls": calls})
 
     def _generate(self, messages, stop=None, run_manager=None, **kwargs):
         hit = self._hit(messages)
