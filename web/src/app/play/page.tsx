@@ -3,7 +3,7 @@
 // Last Stand LA: /play (live agent) and /play?stub=1 (synthetic data, timer-driven agent).
 // dusk -> scout -> night -> aftershock -> dawn, then play again without a reload.
 
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CaseFile } from "@/components/Cases";
 import { District3D, type DistrictHandle } from "@/game/District3D";
@@ -50,6 +50,12 @@ function Play() {
   const [panoOpen, setPanoOpen] = useState(false);
   const [tip, setTip] = useState("");
   const replay = useReplayMode(!stub, game.isLoading);
+  // The recorded replay covers only the on-foot night's exact messages. The map mode scouts any building and sends later
+  // waves, which strict replay can't answer, so while the server replays, send players to the on-foot game.
+  const router = useRouter();
+  useEffect(() => {
+    if (replay && !replay.startsWith("recording")) router.replace("/play?mode=foot");
+  }, [replay, router]);
   const lines = useMemo(() => radioLines(game.messages), [game.messages]);
   const { district, phase, dossier, fortress, outcome, fallback, proposal, decision } = game;
 
