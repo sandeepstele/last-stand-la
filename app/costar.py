@@ -101,6 +101,11 @@ def normalize(r: dict[str, Any], models: list[str] | None = None) -> dict[str, A
         "tenancy_type": _decode("TenancyType", (r.get("propertyOffice") or {}).get("tenancyType")),
         "building_class": _decode("BuildingClass", r.get("buildingClass")),
         "matterport_model_ids": models or [],
+        "construction_material": _decode("BuildingConstructionMaterialType", r.get("buildingConstructionMaterial")),
+        "zip": (a.get("postcode") or "")[:5] or None,
+        "units": (r.get("propertyApartment") or {}).get("totalNumUnits"),
+        "street_addresses": [" ".join(str(p) for p in (x.get("streetNumber"), x.get("streetName"), x.get("streetType")) if p)
+                             for x in [a, *(r.get("addresses") or [])] if x.get("streetNumber") and x.get("streetName")],
     }
 
 
