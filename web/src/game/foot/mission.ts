@@ -660,6 +660,14 @@ export function createMission(ctx: FootCtx): System {
     wall.wood.color.lerpColors(C_WOOD_BAD, C_WOOD, 0.35 + frac * 0.65);
     punch = Math.max(0, punch - dt * 5);
     wall.group.scale.set(1 + punch * 0.05, 1 + punch * 0.05, 1);
+    // camera-safe: the HOLD camera can back up into the doorway; never fill the screen with planks
+    const cam = ctx.camera.position;
+    wall.group.visible = (cam.x - wall.group.position.x) * door.fx + (cam.z - wall.group.position.z) * door.fz > 0.6;
+    if (wallLabel) {
+      // the HUD carries the same numbers up close; the in-world prompt is for when you're looking from the street
+      const lp = wallLabel.sprite.position;
+      (wallLabel.sprite.material as THREE.SpriteMaterial).opacity = Math.max(0, Math.min(1, (Math.hypot(cam.x - lp.x, cam.y - lp.y, cam.z - lp.z) - 3.5) / 2.5));
+    }
 
     // the prompt above the door (redrawn only when its content changes)
     if (wallLabel) {
