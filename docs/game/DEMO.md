@@ -12,7 +12,7 @@ The user's decisions (1:50 pm): **Entertainment**; the deep agent is always visi
 
 | Time | On screen | Say |
 |---|---|---|
-| 0:00 | Intro camera over real downtown LA | "Building records go stale. CoStar's record of this building says masonry; the city's retrofit list says concrete. Nobody has gone to look. Our deep agent works CoStar's queue of 328 cases like this, and tonight you're its eyes." |
+| 0:00 | Intro: the camera starts over **all of LA**: 1,581 CoStar LA buildings coloured by their records, light pillars on the 328 open cases (amber = material conflict, teal = ghost tenant, red = stale entry), and dives into tonight's district | "Building records go stale. CoStar's record of this building says masonry; the city's retrofit list says concrete. Nobody has gone to look. Our deep agent works CoStar's queue of 328 cases like this, and tonight you're its eyes." |
 | 0:12 | Enter. The HQ panel shows the agent's briefing (#6 and #7 from the real queue), then works #7. F to the door; scout radio; the drone shows the aerial it looked at | "It plans the night from the real queue, sends four squads in parallel, and looks at the aerial itself. Code weighs it." |
 | 0:35 | E: inside the building's real 3D tour. [1] Concrete; the odds move | "So I go in and look. My report is evidence: capped, never final." |
 | 0:55 | Step out; the horde; HQ proposes RUN or HOLD. Press the key; F | "The agent proposes; I decide. Code rolls the walls against the 1994 Northridge shaking at this block." |
@@ -87,3 +87,10 @@ Your report from inside changes the real case. That's "Inside and Out". Case #7 
    4. The recorded video.
 5. **Before the video:** confirm with CoStar whether real addresses may appear. Otherwise hide labels or crop.
 6. **Never** edit `app/` on the demo machine while judges are around; the server has no hot reload.
+
+## New since 6 pm (show at the table, not in the 2-minute cut)
+- **All of LA:** the intro dive over 1,581 buildings and 328 open cases.
+- **Walk into 16 real buildings:** any lit door, [E]. 750 Broadway is a good one near the fortress.
+- **Inside 737 Broadway:** walk its 10 real scan spots ([A]/[D] or click the floor plan).
+- **Walk-by aerials:** the corner view shows the nearest building's real Vexcel image when one is on file (106 buildings), labelled "Real aerial on file".
+- **Honesty:** real images and tours only where they're on file. Otherwise the corner views are game renders. Images feed the screen only; the agent's recorded evidence is unchanged.

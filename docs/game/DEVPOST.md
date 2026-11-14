@@ -26,6 +26,11 @@ Building records go stale quietly. CoStar's record of a downtown tower says maso
   - Code rolls every number against the evidence and the **1994 Northridge shaking** at that block.
 - **Dawn:** the agent drafts tonight's corrections live, **citing your words**. "File tonight's reports" opens the same agent as the auditor, on that case, with your report in the case file.
 
+**Also in the game:**
+- the intro flies over all **1,581** LA buildings in CoStar's kit with the **328** open cases lit up;
+- you can walk into **16** real buildings' Matterport interiors and between **10** real scan spots inside the fortress;
+- real Vexcel aerials appear for the **106** buildings that have them.
+
 ## How we built it
 - **The deep agent:** LangChain **deepagents** on LangGraph.
   - **Planning:** `write_todos`.
@@ -85,7 +90,7 @@ Record on the production build (`npm run build && npm start`) against strict rep
 
 | # | Time | Shot | Voice-over |
 |---|---|---|---|
-| 1 | 0:00–0:08 | The intro camera circling the real downtown district at dusk; title "LAST STAND LA" | "Building records go stale. Nobody goes to look." |
+| 1 | 0:00–0:08 | The intro over all of LA (1,581 buildings, 328 case pillars), diving into tonight's district; title "LAST STAND LA" | "Building records go stale. Here are 328 that disagree, across LA. Nobody goes to look." |
 | 2 | 0:08–0:18 | Enter. The HQ panel: "Tonight's cases: #6 and #7 of 328"; the plan appears | "Our AI commander works CoStar's real queue of 328 cases where records disagree, and plans the night." |
 | 3 | 0:18–0:32 | F to 737 Broadway's door. The radio; four squad chips light up; **"HQ looked at the aerial"** moment with the real image | "Four squads in parallel. It picks its own evidence and looks at the aerial itself." |
 | 4 | 0:32–0:45 | E: the real 3D tour. Press 1, Concrete. **"Your report moved the odds: 66% → 72%"** | "Then I go in and look. My report is evidence: capped, never final." |
