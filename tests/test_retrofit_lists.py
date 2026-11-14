@@ -17,6 +17,10 @@ def public(tmp_path, monkeypatch):
     ndc = [{"address": "200 W 1ST STREET", "zip": "90012", "otc_date": "2017-11-20T00:00:00.000",
             "step_1_due_date": "2020-11-20T00:00:00.000", "step_2_due_date": "2027-11-20T00:00:00.000",
             "step_3_due_date": "2042-11-20T00:00:00.000", "checklist": "2019-12-02T00:00:00.000"},
+           {"address": "400 HOPE ST", "zip": "90071", "otc_date": "2017-11-20T00:00:00.000",
+            "step_1_due_date": "2020-11-20T00:00:00.000", "step_1_toll_order_ext_date": "2027-01-01T00:00:00.000"},
+           {"address": "500 HOPE ST", "zip": "90071", "otc_date": "2017-11-20T00:00:00.000",
+            "step_1_due_date": "2020-11-20T00:00:00.000", "step_1_toll_order_ext_date": "2023-10-20T00:00:00.000"},
            {"address": "300-310 Spring St", "zip": "90013", "otc_date": "2017-11-20T00:00:00.000",
             "step_1_due_date": "2020-11-20T00:00:00.000"}]
     permits = [{"primary_address": "100 MAIN ST", "zip_code": "90012", "issue_date": "2024-03-01T00:00:00.000",
@@ -81,3 +85,13 @@ def test_missing_public_data_says_how_to_fix(tmp_path, monkeypatch):
     with pytest.raises(rl.PublicDataMissing, match="fetch_public.py"):
         rl.assess(rec("7", "100 Main St", "90012", 1962))
     rl._lists.cache_clear()
+
+
+def test_extensions_move_the_deadline(public):
+    tolled = rl.assess(rec("8", "400 Hope St", "90071", 1965, "ReinforcedConcrete"), today=TODAY)
+    s1 = tolled["lists"][0]["steps"][0]
+    assert s1["due"] == "2027-01-01" and s1["extended"] and s1["state"] == "not_due_yet"
+    assert tolled["hypotheses"][0]["past_due"] is False
+    late = rl.assess(rec("9", "500 Hope St", "90071", 1965, "ReinforcedConcrete"), today=TODAY)
+    assert late["lists"][0]["overdue_steps"] == ["step_1"]
+    assert "due 2023-10-20 (extended)" in late["hypotheses"][0]["evidence"]

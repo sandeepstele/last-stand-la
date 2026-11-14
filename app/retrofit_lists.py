@@ -82,18 +82,22 @@ def _day(v: str | None) -> str | None:
     return v[:10] if v else None
 
 
-def _steps(due: dict[str, str | None], done: dict[str, str | None], today: str) -> list[dict[str, Any]]:
-    """Each ordinance step with its deadline and the record that shows it done, if any."""
+def _steps(due: dict[str, str | None], ext: dict[str, str | None], done: dict[str, str | None], today: str) -> list[dict[str, Any]]:
+    """Each ordinance step with its deadline (the later of the original date and any city extension, i.e.
+    tolling order) and the record that shows it done, if any."""
     out = []
     for step in ("step_1", "step_2", "step_3"):
-        d, ok = due.get(step), done.get(step)
+        orig, e, ok = due.get(step), ext.get(step), done.get(step)
+        d = max(x for x in (orig, e) if x) if (orig or e) else None
         state = "done" if ok else ("overdue" if d and d < today else "not_due_yet")
-        out.append({"step": step, "what": STEP_WHAT[step], "due": d, "done": ok, "state": state})
+        out.append({"step": step, "what": STEP_WHAT[step], "due": d, "original_due": orig,
+                    "extended": bool(e and orig and e > orig), "done": ok, "state": state})
     return out
 
 
-def _with_steps(entry: dict[str, Any], done: dict[str, str | None], today: str, what: dict[str, str]) -> dict[str, Any]:
-    entry["steps"] = [dict(s, what=what[s["step"]]) for s in _steps(entry["due"], done, today)]
+def _with_steps(entry: dict[str, Any], ext: dict[str, str | None], done: dict[str, str | None], today: str,
+                what: dict[str, str]) -> dict[str, Any]:
+    entry["steps"] = [dict(s, what=what[s["step"]]) for s in _steps(entry["due"], ext, done, today)]
     entry["overdue_steps"] = [s["step"] for s in entry["steps"] if s["state"] == "overdue"]
     return entry
 
@@ -104,7 +108,9 @@ def _soft_story(r: dict[str, Any], today: str) -> dict[str, Any]:
             "completed": _day(r.get("cofc_issued")),  # certificate of compliance
             "due": {"step_1": _day(r.get("step_1_compl_date")), "step_2": _day(r.get("step_2_compl_date")),
                     "step_3": _day(r.get("step_3_compl_date"))}}
-    return _with_steps(e, {"step_1": _day(r.get("submitted")), "step_2": _day(r.get("issued")), "step_3": _day(r.get("cofc_issued"))},
+    ext = {"step_1": _day(r.get("step_1_tolling_extension")), "step_2": _day(r.get("step2_tollingextdate")),
+           "step_3": _day(r.get("step3_tollingextdate"))}
+    return _with_steps(e, ext, {"step_1": _day(r.get("submitted")), "step_2": _day(r.get("issued")), "step_3": _day(r.get("cofc_issued"))},
                        today, SOFT_STORY_STEPS)
 
 
@@ -114,7 +120,8 @@ def _concrete(r: dict[str, Any], today: str) -> dict[str, Any]:
             "completed": _day(r.get("work_completion")),
             "due": {"step_1": _day(r.get("step_1_due_date")), "step_2": _day(r.get("step_2_due_date")),
                     "step_3": _day(r.get("step_3_due_date"))}}
-    return _with_steps(e, {"step_1": _day(r.get("checklist")), "step_2": _day(r.get("plan_submittal")), "step_3": _day(r.get("work_completion"))},
+    ext = {k: _day(r.get(f"{k}_toll_order_ext_date")) for k in ("step_1", "step_2", "step_3")}
+    return _with_steps(e, ext, {"step_1": _day(r.get("checklist")), "step_2": _day(r.get("plan_submittal")), "step_3": _day(r.get("work_completion"))},
                        today, CONCRETE_STEPS)
 
 
@@ -152,7 +159,7 @@ def assess(rec: dict[str, Any], today: str | None = None) -> dict[str, Any]:
                          "evidence": f"on the list but CoStar says built {yb}, after the ordinance's cutoff; the listed building may have been replaced",
                          "next_check": "look for demolition or new-building permits at this address"})
         else:
-            overdue = [f"{e['list'].replace('_', ' ')} {s['step'].replace('_', ' ')} ({s['what']}, due {s['due']})"
+            overdue = [f"{e['list'].replace('_', ' ')} {s['step'].replace('_', ' ')} ({s['what']}, due {s['due']}{' (extended)' if s['extended'] else ''})"
                        for e in entries for s in e["steps"] if s["state"] == "overdue"]
             hyps.append({"key": "unfinished", "status": "supported", "past_due": bool(overdue),
                          "evidence": f"ordered to retrofit{' on ' + entries[0]['order_date'] if entries[0].get('order_date') else ''}; no completion on record"
