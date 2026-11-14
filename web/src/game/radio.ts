@@ -118,6 +118,15 @@ export function radioLines(messages: readonly unknown[]): RadioLine[] {
         lines.push({ id, who: "HQ", text: `opening the case on suite ${suite[1]}: is the office on record still there?`, tone: "hq" });
         return;
       }
+      const tip = raw.match(/^Tip: I'm inside (?:the building|suite (\S+))\. (.*)$/);
+      if (tip) {
+        const said = tip[2].toLowerCase();
+        const what = tip[1]
+          ? (said.includes("empty") ? "suite empty, nobody working" : said.includes("people are working") ? "people are working in the suite" : "can't tell if anyone works there")
+          : (said.includes("concrete") ? "walls look like concrete" : said.includes("brick") ? "walls look like brick" : "can't tell what the walls are");
+        lines.push({ id, who: "You", text: `reported: ${what}`, tone: "you" });
+        return;
+      }
       const t = /^Scout property /.test(raw) ? "scout tonight's fortress"
         : /^Brief the night shift/.test(raw) ? "brief me on tonight's cases"
         : /^Debrief the night shift/.test(raw) ? "debrief: draft tonight's corrections"
