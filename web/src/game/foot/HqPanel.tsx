@@ -6,6 +6,7 @@
 import { useMemo } from "react";
 import { hqModel, type BriefCase, type BriefView, type CaseView, type EvidenceView, type HqView, type SquadView } from "./hqModel";
 import styles from "./hq.module.css";
+import { DraftList } from "./hqDrafts";
 
 export type HqProps = {
   messages: readonly unknown[]; // the laststand thread (LangChain messages, as in useGame)
@@ -61,6 +62,11 @@ function Compact({ view, busy }: { view: HqView; busy: boolean }) {
           <span>HQ is waiting for your call:</span>
           <span><b>HOLD</b> or <b>RUN</b></span>
         </div>
+      ) : view.drafts.drafting ? (
+        <div className={styles.now}>
+          <span className={styles.spin} aria-hidden />
+          <span>HQ is drafting tonight&apos;s corrections{view.drafts.expected ? ` · ${view.drafts.done} of ${view.drafts.expected}` : ""}</span>
+        </div>
       ) : view.current ? (
         <div className={styles.now}>
           <span className={styles.spin} aria-hidden />
@@ -107,6 +113,9 @@ function Full({ view, busy }: { view: HqView; busy: boolean }) {
       )}
 
       {view.brief && <Brief brief={view.brief} busy={busy} hasOdds={!!view.caseView?.weighed} />}
+
+      {/* the dawn debrief: while it runs it is the live thing, so it sits right under the brief */}
+      <DraftList view={view.drafts} variant="panel" />
 
       {(view.squadsSent || !view.brief) && (
         <div className={styles.section}>
@@ -232,7 +241,9 @@ function EvidenceCard({ e }: { e: EvidenceView }) {
 
 // ---------------------------------------------------------------- tonight's cases (the night shift brief)
 
-const STATE_WORDS: Record<BriefCase["state"], string> = { open: "open", checking: "being checked", report: "report logged", weighed: "weighed" };
+const STATE_WORDS: Record<BriefCase["state"], string> = {
+  open: "open", checking: "being checked", report: "report logged", weighed: "weighed", drafting: "drafting", drafted: "drafted",
+};
 
 function Brief({ brief, busy, hasOdds }: { brief: BriefView; busy: boolean; hasOdds: boolean }) {
   return (
@@ -247,7 +258,7 @@ function Brief({ brief, busy, hasOdds }: { brief: BriefView; busy: boolean; hasO
               <div className={styles.caseTop}>
                 <strong>{c.type}</strong>
                 <span className={styles.state} data-state={c.state}>
-                  {c.state === "checking" && c.active && busy && <span className={styles.spin} aria-hidden />}
+                  {((c.state === "checking" && c.active) || c.state === "drafting") && busy && <span className={styles.spin} aria-hidden />}
                   {STATE_WORDS[c.state]}
                 </span>
               </div>
@@ -286,7 +297,7 @@ function BriefStrip({ brief, busy }: { brief: BriefView; busy: boolean }) {
       )}
       {brief.cases.map((c) => (
         <span key={c.id} className={styles.pill} data-active={c.active} data-state={c.state} title={`${c.type} · ${c.where}`}>
-          {c.state === "checking" && c.active && busy ? <span className={styles.spin} aria-hidden /> : <span className={styles.icon} aria-hidden />}
+          {((c.state === "checking" && c.active) || c.state === "drafting") && busy ? <span className={styles.spin} aria-hidden /> : <span className={styles.icon} aria-hidden />}
           {c.n != null ? `#${c.n} ` : ""}{c.short}
           <em>{c.verdict && c.state === "weighed" ? `${c.verdict.label} ${c.verdict.pct}%` : STATE_WORDS[c.state]}</em>
         </span>

@@ -206,6 +206,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
   }, [tip]);
   const [hud, setHud] = useState({ health: 100, stamina: 1, yawDeg: 0, threat: 0, nearDoor: false, target: null as null | { label: string; bearingDeg: number; dist: number } });
   const [dronePhoto, setDronePhoto] = useState<{ src: string; caption: string } | null>(null);
+  const [cctvPhoto, setCctvPhoto] = useState<{ src: string; caption: string } | null>(null);
   const [feedCaps, setFeedCaps] = useState({ drone: "DRONE", cctv: "CCTV" });
   const routeTo = useRef<Pt | null>(null);
   const downed = useRef(false);
@@ -513,11 +514,14 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
             if (kind(m) !== "tool" || m.name !== "weigh_case") continue;
             const w = parse<{ property_id?: string; verdict?: { hypothesis?: string; label?: string } }>(m);
             if (String(w?.property_id) !== office.pid) continue;
-            lean = w?.verdict?.label && w.verdict.label !== "unresolved" ? w.verdict.hypothesis ?? null : null;
+            lean = w?.verdict?.hypothesis ?? null;
             break;
           }
           const n = Math.min(4, Math.max(1, Number(/(\d+)-person/.exec(c7?.stakes ?? "")?.[1] ?? 3)));
-          if (lean === "still_there" && !officeSpawned.current) {
+          // Tenant present = "still there" or "the listing is stale" (the suite was leased and the listing never came down).
+          // The office comes with you only if the evidence leans present AND you didn't report the suite empty.
+          const present = lean === "still_there" || lean === "listing_stale";
+          if (present && t.chosen !== 0 && !officeSpawned.current) {
             officeSpawned.current = true;
             const names = ["Ana", "Ben", "Chen", "Dara"].slice(0, n);
             const spots = names.map((name, i) => {
@@ -525,9 +529,9 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
               return { id: `office-${i}`, x, z, name };
             });
             ctx.bus.emit("mission:survivors", { survivors: spots });
-            setBanner({ title: "The office on record is still here", sub: `Bring them to ${hero.label}.`, tone: "good" }, 4500);
+            setBanner({ title: "The office on record looks like it's still here", sub: `The listing may be stale. Bring them to ${hero.label}.`, tone: "good" }, 4500);
           } else {
-            setBanner({ title: lean === "still_there" ? "They're with you" : "Nobody to bring", sub: lean === "still_there" ? "" : `CoStar records ${n} ${n === 1 ? "person" : "people"} in suite ${c7?.suite}. HQ will flag the record for a human to check.`, tone: "info" }, 5000);
+            setBanner({ title: "Nobody to bring", sub: `CoStar records ${n} ${n === 1 ? "person" : "people"} in suite ${c7?.suite}; your report and the records disagree. HQ will flag it for a human to check.`, tone: "info" }, 5000);
           }
           g.select(hero.pid);
           ctx.bus.emit("world:beacon", { pid: hero.pid });
@@ -767,27 +771,34 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
     if (hero) ctxRef.current?.bus.emit("world:lean", { pid: hero.pid, material: lean });
   }, [hero, lean]);
 
-  // The drone feed shows the agent's own vision check (the real aerial it looked at) for 10 s.
+  // The agent's own vision checks pop up for 10 s: the real aerial it read for case #6 (drone slot), and the real
+  // Matterport tour of suite 1100 it read for case #7 (camera slot), so the judge sees the evidence even when the player
+  // isn't standing there (the stage cut never walks case #7).
   const lastPhotoId = useRef<string | null>(null);
   useEffect(() => {
     if (!hero) return;
     for (let i = game.messages.length - 1; i >= 0; i--) {
       const m = game.messages[i] as Msg;
       if (kind(m) !== "tool" || m.name !== "check_evidence") continue;
-      const r = parse<{ property_id?: string; images?: string[]; callout?: string; finding?: string }>(m);
-      if (!r?.images?.length || String(r.property_id ?? hero.pid) !== hero.pid) continue;
+      const r = parse<{ property_id?: string; suite?: string; images?: string[]; callout?: string; finding?: string }>(m);
+      const pid = String(r?.property_id ?? hero.pid);
+      if (!r?.images?.length || (pid !== hero.pid && pid !== office?.pid)) continue;
       const id = String(m.id ?? i);
       if (id === lastPhotoId.current) return;
       lastPhotoId.current = id;
-      setDronePhoto({ src: evidenceUrl(r.images[0]), caption: `HQ looked: ${r.callout || r.finding || "aerial"}` });
-      feedsRef.current?.setOverride("drone", true);
+      const slot = pid === hero.pid ? "drone" : "cctv";
+      const photo = slot === "drone"
+        ? { src: evidenceUrl(r.images[0]), caption: `HQ looked from above: ${r.callout || r.finding || "aerial"}` }
+        : { src: evidenceUrl(r.images[0]), caption: `HQ looked inside${case7?.suite ? ` suite ${case7.suite}` : ""} (its 3D tour): ${r.callout || r.finding || "tour"}` };
+      (slot === "drone" ? setDronePhoto : setCctvPhoto)(photo);
+      feedsRef.current?.setOverride(slot, true);
       const t = setTimeout(() => {
-        setDronePhoto(null);
-        feedsRef.current?.setOverride("drone", false);
+        (slot === "drone" ? setDronePhoto : setCctvPhoto)(null);
+        feedsRef.current?.setOverride(slot, false);
       }, 10_000);
       return () => clearTimeout(t);
     }
-  }, [game.messages, hero]);
+  }, [game.messages, hero, office, case7]);
 
   // ------------------------------------------------------------------ actions
   function begin() {
@@ -971,7 +982,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
           decision={decision}
           compass={{ yawDeg: hud.yawDeg, waveSector: step === "night" || step === "escape" || step === "hold" ? game.wave?.sector ?? null : null, target: hud.target }}
           threat={hud.threat}
-          feeds={{ drone: { caption: feedCaps.drone, photo: dronePhoto }, cctv: { caption: feedCaps.cctv, photo: null } }}
+          feeds={{ drone: { caption: feedCaps.drone, photo: dronePhoto }, cctv: { caption: feedCaps.cctv, photo: cctvPhoto } }}
           badges={{ stub: game.stub, replay }}
           disclaimer={DISCLAIMER}
           attribution={district.attribution ?? null}
