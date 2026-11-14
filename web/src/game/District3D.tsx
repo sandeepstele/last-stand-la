@@ -17,6 +17,8 @@ export type DistrictHandle = {
   setTarget(pid: string | null): void;
   spawnWave(wave: Wave, pid: string): void;
   clearHorde(): void;
+  /** A dashed fallback route on the ground between two buildings (any pid); null hides it. */
+  setRoute(from: string | null, to: string | null): void;
 };
 
 type Props = {
@@ -73,6 +75,7 @@ type Ctx = {
   ringGeo: THREE.RingGeometry;
   beacon: THREE.Mesh;
   beaconRing: THREE.Mesh;
+  route: THREE.Line;
   qTexture: THREE.CanvasTexture;
   clock: THREE.Clock;
   focus: { from: THREE.Vector3; to: THREE.Vector3; off0: THREE.Vector3; off1: THREE.Vector3; t0: number; active: boolean };
@@ -234,9 +237,15 @@ export const District3D = forwardRef<DistrictHandle, Props>(function District3D(
     beaconRing.position.y = 0.15;
     beaconRing.visible = false;
     scene.add(beaconRing);
+    const routeGeo = new THREE.BufferGeometry();
+    routeGeo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(6), 3));
+    const route = new THREE.Line(routeGeo, new THREE.LineDashedMaterial({ color: AMBER, dashSize: 8, gapSize: 5, transparent: true, opacity: 0.95 }));
+    route.visible = false;
+    route.frustumCulled = false;
+    scene.add(route);
 
     const ctx: Ctx = {
-      renderer, scene, camera, controls, horde, group, recs: new Map(), pickables: [], ringMats, ringGeo, beacon, beaconRing,
+      renderer, scene, camera, controls, horde, group, recs: new Map(), pickables: [], ringMats, ringGeo, beacon, beaconRing, route,
       qTexture: makeQTexture(), clock: new THREE.Clock(),
       focus: { from: new THREE.Vector3(), to: new THREE.Vector3(), off0: new THREE.Vector3(), off1: new THREE.Vector3(), t0: 0, active: false },
       shake: { amp: 0, t0: 0, active: false, offset: new THREE.Vector3() },
@@ -431,6 +440,8 @@ export const District3D = forwardRef<DistrictHandle, Props>(function District3D(
       beacon.geometry.dispose();
       (beacon.material as THREE.Material).dispose();
       (beaconRing.material as THREE.Material).dispose();
+      routeGeo.dispose();
+      (route.material as THREE.Material).dispose();
       ctx.qTexture.dispose();
       renderer.dispose();
       renderer.domElement.remove();
@@ -595,6 +606,20 @@ export const District3D = forwardRef<DistrictHandle, Props>(function District3D(
     },
     clearHorde() {
       ctxRef.current?.horde.clear();
+    },
+    setRoute(from, to) {
+      const ctx = ctxRef.current;
+      if (!ctx) return;
+      const a = from ? ctx.recs.get(from) : undefined;
+      const b = to ? ctx.recs.get(to) : undefined;
+      ctx.route.visible = !!(a && b && a !== b);
+      if (!a || !b || a === b) return;
+      const pos = ctx.route.geometry.getAttribute("position") as THREE.BufferAttribute;
+      pos.setXYZ(0, a.cx, 1.5, a.cz);
+      pos.setXYZ(1, b.cx, 1.5, b.cz);
+      pos.needsUpdate = true;
+      ctx.route.geometry.computeBoundingSphere();
+      ctx.route.computeLineDistances();
     },
   }), []);
 

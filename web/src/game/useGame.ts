@@ -143,9 +143,10 @@ export function useGame(stub: boolean) {
     agent.submit(`Scout property ${selected}`, true).catch(() => {});
   }, [selected, agent]);
 
-  const startNight = useCallback((n = 1) => {
+  /** Start wave n; returns the pid the horde comes for (null if it could not start). */
+  const startNight = useCallback((n = 1): string | null => {
     const w = district?.waves.find((x) => x.n === n);
-    if (!fortress || !w || agent.isLoading) return;
+    if (!fortress || !w || agent.isLoading) return null;
     // After a RUN, the next wave comes for the building you ended the night in.
     const at = n > 1 && outcome?.pid_final ? outcome.pid_final : fortress;
     if (at !== fortress) setFortress(at);
@@ -157,6 +158,7 @@ export function useGame(stub: boolean) {
     answered.current = null;
     setPhase("night");
     agent.submit(`Wave ${n} is coming from the ${w.sector}`, false).catch(() => {});
+    return at;
   }, [fortress, agent, messages.length, district, outcome]);
 
   const postResolve = useCallback(async (action: PlanAction, to_pid?: string) => {
