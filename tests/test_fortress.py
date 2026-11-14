@@ -187,3 +187,17 @@ def test_dossier_walls_follow_the_evidence_so_far(monkeypatch):
     assert w == {"value": 76, "label": "likely", "why": "evidence", "source": "s"}
     assert seen["checks"] == ["look_from_above", "compliance_filings", "human_report"] and seen["notes"][0]["note"] == "concrete"
     assert "look_from_above" in evidence.CHECK_WHAT
+
+
+def test_demo_reset_clears_one_nights_traces():
+    store = InMemoryStore()
+    store.put(("notes", "6375735"), "a", {"note": "concrete"})
+    store.put(("notes", "254167#1100"), "b", {"note": "empty"})
+    store.put(("corrections",), "c", {"decision": "approve"})
+    store.put(("keep",), "d", {"x": 1})
+    routes.app.state.store = store
+    c = TestClient(routes.app)
+    assert c.post("/demo/reset", json={}).status_code == 400
+    r = c.post("/demo/reset", json={"confirm": "reset"})
+    assert r.status_code == 200 and r.json()["cleared"] == {"notes": 2, "corrections": 1, "outbox": 0}
+    assert not store.search(("notes",)) and store.search(("keep",))

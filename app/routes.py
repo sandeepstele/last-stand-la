@@ -215,8 +215,34 @@ async def game_resolve(request: Request) -> JSONResponse:
     return JSONResponse(await asyncio.to_thread(fortress.resolve, pid, wave, seed, action, to_pid, checks, notes))
 
 
+async def demo_reset(request: Request) -> JSONResponse:
+    """POST /demo/reset {"confirm": "reset"}: the one-click "Play again" at the table. Clears what one night leaves in the
+    Store (team notes and player reports, correction decisions, outbox drafts) so the next night starts clean and its
+    strict-replay keys match. Local callers only; the JSON body keeps a cross-site page from triggering it.
+    scripts/demo_reset.py does the same from a terminal (and also deletes paused threads)."""
+    host = request.client.host if request.client else ""
+    if host not in ("127.0.0.1", "::1", "localhost", "testclient"):
+        return JSONResponse({"error": "local only"}, status_code=403)
+    try:
+        body = json.loads(await request.body() or b"{}")
+    except json.JSONDecodeError:
+        body = {}
+    if body.get("confirm") != "reset":
+        return JSONResponse({"error": 'send {"confirm": "reset"}'}, status_code=400)
+    store, cleared = _store(request), {}
+    for prefix in (("notes",), ("corrections",), ("outbox",)):
+        n = 0
+        while items := await store.asearch(prefix, limit=100):
+            for it in items:
+                await store.adelete(it.namespace, it.key)
+                n += 1
+        cleared["/".join(prefix)] = n
+    return JSONResponse({"ok": True, "cleared": cleared})
+
+
 app = Starlette(
     routes=[
+        Route("/demo/reset", demo_reset, methods=["POST"]),
         Route("/game/district", game_district, methods=["GET"]),
         Route("/game/dossier/{pid}", game_dossier, methods=["GET"]),
         Route("/game/resolve", game_resolve, methods=["POST"]),
