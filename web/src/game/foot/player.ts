@@ -32,7 +32,7 @@ const SHOVE_CD = 0.8;
 const SHOVE_ANIM = 0.34;
 const TURN_RATE = 11; // 1/s, how fast the avatar turns to face its movement
 const SPOT_ANGLE = 0.45;
-const SPOT_I = 40; // flashlight intensity (decay 1)
+const SPOT_I = 18; // flashlight intensity, with a gentle falloff (decay 0.8): no blown-out wall at arm's length
 const WARM_I = 2.4; // fill light around the avatar
 
 const TAU = Math.PI * 2;
@@ -51,7 +51,7 @@ export function createPlayer(ctx: FootCtx): System {
 
   // flashlight + a warm fill so the avatar reads in the dark. Never toggled visible (a light count change would
   // recompile every material); intensity goes to 0 instead.
-  const spot = new THREE.SpotLight(0xfff0d2, 0, 40, SPOT_ANGLE, 0.5, 1);
+  const spot = new THREE.SpotLight(0xfff0d2, 0, 40, SPOT_ANGLE, 0.5, 0.8);
   spot.castShadow = false;
   const warm = new THREE.PointLight(0xffb070, 0, 6, 1);
   const beam = createBeam(SPOT_ANGLE);
