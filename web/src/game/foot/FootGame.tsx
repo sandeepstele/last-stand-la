@@ -31,6 +31,7 @@ import { createPlayer } from "./player";
 import { createHorde } from "./horde";
 import { createFeeds, type Feeds } from "./feeds";
 import { createMission } from "./mission";
+import { createAudio } from "./audio";
 import { HqPanel } from "./HqPanel";
 import { mulberry32 } from "../prng";
 import { IntroOverlay } from "./IntroOverlay";
@@ -236,7 +237,7 @@ export function FootGame({ game, replay, agentOff = false }: { game: Game; repla
 
     const feeds = createFeeds(ctx);
     feedsRef.current = feeds;
-    const systems = [safely("world", createWorld(ctx)), safely("player", createPlayer(ctx)), safely("horde", createHorde(ctx)), safely("mission", createMission(ctx)), safely("feeds", feeds)];
+    const systems = [safely("world", createWorld(ctx)), safely("player", createPlayer(ctx)), safely("horde", createHorde(ctx)), safely("mission", createMission(ctx)), safely("audio", createAudio(ctx)), safely("feeds", feeds)];
     ctx.bus.emit("world:beacon", { pid: hero.pid });
     const offDown = ctx.bus.on("player:downed", () => (downed.current = true));
     const offMission = [
@@ -329,6 +330,7 @@ export function FootGame({ game, replay, agentOff = false }: { game: Game; repla
   const startDefend = (ctx: FootCtx, door: Pt) => {
     const f = dirOf(hero?.door?.facing ?? 180);
     [ctx.player.x, ctx.player.z] = ctx.collide(door[0] + f[0] * 1.5, door[1] + f[1] * 1.5, 0.5);
+    ctx.player.yaw = ((hero?.door?.facing ?? 180) * Math.PI) / 180; // face the horde
     ctx.player.frozen = false;
     ctx.player.hidden = false;
     ctx.cameraOwner = "player";
@@ -429,6 +431,7 @@ export function FootGame({ game, replay, agentOff = false }: { game: Game; repla
         if (k.has("KeyE") && (agentOff || (!tipBusy && !scoutBusy && g.phase !== "dusk"))) {
           // Step out: the night begins.
           [p.x, p.z] = ctx.collide(heroDoor[0] + dirOf(hero.door?.facing ?? 180)[0] * 2.5, heroDoor[1] + dirOf(hero.door?.facing ?? 180)[1] * 2.5, 0.5);
+          p.yaw = ((hero.door?.facing ?? 180) * Math.PI) / 180; // face the street, not the wall
           p.frozen = false;
           p.hidden = false;
           ctx.input.lock();
@@ -485,6 +488,7 @@ export function FootGame({ game, replay, agentOff = false }: { game: Game; repla
           } else {
             const f = dirOf(hero.door?.facing ?? 180);
             [p.x, p.z] = ctx.collide(heroDoor[0] + f[0] * 3, heroDoor[1] + f[1] * 3, 0.5);
+            p.yaw = ((hero.door?.facing ?? 180) * Math.PI) / 180;
             ctx.bus.emit("wave:breach", { x: heroDoor[0], z: heroDoor[1], count: 24 });
             ctx.bus.emit("mission:evacuate", { x: heroDoor[0], z: heroDoor[1] });
             startEscape(ctx, true);
