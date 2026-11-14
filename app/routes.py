@@ -79,7 +79,9 @@ async def get_scans(request: Request) -> JSONResponse:
 async def healthz(request: Request) -> JSONResponse:
     return JSONResponse({
         "ok": True,
-        "models": {"orchestrator": os.environ.get("RADAR_ORCH_MODEL", "(auto)"), "specialists": os.environ.get("RADAR_SPEC_MODEL", "(auto)")},
+        "models": {"orchestrator": os.environ.get("RADAR_ORCH_MODEL", "(auto)"),
+                   "specialists": os.environ.get("RADAR_FAST_MODEL", "(auto)"),
+                   "timeout_s": os.environ.get("RADAR_MODEL_TIMEOUT_S", "8")},
         "field_uploads_enabled": bool(os.environ.get("RADAR_FIELD_TOKEN")),
         "scene_mode": os.environ.get("RADAR_SCENE_MODE", "ack"),
         "layers": {k: os.environ.get(f"RADAR_LAYER_{k.upper()}", "cached") for k in ("costar", "vexcel")},

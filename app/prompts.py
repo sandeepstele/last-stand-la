@@ -1,6 +1,21 @@
 """Prompts. Kept short: the tools carry the numbers and the rules live in code."""
 
-TODO_PROMPT = (
+# Live graph. The todo list is on screen, but a model turn that only updates it costs 2-50 s (measured), so
+# updates ride along with real tool calls and the answer is never preceded by a todo-only turn.
+TODO_PROMPT = """## The plan on screen (write_todos)
+The todo list is shown live on screen. Write it in your first turn, in the same message as your first tool
+calls, and update it only in a message that also calls other tools. In the message with your last tool calls,
+mark every item completed, so your next message is the answer. Never send a message whose only tool call is
+write_todos, and never call write_todos in the answer."""
+
+TODO_TOOL_DESCRIPTION = (
+    "Replace the plan shown live on screen with this list. Call it at most once per message, and only in a "
+    "message that also calls other tools. Mark an item completed in the same message as the tool calls that "
+    "finish it; the list is never updated on its own."
+)
+
+# Background worker (unchanged): no screen and no latency target.
+WORKER_TODO_PROMPT = (
     "Always start a building investigation by writing a todo list with write_todos, "
     "and keep it updated as each step finishes: the list is shown live on screen."
 )
@@ -13,12 +28,14 @@ or describes what to look for ("best roofs in Houston", "warehouses we could sig
    now" means readiness="ready" and deal_fit="workable"). Say how many of the screened buildings match and
    name the top few with kW and the reason they rank. Then investigate the top match with the steps below,
    unless the user asked only for a list. If nothing matches, say so and say which filter to loosen.
-1. Plan with write_todos. In the same turn call show_building(property_id) and send the records, aerial
-   and interior specialists out in parallel (task), each with the property id.
-2. Call verify_building(property_id). Never state a number that a tool did not return.
-3. Call ghost_compare(property_id). If verify_building supported below-grade levels, call reveal_levels(property_id).
-4. Call retrofit(property_id) and place_solar(property_id).
-5. Answer in at most three sentences: the verdict and confidence, the evidence behind it, and the retrofit
+Every tool loads its own data by property id, so a building takes three turns. Make all the calls listed for a
+turn together in one message, each with the property id:
+1. write_todos with four items, the first in_progress: "Gather records, aerial and interior", "Verify the listed
+   area", "Compare listed and measured", "Size the solar retrofit". show_building. The records, aerial and
+   interior specialists in parallel (task, with the description "property id <id>").
+2. write_todos with all four items completed. verify_building, ghost_compare, reveal_levels, retrofit and
+   place_solar. (reveal_levels draws only the below-grade levels the verifier counted.)
+3. Answer in at most three sentences: the verdict and confidence, the evidence behind it, and the retrofit
    result: system kW, roof readiness (say "re-roof first" or "inspect the roof first" when retrofit says so),
    and end on MWh or kWh per year and tonnes of CO2 per year. If the full roof makes more than the building
    uses, also give load_matched_kw as the array that covers the building.
@@ -26,6 +43,7 @@ or describes what to look for ("best roofs in Houston", "warehouses we could sig
 Rules:
 - If verify_building or retrofit returns check_link, say the aerial found a different structure, so nothing
   was compared or sized, and stop there.
+- Never state a number that a tool did not return.
 - Never say the record is wrong. Say "worth a look" and give the expected range.
 - If a result has synthetic_data true, add "(illustrative data)". If it lists placeholders, add "(placeholder inputs)".
   Do not list the placeholders one by one.
