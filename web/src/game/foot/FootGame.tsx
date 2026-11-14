@@ -30,6 +30,7 @@ import { IntroOverlay } from "./IntroOverlay";
 import { InsideView, type InsideMode } from "./InsideView";
 import { FootHud, type Banner, type Hint } from "./FootHud";
 import { DawnView } from "./DawnView";
+import { RadioLog } from "../Hud";
 
 type Step = "intro" | "approach" | "inside" | "night" | "hold" | "escape" | "safe" | "aftershock" | "dawn";
 
@@ -605,6 +606,12 @@ export function FootGame({ game, replay, agentOff = false }: { game: Game; repla
           exitHint={exitAllowed ? "[E] step outside" : step === "inside" ? (hero.conflict && tip.chosen === null ? "Answer first: what do the walls look like?" : "Wait for HQ…") : null}
           onChoose={(i) => tip.chosen === null && setTip({ chosen: i, sentAt: null })}
         />
+      )}
+      {showInside && (
+        // The agent keeps talking while you're inside: the radio stays on screen (top-right is kept free by InsideView).
+        <div style={{ position: "absolute", top: 16, right: 16, width: 360, maxHeight: 260, overflow: "hidden", zIndex: 30, pointerEvents: "none" }}>
+          <RadioLog lines={radio.slice(-5)} busy={game.isLoading} />
+        </div>
       )}
       {step === "intro" && <IntroOverlay heroLabel={heroLabel} ready={!!district} stub={game.stub} replay={replay} attribution={district.attribution ?? null} onStart={begin} />}
       {step === "dawn" && (
