@@ -513,11 +513,14 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
             if (kind(m) !== "tool" || m.name !== "weigh_case") continue;
             const w = parse<{ property_id?: string; verdict?: { hypothesis?: string; label?: string } }>(m);
             if (String(w?.property_id) !== office.pid) continue;
-            lean = w?.verdict?.label && w.verdict.label !== "unresolved" ? w.verdict.hypothesis ?? null : null;
+            lean = w?.verdict?.hypothesis ?? null;
             break;
           }
           const n = Math.min(4, Math.max(1, Number(/(\d+)-person/.exec(c7?.stakes ?? "")?.[1] ?? 3)));
-          if (lean === "still_there" && !officeSpawned.current) {
+          // Tenant present = "still there" or "the listing is stale" (the suite was leased and the listing never came down).
+          // The office comes with you only if the evidence leans present AND you didn't report the suite empty.
+          const present = lean === "still_there" || lean === "listing_stale";
+          if (present && t.chosen !== 0 && !officeSpawned.current) {
             officeSpawned.current = true;
             const names = ["Ana", "Ben", "Chen", "Dara"].slice(0, n);
             const spots = names.map((name, i) => {
@@ -525,9 +528,9 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
               return { id: `office-${i}`, x, z, name };
             });
             ctx.bus.emit("mission:survivors", { survivors: spots });
-            setBanner({ title: "The office on record is still here", sub: `Bring them to ${hero.label}.`, tone: "good" }, 4500);
+            setBanner({ title: "The office on record looks like it's still here", sub: `The listing may be stale. Bring them to ${hero.label}.`, tone: "good" }, 4500);
           } else {
-            setBanner({ title: lean === "still_there" ? "They're with you" : "Nobody to bring", sub: lean === "still_there" ? "" : `CoStar records ${n} ${n === 1 ? "person" : "people"} in suite ${c7?.suite}. HQ will flag the record for a human to check.`, tone: "info" }, 5000);
+            setBanner({ title: "Nobody to bring", sub: `CoStar records ${n} ${n === 1 ? "person" : "people"} in suite ${c7?.suite}; your report and the records disagree. HQ will flag it for a human to check.`, tone: "info" }, 5000);
           }
           g.select(hero.pid);
           ctx.bus.emit("world:beacon", { pid: hero.pid });

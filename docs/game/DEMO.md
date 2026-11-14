@@ -18,7 +18,7 @@ The user's decisions (1:50 pm): **Entertainment**; the deep agent is always visi
 | 0:55 | Step out; the horde; HQ proposes RUN or HOLD. Press the key; F | "The agent proposes; I decide. Code rolls the walls against the 1994 Northridge shaking at this block." |
 | 1:10 | Aftershock, dawn, "File the report" | "And the night produced something real." |
 | 1:15 | The auditor: the case file with your report as a person's report, the draft correction, the queue (#6 of 328; #7 already worked) | "Same agent, auditing CoStar's records: it worked case 7 from the data while I ran. The other 326 it works overnight." |
-| 1:50 | Close | "The zombies are fake. The weak spots are real." |
+| 1:50 | Close | "Settle tonight's cases and make it to dawn: every night, real records get checked." |
 
 **Acceptance:**
 - `?demo=1` on strict replay, with F at approach and escape.
@@ -31,7 +31,7 @@ The user's decisions (1:50 pm): **Entertainment**; the deep agent is always visi
 
 | Time | On screen | Say |
 |---|---|---|
-| 0:00 | The intro: the camera circles real downtown LA | "Every building here is real: CoStar's record, the city's retrofit orders, Vexcel's aerials, Matterport's tours. The zombies are fake. The weak spots are real." |
+| 0:00 | The intro: the camera circles real downtown LA | "Every building here is real: CoStar's record, the city's retrofit orders, Vexcel's aerials, Matterport's tours." |
 | 0:15 | Start; walking toward the hero building; the radio comes alive | "My commander is a LangChain deep agent. Four squads read the records in parallel… and they disagree: CoStar says masonry, the city's retrofit list says concrete." |
 | 0:30 | The DRONE feed flips to the real aerial: "HQ looked: concrete frame visible" | "It doesn't guess. It picks the evidence and looks at the aerial itself. Code weighs it: 66% concrete." |
 | 0:45 | [E] at the door: the real interior (its own 3D tour). Press [1] "Concrete" | "So I go in and look. My report is testimony: it moves the odds, capped, never final. 72% now." |
