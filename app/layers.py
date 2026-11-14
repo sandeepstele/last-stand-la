@@ -219,6 +219,18 @@ def _link_problem(footprint: float, listed: float, basis: str, stories: int) -> 
             f"{plate:,.0f} sq ft ({ratio:.2f}x): it is probably another structure on the parcel, not this building.")
 
 
+PARCEL_SLACK = 1.25  # roof overhangs and parcel mapping error explain up to ~25%; 52227 is 1.44x
+
+
+def _outline_problem(aer: dict) -> str | None:
+    """An outline bigger than its own parcel almost always includes a neighbor (shared party walls downtown)."""
+    fp, parcel = aer.get("footprint_sqft"), aer.get("parcel_area_sqft")
+    if not fp or not parcel or fp <= PARCEL_SLACK * parcel:
+        return None
+    return (f"Vexcel's outline is {fp:,.0f} sq ft but its parcel is only {parcel:,.0f} sq ft: the outline likely includes a "
+            "neighboring building that shares a wall, so it can't measure this building on its own.")
+
+
 def load_building(property_id: str) -> Building:
     """Everything the verifier needs, validated. Raises LayerError with a readable message."""
     pid = check_property_id(property_id)
@@ -260,7 +272,7 @@ def load_building(property_id: str) -> Building:
             "synthetic": False,
             "linked_by": "costar record (synthetic link)" if rec["synthetic"] else "costar record",
         }
-    link = _link_problem(aerial.footprint_sqft, listed, basis, records.stories)
+    link = _link_problem(aerial.footprint_sqft, listed, basis, records.stories) or _outline_problem(aer)
     return Building(pid, records, aerial, twin_id, twin, rec, aer, provenance, warnings, link)
 
 

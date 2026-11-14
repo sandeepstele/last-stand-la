@@ -207,3 +207,11 @@ def test_best_linked_twin_is_the_largest_nearby_scan(monkeypatch):
     rec = {"matterport_model_ids": ["SMALLnear1", "HUGEfar001", "BIGnear001"], "latitude": 29.755, "longitude": -95.405}
     model_id, twin = layers.get_twin("900001", rec)
     assert model_id == "BIGnear001" and twin is not None and rec["matterport_model_id"] == "BIGnear001"
+
+
+def test_outline_bigger_than_its_parcel_is_not_this_building_alone():
+    from app import layers
+
+    assert layers._outline_problem({"footprint_sqft": 16820, "parcel_area_sqft": 11650}).startswith("Vexcel's outline is 16,820")
+    assert layers._outline_problem({"footprint_sqft": 5058, "parcel_area_sqft": 4551}) is None  # 1.11x: mapping error
+    assert layers._outline_problem({"footprint_sqft": 5000, "parcel_area_sqft": None}) is None
