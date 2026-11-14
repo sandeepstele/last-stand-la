@@ -50,7 +50,7 @@
 @keyframes titleIn { from { opacity: 0; letter-spacing: 0.4em; filter: blur(8px); } }
 .tagline { margin: 12px 0 0; font-family: var(--display); font-weight: 600; text-transform: uppercase; letter-spacing: 0.14em; font-size: clamp(18px, 1.9vw, 28px); color: #d8dee8;
   animation: fadeUp 1s 0.8s ease both; text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8); }
-.tagline b { color: var(--red); font-weight: 700; }
+.tagline b { color: var(--amber); font-weight: 700; }
 @keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } }
 
 .briefRow { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(250px, 1fr); gap: 16px; width: min(1060px, 100%); transition: opacity 0.6s ease 0.25s; }
@@ -459,7 +459,18 @@
 @keyframes hitFlash { from { opacity: 1; } to { opacity: 0; } }
 
 /* ------------------------------------------------------------------ round 2: the night's goal, case tags, flares */
-.goal { margin: 7px 0 2px; font-family: var(--display); font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; font-size: 16px; line-height: 1.15; color: #fff; }
+.goal { margin: 7px 0 2px; font-family: var(--display); font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; font-size: 17px; line-height: 1.1; color: #fff; }
+.goal span { display: block; color: var(--amber); }
+@media (max-height: 760px) {
+  .goal { font-size: 15px; margin-top: 4px; }
+  .timer { margin: 5px 0 4px; padding: 4px 9px 3px; }
+  .timer b { font-size: 26px; }
+  .objList li { font-size: 13.5px; padding: 1px 0; }
+  .objList li[data-kind="main"] { font-size: 14px; }
+  .now { margin-top: 6px; padding-top: 5px; }
+  .disagree { display: none; }
+  .bars { gap: 5px; margin-top: 5px; }
+}
 .objText { min-width: 0; overflow-wrap: anywhere; }
 .caseTag { display: inline-block; margin-right: 6px; padding: 2px 5px 1px; border-radius: 3px; vertical-align: 1px; white-space: nowrap;
   font: 700 10.5px/1.2 var(--mono); letter-spacing: 0.06em; color: #111; background: var(--amber); text-decoration: none; }

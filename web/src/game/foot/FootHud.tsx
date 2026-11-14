@@ -74,7 +74,10 @@ function Missions({ objectives, now, timer, survivors, badges }: { objectives: O
         <span className={styles.tag}>Missions</span>
         <Badges stub={badges.stub} replay={badges.replay} />
       </div>
-      <p className={styles.goal}>Settle tonight&apos;s cases · make it to dawn</p>
+      <p className={styles.goal}>
+        Settle tonight&apos;s cases
+        <span>Make it to dawn</span>
+      </p>
       {timer && (
         <div className={styles.timer} data-urgent={timer.urgent}>
           <span>{timer.label}</span>
