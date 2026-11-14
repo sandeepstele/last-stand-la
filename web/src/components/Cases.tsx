@@ -18,7 +18,7 @@ type Weighed = {
   verdict: { hypothesis: string; claim: string; confidence: number; label: string };
   next_check: string | null; correction_draft: string | null;
 };
-type QueueRow = { case: string; property_id: string; suite?: string; address?: string; year_built?: number; material?: string; past_due?: boolean; label?: string };
+type QueueRow = { id?: string; case: string; property_id: string; suite?: string; address?: string; year_built?: number; material?: string; past_due?: boolean; label?: string };
 type Queue = { counts: Record<string, number>; total: number; top: QueueRow[] };
 
 export const CASE_LABEL: Record<string, string> = {
@@ -95,7 +95,7 @@ export function CaseQueue({ onOpen, busy }: { onOpen: (propertyId: string, suite
           <p className={styles.muted}>Order: imagery gathered first, then by stakes</p>
           <ol className={styles.queue}>
             {q.top.slice(0, 12).map((c) => (
-              <li key={`${c.case}-${c.property_id}-${c.suite ?? ""}`}>
+              <li key={c.id ?? `${c.case}-${c.property_id}-${c.suite ?? ""}`}>
                 <button type="button" disabled={busy} onClick={() => onOpen(c.property_id, c.suite)}>
                   <strong>{c.address ?? c.property_id}</strong>
                   <span className={styles.muted}>{CASE_LABEL[c.case] ?? c.case}{c.label ? ` · ${c.label}` : ""}{c.past_due ? " · past a deadline" : ""}</span>

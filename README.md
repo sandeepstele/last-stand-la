@@ -14,7 +14,7 @@ The agent opens **cases** wherever independent sources disagree. An overnight sw
 |---|---|---|
 | **Material conflict** | LA's non-ductile concrete retrofit list names the building; CoStar records another material | Only 12 of the 65 buildings matched to the city's concrete list are recorded as concrete by CoStar |
 | **Stale entry** | A city retrofit list still names a building that was replaced | 8 found; 2 backed by demolition permits |
-| **Ghost tenant** | CoStar records a company in a suite that is listed for lease right now | 316 suites, about 5,050 employees on record |
+| **Ghost tenant** | CoStar records a company in a suite that is listed for lease right now | 316 suites, about 5,050 employees on record; 273 of them become cases (the other 43 are sublet listings, where the tenant itself offers the space) |
 
 For each case the agent:
 1. **Opens the case:** competing hypotheses, each with a prior confidence.

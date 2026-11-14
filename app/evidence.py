@@ -294,7 +294,8 @@ def listing_timeline(pid: str, case: str, suite: str) -> dict[str, Any]:
     kinds = sorted({x["type"] for x in f["listings"]})
     today = date.today().isoformat()
     months = _months(on, today) if on else None
-    finding = (f"listed since {on} ({months} months, {', '.join(kinds)} listing); CoStar records {t['tenant']} here since {t['tenant_since']}")
+    finding = (f"listed since {on} ({months} months, {', '.join(kinds)} listing); CoStar records {t['tenant']} here since {t['tenant_since']}"
+               + (f", and {len(f['tenants'])} current tenancies in this one suite" if len(f["tenants"]) > 1 else ""))
     if any(k in ("sublet", "assignment") for k in kinds):
         return {"finding": finding, "effects": _effects(subleasing=+0.4, gone_dark=-0.05), "why": "a sublet listing is the tenant offering its own space"}
     if t["tenant_since"] and on and t["tenant_since"] > on:
@@ -449,7 +450,9 @@ def open_case(pid: str, suite: str | None = None) -> dict[str, Any]:
         f = _facts(pid, suite)
         if not (f["tenants"] and f["listings"]):
             return {"property_id": pid, "suite": f["suite"], "cases": [], "note": "This suite is not both occupied on record and listed."}
-        return {"property_id": pid, "suite": f["suite"], "tenant": f["tenants"][0]["tenant"], "cases": [_spec("ghost_tenant")],
+        from app import tenants as _t
+
+        return {"property_id": pid, "suite": f["suite"], "tenant": _t.who(f["tenants"]), "cases": [_spec("ghost_tenant")],
                 "note": "Pick the checks most likely to separate the hypotheses."}
     found = [c for c in cases_for(pid) if c != "ghost_tenant"]
     try:

@@ -28,7 +28,7 @@ def build_queue() -> dict:
         past_due = any(h.get("past_due") for h in a["hypotheses"])
         for case in ("material_conflict", "stale_entry"):
             if case in keys:
-                cases.append({"case": case, "property_id": a["property_id"], "address": a["address"],
+                cases.append({"id": f"{case}:{a['property_id']}", "case": case, "property_id": a["property_id"], "address": a["address"],
                               "year_built": a["year_built"], "units": a["units"], "material": a["costar_material"],
                               "past_due": past_due, "stakes": (2 if past_due else 0) + (a["stories"] or 0) / 10 + (a["units"] or 0) / 100})
     try:

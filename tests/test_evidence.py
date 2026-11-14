@@ -133,3 +133,21 @@ def test_human_report_moves_the_case_and_is_capped(ghost):
 def test_a_note_without_a_usable_hypothesis_moves_nothing(ghost):
     r = ev.run_check("X1", "human_report", "ghost_tenant", "300", notes=[{"note": "call me", "at": "2026-11-14", "supports": "vibes"}])
     assert r["effects"] == [] and "call me" in r["finding"]
+
+
+def test_ghost_queue_has_one_case_per_suite(monkeypatch):
+    from app import costar, tenants
+
+    rows = [{"property_id": "1", "suite": "600", "city": "Los Angeles", "listed_since": "2025-01-01", "tour": None,
+             "tenant": f"a {n}-person office", "employees": n, "tenant_since": "2019-01-01", "lease_expires": None,
+             "business_status": "active", "sqft": 1000, "sublet": False, "tenant_after_listing": False, "moved_elsewhere": False}
+            for n in (5, 9, 12)]
+    rows.append(dict(rows[0], suite="700"))
+    rows.append(dict(rows[0], suite="800", sublet=True))
+    monkeypatch.setattr(tenants, "candidates", lambda: rows)
+    monkeypatch.setattr(costar, "get", lambda pid: {"address": "1 Test St"})
+    q = tenants.queue_rows()
+    keys = [(r["property_id"], r["suite"]) for r in q]
+    assert len(keys) == len(set(keys)) == 2  # 600 once (3 tenancies), 700 once, the sublet suite excluded
+    six = next(r for r in q if r["suite"] == "600")
+    assert six["label"] == "suite 600: 3 tenants on record (26 employees)" and six["id"] == "ghost_tenant:1#600"

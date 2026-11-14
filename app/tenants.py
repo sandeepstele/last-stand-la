@@ -133,19 +133,35 @@ def candidates() -> list[dict[str, Any]]:
     return out
 
 
+def who(tenants: list[dict]) -> str:
+    """One suite, one line: "a 21-person office", or "3 tenants on record (26 employees)"."""
+    if len(tenants) == 1:
+        return tenants[0]["tenant"]
+    emp = sum(t.get("employees") or 0 for t in tenants)
+    return f"{len(tenants)} tenants on record" + (f" ({emp} employees)" if emp else "")
+
+
 def queue_rows() -> list[dict[str, Any]]:
-    rows = []
+    """One case per (building, suite): several current tenancies in one listed suite are one case."""
+    by_suite: dict[tuple, list[dict]] = collections.defaultdict(list)
     for c in candidates():
-        if c["sublet"]:
+        by_suite[(c["property_id"], c["suite"])].append(c)
+    rows = []
+    for (pid, suite), cs in by_suite.items():
+        if any(c["sublet"] for c in cs):
             continue  # a sublet listing is the tenant's own move, not a ghost
+        first = cs[0]
         months = 0
-        if c["listed_since"]:
-            y, m = int(c["listed_since"][:4]), int(c["listed_since"][5:7])
+        if first["listed_since"]:
+            y, m = int(first["listed_since"][:4]), int(first["listed_since"][5:7])
             months = (date.today().year - y) * 12 + date.today().month - m
-        rows.append({"case": "ghost_tenant", "property_id": c["property_id"], "suite": c["suite"],
-                     "address": (costar.get(c["property_id"]).get("address") if c["property_id"] else None),
-                     "label": f"suite {c['suite']}: {c['tenant']}", "past_due": False,
-                     "stakes": (c["employees"] or 0) / 25 + (1 if c["tour"] else 0) + months / 12 - (3 if c["tenant_after_listing"] else 0)})
+        employees = sum(c["employees"] or 0 for c in cs)
+        rows.append({"id": f"ghost_tenant:{pid}#{suite}", "case": "ghost_tenant", "property_id": pid, "suite": suite,
+                     "address": costar.get(pid).get("address") if pid else None,
+                     "label": f"suite {suite}: {who(cs)}", "tenants_on_record": len(cs), "employees": employees,
+                     "past_due": False,
+                     "stakes": employees / 25 + (1 if first["tour"] else 0) + months / 12 - (3 if all(c["tenant_after_listing"] for c in cs) else 0)
+                               + (1 if len(cs) > 1 else 0)})
     return rows
 
 
@@ -154,6 +170,7 @@ def stats() -> dict[str, Any]:
     pairs = {(c["property_id"], c["suite"]) for c in cs}
     return {"suites": len(pairs), "employees_on_record": sum(c["employees"] or 0 for c in cs),
             "sublet": len({(c["property_id"], c["suite"]) for c in cs if c["sublet"]}),
+            "queue_suites": len(queue_rows()),
             "tenant_after_listing": len({(c["property_id"], c["suite"]) for c in cs if c["tenant_after_listing"] and not c["sublet"]}),
             "with_tour": len({(c["property_id"], c["suite"]) for c in cs if c["tour"]}),
             "moved_elsewhere": len({(c["property_id"], c["suite"]) for c in cs if c["moved_elsewhere"]})}
