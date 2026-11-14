@@ -1,0 +1,589 @@
+{
+ "center": {
+  "lat": 0.0,
+  "lon": 0.0
+ },
+ "radius_m": 400,
+ "seed": 1337,
+ "buildings": [
+  {
+   "pid": "syn-a",
+   "label": "Building A",
+   "x": -210,
+   "z": -150,
+   "footprint": [
+    [
+     -25.0,
+     -13.0
+    ],
+    [
+     25.0,
+     -13.0
+    ],
+    [
+     25.0,
+     0.0
+    ],
+    [
+     2.5,
+     0.0
+    ],
+    [
+     2.5,
+     13.0
+    ],
+    [
+     -25.0,
+     13.0
+    ]
+   ],
+   "w": 50,
+   "d": 26,
+   "height_m": 33.3,
+   "stories": 8,
+   "material": "masonry",
+   "list": "concrete",
+   "unfinished": true,
+   "past_due": true,
+   "mmi": 7.4,
+   "hero": true,
+   "year_built": 1962,
+   "people": 260,
+   "conflict": {
+    "costar": "masonry",
+    "city": "concrete"
+   }
+  },
+  {
+   "pid": "syn-b",
+   "label": "Building B",
+   "x": -90,
+   "z": -150,
+   "footprint": null,
+   "w": 50,
+   "d": 26,
+   "height_m": 6.9,
+   "stories": 2,
+   "material": "steel",
+   "list": null,
+   "unfinished": false,
+   "past_due": false,
+   "mmi": 6.7,
+   "hero": false,
+   "year_built": 1985,
+   "people": 260
+  },
+  {
+   "pid": "syn-c",
+   "label": "Building C",
+   "x": 30,
+   "z": -150,
+   "footprint": null,
+   "w": 30,
+   "d": 46,
+   "height_m": 19.5,
+   "stories": 5,
+   "material": "concrete",
+   "list": "concrete",
+   "unfinished": true,
+   "past_due": false,
+   "mmi": 6.5,
+   "hero": false,
+   "year_built": 1968,
+   "people": 12
+  },
+  {
+   "pid": "syn-d",
+   "label": "Building D",
+   "x": 150,
+   "z": -150,
+   "footprint": null,
+   "w": 36,
+   "d": 26,
+   "height_m": 23.1,
+   "stories": 6,
+   "material": "unknown",
+   "list": null,
+   "unfinished": false,
+   "past_due": false,
+   "mmi": 7.5,
+   "hero": false,
+   "year_built": 1948,
+   "people": 260
+  },
+  {
+   "pid": "syn-e",
+   "label": "Building E",
+   "x": 250,
+   "z": -60,
+   "footprint": null,
+   "w": 50,
+   "d": 46,
+   "height_m": 7.8,
+   "stories": 2,
+   "material": "concrete",
+   "list": null,
+   "unfinished": false,
+   "past_due": false,
+   "mmi": 7.2,
+   "hero": false,
+   "year_built": 1974,
+   "people": 40
+  },
+  {
+   "pid": "syn-f",
+   "label": "Building F",
+   "x": -210,
+   "z": -40,
+   "footprint": null,
+   "w": 42,
+   "d": 46,
+   "height_m": 17.3,
+   "stories": 5,
+   "material": "steel",
+   "list": "concrete",
+   "unfinished": false,
+   "past_due": false,
+   "mmi": 8.1,
+   "hero": false,
+   "year_built": 1974,
+   "people": 12,
+   "conflict": {
+    "costar": "steel",
+    "city": "concrete"
+   }
+  },
+  {
+   "pid": "syn-g",
+   "label": "Building G",
+   "x": -90,
+   "z": -40,
+   "footprint": null,
+   "w": 42,
+   "d": 32,
+   "height_m": 35.3,
+   "stories": 10,
+   "material": "concrete",
+   "list": null,
+   "unfinished": false,
+   "past_due": false,
+   "mmi": 7.1,
+   "hero": false,
+   "year_built": 1925
+  },
+  {
+   "pid": "syn-h",
+   "label": "Building H",
+   "x": 30,
+   "z": -40,
+   "footprint": [
+    [
+     -21.0,
+     -23.0
+    ],
+    [
+     21.0,
+     -23.0
+    ],
+    [
+     21.0,
+     23.0
+    ],
+    [
+     8.4,
+     23.0
+    ],
+    [
+     8.4,
+     13.8
+    ],
+    [
+     -8.4,
+     13.8
+    ],
+    [
+     -8.4,
+     23.0
+    ],
+    [
+     -21.0,
+     23.0
+    ]
+   ],
+   "w": 42,
+   "d": 46,
+   "height_m": 29.4,
+   "stories": 8,
+   "material": "concrete",
+   "list": "concrete",
+   "unfinished": true,
+   "past_due": false,
+   "mmi": 8.3,
+   "hero": true,
+   "year_built": 1974,
+   "people": 12
+  },
+  {
+   "pid": "syn-i",
+   "label": "Building I",
+   "x": 150,
+   "z": -40,
+   "footprint": null,
+   "w": 50,
+   "d": 40,
+   "height_m": 23.5,
+   "stories": 6,
+   "material": "concrete",
+   "list": null,
+   "unfinished": false,
+   "past_due": false,
+   "mmi": 8.2,
+   "hero": false,
+   "year_built": 1962,
+   "people": 140
+  },
+  {
+   "pid": "syn-j",
+   "label": "Building J",
+   "x": -210,
+   "z": 70,
+   "footprint": null,
+   "w": 50,
+   "d": 26,
+   "height_m": 15.6,
+   "stories": 4,
+   "material": "masonry",
+   "list": null,
+   "unfinished": false,
+   "past_due": false,
+   "mmi": 6.7,
+   "hero": false,
+   "year_built": 1956,
+   "people": 40
+  },
+  {
+   "pid": "syn-k",
+   "label": "Building K",
+   "x": -90,
+   "z": 70,
+   "footprint": [
+    [
+     -25.0,
+     -13.0
+    ],
+    [
+     25.0,
+     -13.0
+    ],
+    [
+     25.0,
+     0.0
+    ],
+    [
+     2.5,
+     0.0
+    ],
+    [
+     2.5,
+     13.0
+    ],
+    [
+     -25.0,
+     13.0
+    ]
+   ],
+   "w": 50,
+   "d": 26,
+   "height_m": 40.8,
+   "stories": 11,
+   "material": "steel",
+   "list": "concrete",
+   "unfinished": true,
+   "past_due": true,
+   "mmi": 6.5,
+   "hero": true,
+   "year_built": 1968,
+   "people": 85,
+   "conflict": {
+    "costar": "steel",
+    "city": "concrete"
+   }
+  },
+  {
+   "pid": "syn-l",
+   "label": "Building L",
+   "x": 30,
+   "z": 70,
+   "footprint": null,
+   "w": 50,
+   "d": 32,
+   "height_m": 15.8,
+   "stories": 4,
+   "material": "wood",
+   "list": "soft_story",
+   "unfinished": true,
+   "past_due": true,
+   "mmi": 6.7,
+   "hero": false,
+   "year_built": 1948,
+   "people": 260
+  },
+  {
+   "pid": "syn-m",
+   "label": "Building M",
+   "x": 150,
+   "z": 70,
+   "footprint": [
+    [
+     -15.0,
+     -16.0
+    ],
+    [
+     15.0,
+     -16.0
+    ],
+    [
+     15.0,
+     0.0
+    ],
+    [
+     1.5,
+     0.0
+    ],
+    [
+     1.5,
+     16.0
+    ],
+    [
+     -15.0,
+     16.0
+    ]
+   ],
+   "w": 30,
+   "d": 32,
+   "height_m": 21.7,
+   "stories": 6,
+   "material": "steel",
+   "list": null,
+   "unfinished": false,
+   "past_due": false,
+   "mmi": 7.1,
+   "hero": true,
+   "year_built": 1962,
+   "people": 85
+  },
+  {
+   "pid": "syn-n",
+   "label": "Building N",
+   "x": 260,
+   "z": 80,
+   "footprint": null,
+   "w": 50,
+   "d": 46,
+   "height_m": 7.5,
+   "stories": 2,
+   "material": "steel",
+   "list": null,
+   "unfinished": false,
+   "past_due": false,
+   "mmi": 7.1,
+   "hero": false,
+   "year_built": 1925,
+   "people": 140
+  },
+  {
+   "pid": "syn-o",
+   "label": "Building O",
+   "x": -210,
+   "z": 180,
+   "footprint": null,
+   "w": 36,
+   "d": 46,
+   "height_m": 17.3,
+   "stories": 5,
+   "material": "concrete",
+   "list": "concrete",
+   "unfinished": true,
+   "past_due": true,
+   "mmi": 6.2,
+   "hero": false,
+   "year_built": 1931,
+   "people": 85
+  },
+  {
+   "pid": "syn-p",
+   "label": "Building P",
+   "x": -90,
+   "z": 180,
+   "footprint": null,
+   "w": 36,
+   "d": 46,
+   "height_m": 6.9,
+   "stories": 2,
+   "material": "unknown",
+   "list": null,
+   "unfinished": false,
+   "past_due": false,
+   "mmi": 6.5,
+   "hero": false,
+   "year_built": 1956
+  },
+  {
+   "pid": "syn-q",
+   "label": "Building Q",
+   "x": 30,
+   "z": 180,
+   "footprint": [
+    [
+     -15.0,
+     -23.0
+    ],
+    [
+     15.0,
+     -23.0
+    ],
+    [
+     15.0,
+     0.0
+    ],
+    [
+     1.5,
+     0.0
+    ],
+    [
+     1.5,
+     23.0
+    ],
+    [
+     -15.0,
+     23.0
+    ]
+   ],
+   "w": 30,
+   "d": 46,
+   "height_m": 15.1,
+   "stories": 4,
+   "material": "wood",
+   "list": "soft_story",
+   "unfinished": true,
+   "past_due": true,
+   "mmi": 7.2,
+   "hero": true,
+   "year_built": 1974,
+   "people": 40
+  },
+  {
+   "pid": "syn-r",
+   "label": "Building R",
+   "x": 150,
+   "z": 180,
+   "footprint": null,
+   "w": 50,
+   "d": 32,
+   "height_m": 31.9,
+   "stories": 8,
+   "material": "concrete",
+   "list": "concrete",
+   "unfinished": true,
+   "past_due": false,
+   "mmi": 7.0,
+   "hero": false,
+   "year_built": 1985
+  },
+  {
+   "pid": "syn-s",
+   "label": "Building S",
+   "x": -300,
+   "z": 40,
+   "footprint": null,
+   "w": 30,
+   "d": 40,
+   "height_m": 25.1,
+   "stories": 6,
+   "material": "unknown",
+   "list": null,
+   "unfinished": false,
+   "past_due": false,
+   "mmi": 7.3,
+   "hero": false,
+   "year_built": 1931,
+   "people": 40
+  },
+  {
+   "pid": "syn-t",
+   "label": "Building T",
+   "x": 80,
+   "z": -250,
+   "footprint": null,
+   "w": 36,
+   "d": 32,
+   "height_m": 31.3,
+   "stories": 8,
+   "material": "unknown",
+   "list": null,
+   "unfinished": false,
+   "past_due": false,
+   "mmi": 8.0,
+   "hero": false,
+   "year_built": 1948,
+   "people": 140
+  },
+  {
+   "pid": "syn-u",
+   "label": "Building U",
+   "x": -150,
+   "z": -260,
+   "footprint": null,
+   "w": 42,
+   "d": 46,
+   "height_m": 8.4,
+   "stories": 2,
+   "material": "masonry",
+   "list": null,
+   "unfinished": false,
+   "past_due": false,
+   "mmi": 6.8,
+   "hero": false,
+   "year_built": 2004
+  },
+  {
+   "pid": "syn-v",
+   "label": "Building V",
+   "x": 240,
+   "z": 200,
+   "footprint": null,
+   "w": 42,
+   "d": 26,
+   "height_m": 16.7,
+   "stories": 4,
+   "material": "wood",
+   "list": "soft_story",
+   "unfinished": true,
+   "past_due": true,
+   "mmi": 6.6,
+   "hero": false,
+   "year_built": 1948,
+   "people": 260
+  }
+ ],
+ "waves": [
+  {
+   "n": 1,
+   "sector": "W",
+   "arrive_s": 20,
+   "size": 500
+  },
+  {
+   "n": 2,
+   "sector": "N",
+   "arrive_s": 45,
+   "size": 650
+  },
+  {
+   "n": 3,
+   "sector": "E",
+   "arrive_s": 70,
+   "size": 800
+  }
+ ]
+}
