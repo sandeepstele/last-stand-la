@@ -35,6 +35,11 @@ export async function POST(req: Request) {
     return Response.json({ error: "expected {thread_id, decision: approve|reject}" }, { status: 400 });
   }
   const c = client();
+  // Only resume paused background-worker runs: never a live thread or an arbitrary id posted to this route.
+  const thread = await c.threads.get(body.thread_id).catch(() => null);
+  if (!thread || (thread.metadata as { graph_id?: string } | null)?.graph_id !== "radar_worker") {
+    return Response.json({ error: "not a background-worker thread" }, { status: 403 });
+  }
   const state = await c.threads.getState(body.thread_id).catch(() => null);
   const interrupts = state?.tasks.flatMap((t) => t.interrupts ?? []) ?? [];
   if (!interrupts.length) return Response.json({ error: "nothing pending on this thread" }, { status: 409 });
@@ -43,6 +48,10 @@ export async function POST(req: Request) {
     decisions: ((it.value as { action_requests?: unknown[] } | undefined)?.action_requests ?? []).map(() => ({ type: body.decision })),
   });
   const resume = interrupts.length === 1 ? value(interrupts[0]) : Object.fromEntries(interrupts.map((it) => [it.id ?? "", value(it)]));
-  await c.runs.create(body.thread_id, "radar_worker", { command: { resume } });
+  try {
+    await c.runs.create(body.thread_id, "radar_worker", { command: { resume } });
+  } catch {
+    return Response.json({ error: "agent server refused the resume" }, { status: 502 });
+  }
   return Response.json({ status: "resumed", decision: body.decision });
 }

@@ -14,7 +14,7 @@ type Check = {
   effects: Effect[]; images?: string[]; callout?: string; status?: string;
 };
 type Weighed = {
-  property_id: string; case: string; posterior: Record<string, number>;
+  property_id: string; case: string; suite?: string | null; posterior: Record<string, number>;
   verdict: { hypothesis: string; claim: string; confidence: number; label: string };
   next_check: string | null; correction_draft: string | null;
 };
@@ -53,13 +53,22 @@ export function caseChecks(messages: readonly unknown[]): Check[] {
     if (m.name === "check_evidence") {
       try {
         const c = JSON.parse(asText(m.content)) as Check;
-        if (!c.status) out.unshift(c);
+        if (!c.status && !out.some((o) => o.check === c.check)) out.unshift(c);
       } catch {
         /* a malformed result is skipped, not fatal */
       }
     }
   }
   return out;
+}
+
+/** Messages after the newest open_case, so a verdict from an earlier case is never shown for this one. */
+export function afterOpenCase(messages: readonly unknown[]): readonly unknown[] {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i] as Msg;
+    if (kind(m) === "tool" && m.name === "open_case") return messages.slice(i + 1);
+  }
+  return [];
 }
 
 /** Live confidence: priors plus the shifts seen so far, normalized like app/evidence.py weigh_case. */
@@ -73,19 +82,22 @@ export function liveConfidence(hypotheses: Hypothesis[], checks: Check[]): Recor
 
 // ---------------------------------------------------------------- left: the overnight queue
 
-export function CaseQueue({ onOpen, busy }: { onOpen: (propertyId: string, suite?: string) => void; busy: boolean }) {
+export function CaseQueue({ onOpen, busy, refreshKey }: { onOpen: (propertyId: string, suite?: string) => void; busy: boolean; refreshKey?: unknown }) {
   const [q, setQ] = useState<Queue | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [tick, setTick] = useState(0);
   useEffect(() => {
+    let live = true;
     fetch("/api/backend/cases/queue")
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
-      .then(setQ)
-      .catch((e: unknown) => setErr(String(e)));
-  }, []);
+      .then((j: Queue) => { if (live) { setQ(j); setErr(null); } })
+      .catch((e: unknown) => { if (live) setErr(String(e)); });
+    return () => { live = false; };
+  }, [refreshKey, tick]);
   return (
     <section className={styles.card}>
       <h2>Overnight case queue</h2>
-      {err && <p className={styles.muted}>Queue unavailable ({err}).</p>}
+      {err && <p className={styles.muted}>Queue unavailable ({err}). <button type="button" onClick={() => setTick((t) => t + 1)}>Retry</button></p>}
       {q && (
         <>
           <p className={styles.big}>{q.total} records disagree with another source</p>
@@ -127,13 +139,26 @@ export function InboxCard({ refreshKey }: { refreshKey: unknown }) {
   const [pending, setPending] = useState<Pending[]>([]);
   const [tick, setTick] = useState(0);
   const [note, setNote] = useState<string | null>(null);
+  const [deciding, setDeciding] = useState<Set<string>>(new Set());
   useEffect(() => {
-    fetch("/api/backend/cases/inbox").then((r) => (r.ok ? r.json() : null)).then(setBox).catch(() => setBox(null));
-    fetch("/api/approvals").then((r) => r.json()).then((j: { pending?: Pending[] }) => setPending(j.pending ?? [])).catch(() => setPending([]));
+    let live = true;
+    fetch("/api/backend/cases/inbox").then((r) => (r.ok ? r.json() : null)).then((j) => live && setBox(j)).catch(() => live && setBox(null));
+    fetch("/api/approvals").then((r) => r.json()).then((j: { pending?: Pending[] }) => live && setPending(j.pending ?? [])).catch(() => live && setPending([]));
+    return () => { live = false; };
   }, [refreshKey, tick]);
+  // The overnight sweep runs in the background, so poll for new cases of the day and approvals.
+  useEffect(() => {
+    const id = setInterval(() => setTick((t) => t + 1), 10_000);
+    return () => clearInterval(id);
+  }, []);
   const decide = async (thread_id: string, decision: "approve" | "reject") => {
+    if (deciding.has(thread_id)) return; // one decision per paused run, even on a double click
+    setDeciding((s) => new Set(s).add(thread_id));
     const r = await fetch("/api/approvals", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ thread_id, decision }) }).catch(() => null);
-    setNote(r?.ok ? (decision === "approve" ? "Approved: the agent is recording it (nothing is sent)." : "Rejected: nothing recorded.") : "Could not reach the agent.");
+    if (r?.ok) setPending((ps) => ps.filter((p) => p.thread_id !== thread_id));
+    setNote(r?.ok ? (decision === "approve" ? "Approved: the agent is recording it (nothing is sent)." : "Rejected: nothing recorded.")
+      : r?.status === 409 ? "Already decided." : "Could not reach the agent.");
+    setDeciding((s) => { const n = new Set(s); n.delete(thread_id); return n; });
     setTimeout(() => setTick((t) => t + 1), 4000);
   };
   const latest = box?.inbox.find((i) => i.kind === "notify_me");
@@ -146,8 +171,8 @@ export function InboxCard({ refreshKey }: { refreshKey: unknown }) {
         <div key={p.thread_id} className={styles.draft}>
           <p><span className={styles.badge}>WAITING FOR YOU</span> {p.actions.map(describePending).join("; ")}</p>
           <div className={styles.approval}>
-            <button type="button" onClick={() => void decide(p.thread_id, "approve")}>Approve</button>
-            <button type="button" onClick={() => void decide(p.thread_id, "reject")}>Reject</button>
+            <button type="button" disabled={deciding.has(p.thread_id)} onClick={() => void decide(p.thread_id, "approve")}>Approve</button>
+            <button type="button" disabled={deciding.has(p.thread_id)} onClick={() => void decide(p.thread_id, "reject")}>Reject</button>
           </div>
         </div>
       ))}
@@ -167,22 +192,29 @@ export function InboxCard({ refreshKey }: { refreshKey: unknown }) {
 
 export function CaseFile({ messages, loading }: { messages: readonly unknown[]; loading: boolean }) {
   const opened = latestTool<OpenCase>(messages, "open_case");
-  const weighed = latestTool<Weighed>(messages, "weigh_case");
+  const weighed = latestTool<Weighed>(afterOpenCase(messages), "weigh_case");
   const checks = caseChecks(messages);
-  const [decision, setDecision] = useState<string | null>(null);
+  // A decision belongs to one case and one draft; showing it is keyed, so switching cases clears it.
+  const [decided, setDecided] = useState<{ key: string; text: string } | null>(null);
+  const [posting, setPosting] = useState(false);
   const c = opened?.cases?.[0];
   const pid = opened?.property_id;
-  useEffect(() => setDecision(null), [pid, weighed?.correction_draft]);
   if (!opened) return null;
   if (!c) return <section className={styles.card}><h2>Case file</h2><p className={styles.muted}>No contradiction to investigate for {pid}: the sources agree.</p></section>;
-  const final = weighed && weighed.case === c.case && weighed.property_id === pid;
+  const final = weighed && weighed.case === c.case && weighed.property_id === pid
+    && (weighed.suite == null || opened.suite == null || weighed.suite === opened.suite);
+  const caseKey = `${c.case}|${pid}|${opened.suite ?? ""}|${final ? weighed.correction_draft ?? "" : ""}`;
+  const decision = decided?.key === caseKey ? decided.text : null;
   const conf = final ? weighed.posterior : liveConfidence(c.hypotheses, checks);
   const decide = async (d: "approve" | "reject") => {
+    if (posting) return;
+    setPosting(true);
     const r = await fetch("/api/backend/cases/decision", {
       method: "POST", headers: { "content-type": "application/json" },
       body: JSON.stringify({ property_id: pid, suite: opened.suite, case: c.case, decision: d, draft: weighed?.correction_draft }),
     }).catch(() => null);
-    setDecision(r?.ok ? (d === "approve" ? "Approved: recorded for a researcher (nothing was sent)." : "Rejected: nothing recorded as a correction.") : "Could not record the decision.");
+    setDecided({ key: caseKey, text: r?.ok ? (d === "approve" ? "Approved: recorded for a researcher (nothing was sent)." : "Rejected: nothing recorded as a correction.") : "Could not record the decision." });
+    setPosting(false);
   };
   return (
     <section className={styles.card} data-verdict={final && weighed.verdict.label !== "unresolved" ? "worth_a_look" : undefined}>
@@ -233,8 +265,8 @@ export function CaseFile({ messages, loading }: { messages: readonly unknown[]; 
               <p><span className={styles.badge}>DRAFT</span> {weighed.correction_draft}</p>
               {decision ? <p className={styles.muted}>{decision}</p> : (
                 <div className={styles.approval}>
-                  <button type="button" onClick={() => void decide("approve")}>Approve</button>
-                  <button type="button" onClick={() => void decide("reject")}>Reject</button>
+                  <button type="button" disabled={posting} onClick={() => void decide("approve")}>Approve</button>
+                  <button type="button" disabled={posting} onClick={() => void decide("reject")}>Reject</button>
                 </div>
               )}
             </div>
