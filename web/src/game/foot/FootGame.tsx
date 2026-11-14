@@ -38,6 +38,7 @@ import { createFeeds, type Feeds } from "./feeds";
 import { createMission } from "./mission";
 import { createAudio } from "./audio";
 import { createFlare } from "./flare";
+import { createCityMap, type City } from "./cityMap";
 import { HqPanel } from "./HqPanel";
 import { HqMoments } from "./hqMoments";
 import { mulberry32 } from "../prng";
@@ -48,7 +49,7 @@ import { DawnView } from "./DawnView";
 import { RadioLog } from "../Hud";
 import { Badges } from "./ui";
 
-type Step = "intro" | "office" | "suite" | "approach" | "inside" | "night" | "hold" | "escape" | "safe" | "result" | "dawn";
+type Step = "intro" | "office" | "suite" | "approach" | "inside" | "visit" | "night" | "hold" | "escape" | "safe" | "result" | "dawn";
 
 const TIP_CHOICES = ["Concrete", "Brick", "Can't tell"];
 const SUITE_CHOICES = ["Empty: no one works here", "People are working here", "Can't tell"];
@@ -227,6 +228,18 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
   const suiteSending = useRef(false);
   const officeSpawned = useRef(false);
   const downedCount = useRef(0);
+  // All of LA (the city map) and the buildings you can look inside on your own (any building with a door + a real tour).
+  const [city, setCity] = useState<{ buildings: number; cases: number } | null>(null);
+  const [visit, setVisit] = useState<string | null>(null);
+  const [nearVisit, setNearVisit] = useState<string | null>(null);
+  // Walk between the real scan spots inside a building (Matterport twin positions), when the dossier has them.
+  const [hop, setHop] = useState(0);
+  const hopCount = useRef(0);
+  const visitFrom = useRef<Step>("approach");
+  const [nearPhoto, setNearPhoto] = useState<{ src: string; caption: string } | null>(null);
+  const nearPhotoOn = useRef(false);
+  const nearPid = useRef<string | null>(null);
+  const nearAt = useRef(0);
   const debriefAsked = useRef(false);
   const debriefSent = useRef(false);
   const [suiteTip, setSuiteTip] = useState<{ chosen: number | null; sentAt: number | null }>({ chosen: null, sentAt: null });
@@ -288,7 +301,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
 
     const feeds = createFeeds(ctx);
     feedsRef.current = feeds;
-    const systems = [safely("world", createWorld(ctx)), safely("player", createPlayer(ctx)), safely("horde", createHorde(ctx)), safely("mission", createMission(ctx)), safely("flare", createFlare(ctx)), safely("audio", createAudio(ctx)), safely("feeds", feeds)];
+    const systems = [safely("world", createWorld(ctx)), safely("player", createPlayer(ctx)), safely("horde", createHorde(ctx)), safely("mission", createMission(ctx)), safely("flare", createFlare(ctx)), safely("city", createCityMap(ctx, (c: City) => setCity({ buildings: c.total_buildings ?? c.buildings.length, cases: c.total_cases ?? c.buildings.filter((b) => b.case).length }))), safely("audio", createAudio(ctx)), safely("feeds", feeds)];
     ctx.bus.emit("world:beacon", { pid: hero.pid });
     const offDown = ctx.bus.on("player:downed", () => (downed.current = true));
     const offMission = [
@@ -464,8 +477,15 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
       }
 
       if (s === "intro") {
-        const t = ctx.time * 0.12;
-        ctx.camera.position.set(hero.x + Math.sin(t) * 170, 110, hero.z + Math.cos(t) * 170);
+        // From all of LA down to tonight's district: 2.4 km up to 110 m over 16 s.
+        const kk = Math.min(1, ctx.time / 16);
+        const e = kk * kk * (3 - 2 * kk);
+        const alt = 2400 * (1 - e) + 110 * e, rad = 1800 * (1 - e) + 170 * e, ang = ctx.time * 0.12;
+        if (ctx.camera.far < 30000) {
+          ctx.camera.far = 30000;
+          ctx.camera.updateProjectionMatrix();
+        }
+        ctx.camera.position.set(hero.x + Math.sin(ang) * rad, alt, hero.z + Math.cos(ang) * rad);
         ctx.camera.lookAt(hero.x, 10, hero.z);
         if (k.has("Enter") && g.district) begin();
         return;
@@ -478,6 +498,40 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
           if (at) [p.x, p.z] = ctx.collide(at[0], at[1], 0.5);
         }
         if (s === "hold") stepAt.current = ctx.time - DEFEND_MIN_S;
+      }
+      if ((s === "visit" || s === "inside") && hopCount.current > 1) {
+        if (k.has("KeyD") || k.has("ArrowRight")) setHop((h) => (h + 1) % hopCount.current);
+        if (k.has("KeyA") || k.has("ArrowLeft")) setHop((h) => (h - 1 + hopCount.current) % hopCount.current);
+      }
+      if (s === "visit") {
+        if (k.has("KeyE") && visit) {
+          const b = ctx.byPid.get(visit);
+          if (b?.door) {
+            const f = dirOf(b.door.facing);
+            [p.x, p.z] = ctx.collide(b.door.x + f[0] * 2.5, b.door.z + f[1] * 2.5, 0.5);
+            p.yaw = (b.door.facing * Math.PI) / 180;
+          }
+          p.frozen = false;
+          p.hidden = false;
+          ctx.input.lock();
+          setVisit(null);
+          setStep(visitFrom.current);
+        }
+        return;
+      }
+      if ((s === "office" || s === "approach") && k.has("KeyE")) {
+        const other = ctx.district.buildings.find((b) => b.door && b.pid !== hero.pid && b.pid !== office?.pid && dist(here, [b.door.x, b.door.z]) < DOOR_R);
+        if (other) {
+          g.loadDossier(other.pid);
+          visitFrom.current = s;
+          p.frozen = true;
+          p.hidden = true;
+          ctx.input.unlock();
+          setVisit(other.pid);
+          setHop(0);
+          setStep("visit");
+          return;
+        }
       }
       if (s === "office" && office) {
         const od = doorOf(ctx, office)!;
@@ -585,6 +639,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
         }
         if (dist(here, heroDoor) < DOOR_R && k.has("KeyE")) {
           ctx.bus.emit("mission:shelter", { pid: hero.pid, x: heroDoor[0], z: heroDoor[1] });
+          setHop(0);
           setProg((q) => ({ ...q, reached: true }));
           p.frozen = true;
           p.hidden = true;
@@ -760,6 +815,29 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
       const o = objectivePoint(ctx);
       const here: Pt = [p.x, p.z];
       const st0 = stepRef.current;
+      const visitDoor = (st0 === "office" || st0 === "approach") && hero
+        ? ctx.district.buildings.find((b) => b.door && b.pid !== hero.pid && b.pid !== office?.pid && dist(here, [b.door.x, b.door.z]) < DOOR_R) ?? null
+        : null;
+      setNearVisit((v) => (v === (visitDoor?.label ?? null) ? v : visitDoor?.label ?? null));
+      // Walking past a building with real aerial imagery on file: show it in the camera slot (labelled as such).
+      if (!ctx.stub && (st0 === "office" || st0 === "approach" || st0 === "night" || st0 === "escape") && ctx.time - nearAt.current > 4) {
+        let best: { pid: string; label: string; d: number } | null = null;
+        for (const b of ctx.district.buildings) {
+          const d = Math.hypot(b.x - p.x, b.z - p.z);
+          if (d < 60 && (!best || d < best.d)) best = { pid: b.pid, label: b.label, d };
+        }
+        if (best?.pid !== nearPid.current) {
+          nearPid.current = best?.pid ?? null;
+          nearAt.current = ctx.time;
+          const ds = best ? gRef.current.dossiers[best.pid] : undefined;
+          if (best && !ds) gRef.current.loadDossier(best.pid);
+          const img = ds && ds !== "loading" && ds !== "error" ? ds.images.drone?.[0] : undefined;
+          const next = best && img ? { src: evidenceUrl(img), caption: `Real aerial on file (Vexcel) · ${best.label}` } : null;
+          nearPhotoOn.current = !!next;
+          setNearPhoto(next);
+          if (best && !img) nearPid.current = null; // retry once its dossier arrives
+        }
+      }
       const nearDoor = (st0 === "approach" && !!hero && dist(here, doorOf(ctx, hero)!) < DOOR_R) || (st0 === "office" && !!office && dist(here, doorOf(ctx, office)!) < DOOR_R);
       const n = ctx.horde.nearest;
       const threat = n < 12 ? 3 : n < 35 ? 2 : ctx.horde.alive > 0 ? 1 : 0;
@@ -786,7 +864,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
       const f = feedsRef.current;
       if (f) {
         const nightish = st === "night" || st === "hold" || st === "escape";
-        f.setOverride("cctv", cctvPhotoOn.current || (nightish && window.innerWidth < 1366));
+        f.setOverride("cctv", cctvPhotoOn.current || nearPhotoOn.current || (nightish && window.innerWidth < 1366));
       }
       if (f) setFeedCaps((c) => (c.drone === f.caption("drone") && c.cctv === f.caption("cctv") ? c : { drone: f.caption("drone"), cctv: f.caption("cctv") }));
     };
@@ -802,7 +880,10 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
   const shownMessages = useMemo(() => {
     if (revealed) return game.messages;
     const idx = game.messages.findIndex((m) => kind(m as Msg) === "tool" && (m as Msg).name === "commit_plan");
-    return idx < 0 ? game.messages : game.messages.slice(0, idx);
+    if (idx < 0) return game.messages;
+    // Keep the answer's slot (so HQ stops "waiting for your call"), hide what it says until the reveal.
+    const placeholder = { ...(game.messages[idx] as Msg), type: "tool", content: "Orders received. The night is rolling." };
+    return [...game.messages.slice(0, idx), placeholder];
   }, [game.messages, revealed]);
 
   // New radio lines go on the bus (spoken + crackle by the audio system).
@@ -878,6 +959,8 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
   function begin() {
     const ctx = ctxRef.current;
     if (!ctx || !hero) return;
+    ctx.camera.far = 4000; // street level again (the city map stays as the skyline beyond the play area)
+    ctx.camera.updateProjectionMatrix();
     ctx.cameraOwner = "player";
     ctx.player.frozen = false;
     ctx.input.lock();
@@ -988,6 +1071,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
   const hints: Hint[] = [];
   if (step === "office" || step === "approach" || step === "escape" || step === "night") hints.push({ key: "WASD", label: "move" }, { key: "Shift", label: "sprint" }, { key: "Space", label: "shove" });
   if (step === "approach" && hud.nearDoor) hints.push({ key: "E", label: `go inside ${heroLabel}` });
+  if ((step === "office" || step === "approach") && nearVisit) hints.push({ key: "E", label: `look inside ${nearVisit}` });
   if (step === "office" && hud.nearDoor && office) hints.push({ key: "E", label: `go up to suite ${case7?.suite ?? ""} at ${office.label}` });
   if (step === "night" && !game.decision) hints.push({ key: "H", label: "hold" }, { key: "R", label: runLabel ? `run to ${runLabel}` : "run", disabled: !runLabel });
   if (step === "hold") hints.push({ key: "E", label: mhud.boards > 0 ? `nail boards (${mhud.boards})` : "no boards left", disabled: mhud.boards === 0 });
@@ -1042,7 +1126,13 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
       : null;
 
   const insideMode: InsideMode = "look";
-  const showInside = (step === "inside" && !!hero) || (step === "suite" && !!office);
+  const showInside = (step === "inside" && !!hero) || (step === "suite" && !!office) || (step === "visit" && !!visit);
+  const visitB = visit ? district?.buildings.find((b) => b.pid === visit) ?? null : null;
+  const visitD = visit ? game.dossiers[visit] : undefined;
+  const visitBase = visitD && visitD !== "loading" && visitD !== "error" ? visitD : null;
+  const hops = (step === "visit" ? visitBase?.images.inside_hops : step === "inside" && heroDossier ? heroDossier.images.inside_hops : undefined) ?? [];
+  const hopNow = hops.length ? hops[Math.min(hop, hops.length - 1)] : null;
+  const visitFaces = hopNow && step === "visit" ? hopNow.faces : visitBase?.images.inside ?? visitBase?.images.pano ?? [];
   const officeDossier = office ? game.dossiers[office.pid] : undefined;
   const officeFaces = officeDossier && officeDossier !== "loading" && officeDossier !== "error" ? officeDossier.images.inside ?? officeDossier.images.pano ?? [] : [];
   const suiteStatus =
@@ -1063,6 +1153,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
     ...(game.outcome ? (game.outcome.why ?? "").split("; ").map((x) => x.replace(/\.\s*Game outcome.*$/, "")) : []),
   ];
 
+  hopCount.current = hops.length;
   return (
     <main style={{ position: "fixed", inset: 0, background: "#05070d", overflow: "hidden" }}>
       <div ref={wrapRef} style={{ position: "absolute", inset: 0 }} />
@@ -1082,7 +1173,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
           compass={{ yawDeg: hud.yawDeg, waveSector: step === "night" || step === "escape" || step === "hold" ? game.wave?.sector ?? null : null, target: hud.target }}
           threat={hud.threat}
           threatDir={hud.threatDir}
-          feeds={{ drone: { caption: feedCaps.drone, photo: dronePhoto }, cctv: { caption: feedCaps.cctv, photo: cctvPhoto } }}
+          feeds={{ drone: { caption: feedCaps.drone, photo: dronePhoto }, cctv: { caption: feedCaps.cctv, photo: cctvPhoto ?? nearPhoto } }}
           badges={{ stub: game.stub, replay }}
           disclaimer={DISCLAIMER}
           attribution={district.attribution ?? null}
@@ -1092,6 +1183,17 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
           survivors={mhud.survivors}
           barricade={mhud.barricade}
           hq={<HqPanel messages={shownMessages} busy={game.isLoading} heroPid={hero?.pid ?? null} compact={step === "approach" || step === "escape" || step === "hold"} />}
+        />
+      )}
+      {step === "visit" && visitB && (
+        <InsideView
+          faces={visitFaces}
+          title={`${visitB.label} · inside`}
+          mode="look"
+          question={null}
+          note={visitFaces.length ? "Real interior: this building's own 3D tour." : "No 3D tour of this interior on file."}
+          exitHint="[E] step outside"
+          onChoose={() => {}}
         />
       )}
       {step === "suite" && office && (
@@ -1107,7 +1209,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
       )}
       {step === "inside" && hero && (
         <InsideView
-          faces={insideFaces}
+          faces={hopNow && step === "inside" ? hopNow.faces : insideFaces}
           title={`${hero.label} · inside`}
           mode={insideMode}
           question={step === "inside" && hero.conflict ? { prompt: "What are the walls made of?", choices: TIP_CHOICES, chosen: tip.chosen, status: tipStatus } : null}
@@ -1115,6 +1217,9 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
           exitHint={exitAllowed ? "[E] step outside" : step === "inside" ? (hero.conflict && tip.chosen === null ? "Answer first: what do the walls look like?" : "Wait for HQ…") : null}
           onChoose={(i) => tip.chosen === null && setTip({ chosen: i, sentAt: null })}
         />
+      )}
+      {showInside && hops.length > 1 && (
+        <HopMap hops={hops} at={Math.min(hop, hops.length - 1)} onPick={setHop} />
       )}
       {showInside && (
         // The agent keeps talking while you're inside: the radio stays on screen (top-right is kept free by InsideView).
@@ -1130,6 +1235,11 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
       {(showInside || step === "dawn") && (
         <div style={{ position: "absolute", top: 16, left: "50%", transform: "translateX(-50%)", zIndex: 40, pointerEvents: "none" }}>
           <Badges stub={game.stub} replay={replay} />
+        </div>
+      )}
+      {step === "intro" && city && (
+        <div style={{ position: "absolute", left: 24, bottom: 72, zIndex: 45, pointerEvents: "none", color: "#e2e8f0", font: "600 13px/1.4 ui-monospace, monospace", background: "rgba(5,7,13,.6)", padding: "8px 12px", borderLeft: "3px solid #f5a524" }}>
+          ALL OF CoStar&apos;S LA RECORDS · {city.buildings.toLocaleString()} buildings · {city.cases} open cases (pillars of light)
         </div>
       )}
       {step === "intro" && <IntroOverlay heroLabel={heroLabel} ready={!!district} stub={game.stub} replay={replay} attribution={district.attribution ?? null} onStart={begin} />}
@@ -1150,5 +1260,26 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
         />
       )}
     </main>
+  );
+}
+
+/** A tiny floor plan of the real scan spots (Matterport twin positions). Click a dot, or A/D, to walk between them. */
+function HopMap({ hops, at, onPick }: { hops: { id: string; x: number; y: number }[]; at: number; onPick(i: number): void }) {
+  const xs = hops.map((h) => h.x), ys = hops.map((h) => h.y);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+  const W = 260, H = Math.max(90, Math.min(200, (W * (y1 - y0 + 2)) / (x1 - x0 + 2)));
+  const px = (x: number) => 14 + ((x - x0) / Math.max(1, x1 - x0)) * (W - 28);
+  const py = (y: number) => 14 + ((y - y0) / Math.max(1, y1 - y0)) * (H - 28);
+  return (
+    <div style={{ position: "absolute", left: 16, top: "38%", zIndex: 36, background: "rgba(5,7,13,.72)", border: "1px solid rgba(245,165,36,.5)", padding: 8, color: "#e2e8f0", font: "600 11px/1.3 ui-monospace, monospace" }}>
+      <div style={{ marginBottom: 4, color: "#f5a524" }}>WALK THE REAL SCAN · {at + 1}/{hops.length} · [A]/[D] or click</div>
+      <svg width={W} height={H} style={{ display: "block" }}>
+        <rect x={4} y={4} width={W - 8} height={H - 8} fill="none" stroke="rgba(226,232,240,.25)" />
+        {hops.map((h, i) => (
+          <circle key={h.id} cx={px(h.x)} cy={py(h.y)} r={i === at ? 7 : 5} fill={i === at ? "#f5a524" : "rgba(226,232,240,.55)"}
+            style={{ cursor: "pointer" }} onClick={() => onPick(i)} />
+        ))}
+      </svg>
+    </div>
   );
 }
