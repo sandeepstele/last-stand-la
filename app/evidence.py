@@ -101,7 +101,9 @@ def compliance_filings(pid: str, case: str) -> dict[str, Any]:
     e = next((x for x in a["lists"] if x["list"] == "non_ductile_concrete"), a["lists"][0] if a["lists"] else None)
     if not e:
         return {"finding": "not on a retrofit list", "effects": [], "why": "nothing filed to read"}
-    done = {s["step"]: s["done"] for s in e["steps"]}
+    yb_rec = rec.get("year_built")
+    # filings made before the current building existed describe the building it replaced
+    done = {s["step"]: s["done"] for s in e["steps"] if s["done"] and not (yb_rec and int(s["done"][:4]) < yb_rec)}
     filed = [f"{s['what']} ({s['done']})" for s in e["steps"] if s["done"]]
     finding = "filed: " + "; ".join(filed) if filed else "nothing filed with the program"
     if case == "material_conflict":
@@ -144,12 +146,17 @@ def replacement_permits(pid: str, case: str) -> dict[str, Any]:
     rec, _ = _ctx(pid)
     idx = _replacements()
     keys = {(retrofit_lists.key_addr(x), rec.get("zip") or "") for x in rec.get("street_addresses") or [] if retrofit_lists.key_addr(x)}
-    hits = sorted(({"type": r.get("permit_type"), "issued": (r.get("issue_date") or "")[:10], "status": r.get("status_desc")}
-                   for k in keys for r in idx.get(k, [])), key=lambda h: h["issued"])
+    accessory = ("CANOPY", "TRELLIS", "PERGOLA", "POOL", "SPA", "FENCE", "WALL ONLY", "SIGN", "CARPORT", "PATIO", "ADU",
+                 "ACCESSORY DWELLING", "GARAGE", "SHADE", "STORAGE", "SHED", "RETAINING", "DECK", "GAZEBO")
+    hits = sorted(({"type": r.get("permit_type"), "issued": (r.get("issue_date") or "")[:10], "status": r.get("status_desc"),
+                    "work": (r.get("work_desc") or "")[:140]}
+                   for k in keys for r in idx.get(k, [])
+                   if not any(a in (r.get("work_desc") or "").upper() for a in accessory)), key=lambda h: h["issued"])
     demo = [h for h in hits if h["type"] == "Bldg-Demolition"]
     new = [h for h in hits if h["type"] == "Bldg-New"]
     finding = (f"{len(demo)} demolition and {len(new)} new-building permit(s) since 2020"
-               + (f", first {hits[0]['type']} {hits[0]['issued']}" if hits else "") + " (the city's permit data starts in 2020)")
+               + (f", first {hits[0]['type']} {hits[0]['issued']}: \"{hits[0]['work']}\"" if hits else "")
+               + " (accessory work such as canopies, pools and fences excluded; the city's permit data starts in 2020)")
     if case == "stale_entry":
         if demo or new:
             return {"finding": finding, "effects": _effects(replaced=+0.35, year_is_renovation=-0.3),
@@ -522,7 +529,7 @@ def weigh_case(pid: str, case: str, checks: list[str], suite: str | None = None,
     post = {k: round(v / total, 2) for k, v in p.items()}
     lead, conf = max(post.items(), key=lambda kv: kv[1])
     runner_up = sorted(post.values())[-2] if len(post) > 1 else 0.0
-    margin = conf - runner_up
+    margin = round(conf - runner_up, 2)  # rounded like the posterior, so labels don't flip on float noise
     # with five hypotheses the leader rarely passes 50%, so its lead over the runner-up counts too
     label = ("likely" if conf >= 0.6 or (conf >= 0.5 and margin >= 0.3)
              else "leaning" if conf >= 0.5 or (conf >= 0.4 and margin >= 0.2) else "unresolved")
@@ -535,7 +542,8 @@ def weigh_case(pid: str, case: str, checks: list[str], suite: str | None = None,
                 machine[e["hypothesis"]] += e["delta"]
     machine_lead = max(machine, key=machine.get)
     human_says = {e["hypothesis"] for t in trail if t["check"] == "human_report" for e in t["effects"]}
-    conflict = bool(human_says) and machine_lead not in human_says
+    machine_moved = any(t["effects"] for t in trail if t["check"] != "human_report")
+    conflict = bool(human_says) and machine_moved and machine_lead not in human_says
     rec = costar.get(pid) if case == "ghost_tenant" else _ctx(pid)[0]
     claim = spec["hypotheses"][lead][0]
     ticket = None

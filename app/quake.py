@@ -60,8 +60,11 @@ def shaking(lat: float, lon: float, event_id: str = DEFAULT_EVENT) -> dict[str, 
     s, grid = _grid(event_id)
     if not (s["lat_min"] <= lat <= s["lat_max"] and s["lon_min"] <= lon <= s["lon_max"]):
         return None
-    i = round((s["lat_max"] - lat) / s["nominal_lat_spacing"])
-    j = round((lon - s["lon_min"]) / s["nominal_lon_spacing"])
+    # the header's nominal spacing is rounded (0.0167); the true cell size is the extent over the cell count
+    dlat = (s["lat_max"] - s["lat_min"]) / (s["nlat"] - 1)
+    dlon = (s["lon_max"] - s["lon_min"]) / (s["nlon"] - 1)
+    i = round((s["lat_max"] - lat) / dlat)
+    j = round((lon - s["lon_min"]) / dlon)
     i, j = min(max(i, 0), len(grid) - 1), min(max(j, 0), len(grid[0]) - 1)
     _, _, mmi, pga, pgv = grid[i][j]
     return {"mmi": round(mmi, 1), "mmi_words": MMI_WORDS.get(int(mmi), "light" if mmi < 5 else "extreme"),

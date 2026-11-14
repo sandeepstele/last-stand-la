@@ -53,9 +53,11 @@ def _index() -> dict[str, Any]:
     for r in _lines("commercial-property"):
         props[r["id"]] = {"type": r.get("propertyType"), "city": (r.get("primaryAddress") or {}).get("city")}
         for a in r.get("attachments") or []:
-            m = re.search(r"(?:suite|ste|unit|#)\s*([A-Za-z0-9-]+)", a.get("caption") or "", re.I)
+            m = re.search(r"(?:\b(?:suite|ste|unit)\b\.?|#)\s*([A-Za-z0-9-]+)", a.get("caption") or "", re.I)
             if a.get("videoKey") and m:
-                tours[(r["id"], norm_suite(m.group(1)))] = {"model": a["videoKey"], "date": (a.get("originationDate") or "")[:10]}
+                key, when = (r["id"], norm_suite(m.group(1))), (a.get("originationDate") or "")[:10]
+                if key not in tours or when > tours[key]["date"]:  # several tours of one suite: keep the latest
+                    tours[key] = {"model": a["videoKey"], "date": when}
     comp: dict[int, dict] = {}
     for c in _lines("company-detail"):
         comp[c["id"]] = {"name": (c.get("name") or "").strip().upper(), "suite": norm_suite(c.get("suite")),
@@ -108,9 +110,13 @@ def suite_facts(pid: int | str, suite: str) -> dict[str, Any]:
     on_market = min((x["on_market"] for x in listings if x["on_market"]), default=None)
     trail_elsewhere, trail_same = [], []
     for t in tenants:
+        seen: set = set()
         for o in ix["by_company"].get(t["_company"], []) if t["_company"] else []:
-            if o is t or (on_market and o["from"] < on_market):
+            if o is t or o["to"] or (o["pid"] == pid_i and o["suite"] == su) or (on_market and o["from"] < on_market):
+                continue  # ended tenancies and this very suite are not a new location
+            if (o["pid"], o["suite"]) in seen:
                 continue
+            seen.add((o["pid"], o["suite"]))
             (trail_same if o["pid"] == pid_i else trail_elsewhere).append(
                 {"since": o["from"], "city": ix["props"].get(o["pid"], {}).get("city"), "same_building": o["pid"] == pid_i,
                  "suite": o["suite"] if o["pid"] == pid_i else None})

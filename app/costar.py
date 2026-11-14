@@ -71,6 +71,21 @@ def _first(*blocks: dict | None, key: str) -> Any:
     return None
 
 
+def _street_addresses(addrs: list[dict]) -> list[str]:
+    """Every street address of a record, expanding a number range ("3324-3330 Wilshire") to the same-side numbers."""
+    out: list[str] = []
+    for x in addrs:
+        if not (x.get("streetNumber") and x.get("streetName")):
+            continue
+        tail = " ".join(str(p) for p in (x.get("streetName"), x.get("streetType")) if p)
+        start, end = str(x["streetNumber"]), str(x.get("streetNumberEndRange") or "")
+        numbers = [start]
+        if start.isdigit() and end.isdigit() and 0 < int(end) - int(start) <= 40:
+            numbers = [str(n) for n in range(int(start), int(end) + 1, 2)]  # same parity = same side of the street
+        out += [f"{n} {tail}" for n in numbers]
+    return out
+
+
 def normalize(r: dict[str, Any], models: list[str] | None = None) -> dict[str, Any]:
     a = r.get("primaryAddress") or {}
     events = {e.get("eventType"): e.get("year") for e in r.get("constructionEvents") or []}
@@ -104,8 +119,7 @@ def normalize(r: dict[str, Any], models: list[str] | None = None) -> dict[str, A
         "construction_material": _decode("BuildingConstructionMaterialType", r.get("buildingConstructionMaterial")),
         "zip": (a.get("postcode") or "")[:5] or None,
         "units": (r.get("propertyApartment") or {}).get("totalNumUnits"),
-        "street_addresses": [" ".join(str(p) for p in (x.get("streetNumber"), x.get("streetName"), x.get("streetType")) if p)
-                             for x in [a, *(r.get("addresses") or [])] if x.get("streetNumber") and x.get("streetName")],
+        "street_addresses": _street_addresses([a, *(r.get("addresses") or [])]),
     }
 
 

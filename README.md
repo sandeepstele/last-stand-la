@@ -12,8 +12,8 @@ The agent opens **cases** wherever independent sources disagree. An overnight sw
 
 | Case | The disagreement | Found in the CoStar kit (Houston + Los Angeles) |
 |---|---|---|
-| **Material conflict** | LA's non-ductile concrete retrofit list names the building; CoStar records another material | Only 12 of the 65 buildings matched to the city's concrete list are recorded as concrete by CoStar |
-| **Stale entry** | A city retrofit list still names a building that was replaced | 8 found; 2 backed by demolition permits |
+| **Material conflict** | LA's non-ductile concrete retrofit list names the building; CoStar records another material | Only 12 of the 69 buildings matched to the city's concrete list are recorded as concrete by CoStar |
+| **Stale entry** | A city retrofit list still names a building that was replaced | 18 found (including newer buildings that replaced a listed concrete one); some backed by demolition permits |
 | **Ghost tenant** | CoStar records a company in a suite that is listed for lease right now | 316 suites, about 5,050 employees on record; 273 of them become cases (the other 43 are sublet listings, where the tenant itself offers the space) |
 
 For each case the agent:
@@ -62,7 +62,7 @@ overnight sweep (cron) ─▶ top case ─▶ investigate ─▶ dossier ─▶ 
 ## Honesty and limits
 
 - **We never say a record or an owner is wrong.** Either source can be out of date, so verdicts are drafts for a person to review.
-- **"Unfinished" is not non-compliance.** Most retrofit orders are on schedule, with deadlines running to the 2040s. Only 13 of the 56 unfinished orders are past a deadline, even after the city's extensions.
+- **"Unfinished" is not non-compliance.** Most retrofit orders are on schedule, with deadlines running to the 2040s. Only 14 of the 61 unfinished orders are past a deadline, even after the city's extensions.
 - **Vision is evidence, not a verdict.** Its weight is capped at 0.2, it needs a confirming second look, and "can't tell" is a valid answer.
 - **Car counts are lot-level** and count only as weak evidence. Tours are dated, and older tours count for less.
 - **An aerial outline bigger than its own parcel** usually includes a neighbor, so the agent refuses to compare areas there.

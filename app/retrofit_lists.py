@@ -110,8 +110,12 @@ def _soft_story(r: dict[str, Any], today: str) -> dict[str, Any]:
                     "step_3": _day(r.get("step_3_compl_date"))}}
     ext = {"step_1": _day(r.get("step_1_tolling_extension")), "step_2": _day(r.get("step2_tollingextdate")),
            "step_3": _day(r.get("step3_tollingextdate"))}
-    return _with_steps(e, ext, {"step_1": _day(r.get("submitted")), "step_2": _day(r.get("issued")), "step_3": _day(r.get("cofc_issued"))},
-                       today, SOFT_STORY_STEPS)
+    e["work_finaled"] = _day(r.get("permit_finaled"))  # the work passed final inspection; the certificate may lag
+    out = _with_steps(e, ext, {"step_1": _day(r.get("submitted")), "step_2": _day(r.get("issued")),
+                               "step_3": _day(r.get("cofc_issued")) or _day(r.get("permit_finaled"))}, today, SOFT_STORY_STEPS)
+    if e["work_finaled"] and not r.get("cofc_issued"):
+        out["steps"][2]["what"] = "finish the work (finaled; certificate of compliance pending)"
+    return out
 
 
 def _concrete(r: dict[str, Any], today: str) -> dict[str, Any]:
@@ -149,11 +153,14 @@ def assess(rec: dict[str, Any], today: str | None = None) -> dict[str, Any]:
     ss, ndc, pm = match(rec)
     today = today or date.today().isoformat()
     entries = [_soft_story(r, today) for r in ss] + [_concrete(r, today) for r in ndc]
-    finished = bool(entries) and (not ss or any(r.get("cofc_issued") for r in ss)) and (not ndc or any(r.get("work_completion") for r in ndc))
+    # every list row must be finished (a building can have several soft-story address rows)
+    finished = bool(entries) and (not ss or all(r.get("cofc_issued") for r in ss)) and (not ndc or all(r.get("work_completion") for r in ndc))
+    yb_ = rec.get("year_built")
+    replaced_concrete = bool(ndc and yb_ and yb_ >= STALE_YEAR)  # a 1978+ building on the pre-1977 concrete list
     permits = sorted((_permit(r) for r in pm), key=lambda p: p["issued"] or "", reverse=True)
     yb, mat = rec.get("year_built"), rec.get("construction_material")
     hyps: list[dict[str, Any]] = []
-    if entries and not finished:
+    if entries and (not finished or replaced_concrete):
         if yb and yb >= STALE_YEAR:
             hyps.append({"key": "stale_entry", "status": "suspected",
                          "evidence": f"on the list but CoStar says built {yb}, after the ordinance's cutoff; the listed building may have been replaced",
@@ -161,11 +168,14 @@ def assess(rec: dict[str, Any], today: str | None = None) -> dict[str, Any]:
         else:
             overdue = [f"{e['list'].replace('_', ' ')} {s['step'].replace('_', ' ')} ({s['what']}, due {s['due']}{' (extended)' if s['extended'] else ''})"
                        for e in entries for s in e["steps"] if s["state"] == "overdue"]
+            finaled = [e["work_finaled"] for e in entries if e.get("work_finaled")]
             hyps.append({"key": "unfinished", "status": "supported", "past_due": bool(overdue),
                          "evidence": f"ordered to retrofit{' on ' + entries[0]['order_date'] if entries[0].get('order_date') else ''}; no completion on record"
                                      + (f"; built {yb}" if yb else "")
+                                     + (f"; work finaled {finaled[0]}, certificate of compliance pending" if finaled else "")
                                      + (f"; past due: {'; '.join(overdue)}" if overdue else "; no deadline has passed yet")})
-    if ndc and mat not in (None, "Unknown", "ReinforcedConcrete"):
+    if ndc and mat not in (None, "Unknown", "ReinforcedConcrete") and not replaced_concrete:
+        # (a 1978+ building is the replacement: its material differing from the listed concrete is expected)
         hyps.append({"key": "material_conflict", "status": "flag_for_researcher",
                      "evidence": f"the city lists it as non-ductile concrete; CoStar records {mat}. One of the two sources is out of date or describes a different part of the site."})
     if not ndc and mat == "ReinforcedConcrete" and yb and yb < OLD_CONCRETE_YEAR:
