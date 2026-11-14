@@ -15,7 +15,7 @@ type Check = {
 };
 type Weighed = {
   property_id: string; case: string; suite?: string | null; posterior: Record<string, number>;
-  verdict: { hypothesis: string; claim: string; confidence: number; label: string };
+  verdict: { hypothesis: string; claim: string; confidence: number; label: string; text?: string };
   next_check: string | null; correction_draft: string | null;
 };
 type QueueRow = { id?: string; case: string; property_id: string; suite?: string; address?: string; year_built?: number; material?: string; past_due?: boolean; label?: string };
@@ -35,7 +35,16 @@ const CHECK_LABEL: Record<string, string> = {
   site_structures: "Structures on the parcel",
   look_from_above: "Looked at the building",
   compare_captures: "Compared captures over time",
+  listing_timeline: "Listing and tenancy dates",
+  lease_terms: "Lease terms",
+  tenancy_trail: "Where the company went",
+  lot_activity: "Cars on the lot over time",
+  suite_tour: "Looked inside the suite",
 };
+
+/** The verdict as a lead to check, never as a finding of fact (we never say a record or a person is wrong). */
+const verdictText = (v: Weighed["verdict"]) =>
+  v.text ?? (v.label === "unresolved" ? "Unresolved: the evidence doesn't settle it yet" : `Worth a look: the evidence ${v.label === "likely" ? "points to" : "leans toward"} "${v.claim}"`);
 
 const imageUrl = (path: string) => `/api/backend/evidence/image/${path.split("/").pop()}`;
 
@@ -197,10 +206,24 @@ export function CaseFile({ messages, loading }: { messages: readonly unknown[]; 
   // A decision belongs to one case and one draft; showing it is keyed, so switching cases clears it.
   const [decided, setDecided] = useState<{ key: string; text: string } | null>(null);
   const [posting, setPosting] = useState(false);
-  const c = opened?.cases?.[0];
   const pid = opened?.property_id;
+  // A building can have two cases; follow the one the agent is checking or weighing.
+  const working = weighed?.case ?? checks[checks.length - 1]?.case;
+  const c = opened?.cases?.find((x) => x.case === working) ?? opened?.cases?.[0];
   if (!opened) return null;
-  if (!c) return <section className={styles.card}><h2>Case file</h2><p className={styles.muted}>No contradiction to investigate for {pid}: the sources agree.</p></section>;
+  if (!c) {
+    const ghosts = opened.ghost_suites?.length ?? 0;
+    return (
+      <section className={styles.card}>
+        <h2>Case file</h2>
+        <p className={styles.muted}>
+          {ghosts
+            ? `${ghosts} suite${ghosts > 1 ? "s" : ""} here ${ghosts > 1 ? "are" : "is"} occupied on record but listed for lease (${opened.ghost_suites!.join(", ")}). Open one from the queue to investigate.`
+            : `No contradiction to investigate for ${pid}: the sources agree.`}
+        </p>
+      </section>
+    );
+  }
   const final = weighed && weighed.case === c.case && weighed.property_id === pid
     && (weighed.suite == null || opened.suite == null || weighed.suite === opened.suite);
   const caseKey = `${c.case}|${pid}|${opened.suite ?? ""}|${final ? weighed.correction_draft ?? "" : ""}`;
@@ -257,7 +280,7 @@ export function CaseFile({ messages, loading }: { messages: readonly unknown[]; 
       {final && (
         <>
           <p className={styles.big}>
-            Verdict: {weighed.verdict.label} · {weighed.verdict.claim} ({Math.round(weighed.verdict.confidence * 100)}%)
+            {verdictText(weighed.verdict)} ({Math.round(weighed.verdict.confidence * 100)}%)
           </p>
           {weighed.next_check && <p className={styles.muted}>Next check: {CHECK_LABEL[weighed.next_check] ?? weighed.next_check}</p>}
           {weighed.correction_draft && (
