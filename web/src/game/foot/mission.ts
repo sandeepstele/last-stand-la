@@ -143,7 +143,7 @@ export function createMission(ctx: FootCtx): System {
   let plx = ctx.player.x, plz = ctx.player.z;
 
   // ---------------------------------------------------------------- fx pools: dust puffs + burst rings
-  const PUFFS = 40;
+  const PUFFS = 64;
   const puffs: { s: THREE.Sprite; mat: THREE.SpriteMaterial; t: number; dur: number; s0: number; s1: number; vy: number }[] = [];
   for (let i = 0; i < PUFFS; i++) {
     const mat = new THREE.SpriteMaterial({ map: art.dustTex, transparent: true, depthWrite: false, opacity: 0 });
@@ -517,12 +517,12 @@ export function createMission(ctx: FootCtx): System {
     const f = (facing * Math.PI) / 180;
     door = { x, z, fx: Math.sin(f), fz: -Math.cos(f) };
     wall = makePlankWall(art, Math.round(Math.abs(x * 31 + z * 17)) + 3);
-    // the door point is ~1 m outside the wall; Builder C's planks sit on the wall, ours just in front of them
-    wall.group.position.set(x - door.fx * 0.62, 0, z - door.fz * 0.62);
+    // the door point is ~1 m outside the wall; Builder C's planks sit 0.65-0.73 m in from it, ours just in front of them
+    wall.group.position.set(x - door.fx * 0.42, 0, z - door.fz * 0.42);
     wall.group.rotation.y = -f;
     root.add(wall.group);
     wallLabel = makeLabel(0.75);
-    wallLabel.sprite.position.set(x - door.fx * 0.4, 3.35, z - door.fz * 0.4);
+    wallLabel.sprite.position.set(x - door.fx * 0.2, 3.45, z - door.fz * 0.2);
     root.add(wallLabel.sprite);
     plankState.fill(0);
     plankT.fill(0);
@@ -604,7 +604,7 @@ export function createMission(ctx: FootCtx): System {
       } else if (st === 1) {
         plankT[i] += dt;
         const k = plankT[i];
-        pl.position.set(rest.x + k * 0.4, Math.max(0.05, rest.y - 4.9 * k * k), k * 1.6);
+        pl.position.set(rest.x + k * 0.4, Math.max(0.05, rest.y - 4.9 * k * k), -k * 1.6); // local -z = outward
         pl.rotation.set(k * 2.5, 0, rest.rz + k * 3);
         if (k > 0.7) {
           plankState[i] = 2;
@@ -693,8 +693,8 @@ export function createMission(ctx: FootCtx): System {
       if (Math.hypot(px - z.x, pz - z.z) <= z.r) break;
     }
     csz[i] = 0.35 + rnd() * 0.85;
-    cy[i] = high ? 16 + rnd() * 18 : 4 + rnd() * 34;
-    cvy[i] = -rnd() * 4;
+    cy[i] = high ? 12 + rnd() * 10 : 3 + rnd() * 24;
+    cvy[i] = -2 - rnd() * 4;
     crx[i] = rnd() * 6;
     cry[i] = rnd() * 6;
     cspin[i] = (rnd() - 0.5) * 8;
@@ -714,7 +714,10 @@ export function createMission(ctx: FootCtx): System {
   const startDebris = (list: { x: number; z: number; r: number }[], secs: number) => {
     clearDebris();
     rs = 12345 + list.length * 977;
-    for (const q of list) {
+    // nearest zones first: they get the chunks when the cap bites
+    const p = ctx.player;
+    const sorted = list.slice().sort((a, b) => Math.hypot(a.x - p.x, a.z - p.z) - a.r - (Math.hypot(b.x - p.x, b.z - p.z) - b.r));
+    for (const q of sorted) {
       if (!Number.isFinite(q.x) || !Number.isFinite(q.z) || !(q.r > 0)) continue;
       const ringMat = new THREE.MeshBasicMaterial({ color: 0xff2d2d, transparent: true, opacity: 0.8, depthWrite: false, fog: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
       const fillMat = new THREE.MeshBasicMaterial({ color: 0xff1f1f, transparent: true, opacity: 0.12, depthWrite: false, fog: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
@@ -732,7 +735,7 @@ export function createMission(ctx: FootCtx): System {
     // chunks per zone by size, capped overall
     let n = 0;
     for (let zi = 0; zi < zones.length && n < CHUNKS_MAX; zi++) {
-      const want = Math.max(8, Math.min(24, Math.round(zones[zi].r * 0.8)));
+      const want = Math.max(12, Math.min(32, Math.round(zones[zi].r * 1.5)));
       for (let j = 0; j < want && n < CHUNKS_MAX; j++) {
         czone[n] = zi;
         spawnChunk(n, false);
@@ -773,8 +776,8 @@ export function createMission(ctx: FootCtx): System {
           if (cy[i] <= csz[i] * 0.5) {
             cy[i] = csz[i] * 0.5;
             cstate[i] = 1;
-            crest[i] = 0.4 + rnd() * 0.9;
-            puff(cx[i], 0.4, cz[i], 0.6, 2.4 + csz[i] * 1.5, 0.8, 0.5, 0xbfb3a0);
+            crest[i] = 0.25 + rnd() * 0.6;
+            puff(cx[i], 0.5, cz[i], 0.8, 3 + csz[i] * 2.2, 0.9, 0.6, 0xbfb3a0);
           }
         } else {
           crest[i] -= dt;

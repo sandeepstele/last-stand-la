@@ -433,7 +433,7 @@ export type PlankWall = {
 
 export function makePlankWall(art: MissionArt, seed: number): PlankWall {
   const group = new THREE.Group();
-  const wood = new THREE.MeshLambertMaterial({ color: 0xb98b55, emissive: 0x1a1006 });
+  const wood = new THREE.MeshLambertMaterial({ color: 0xb98b55, emissive: 0x3a2410 });
   const crackMat = new THREE.MeshBasicMaterial({ color: 0x1a0f07 });
   const nailMat = new THREE.MeshLambertMaterial({ color: 0x52525b });
   const mats: THREE.Material[] = [wood, crackMat, nailMat];
@@ -445,14 +445,14 @@ export function makePlankWall(art: MissionArt, seed: number): PlankWall {
   const planks: THREE.Mesh[] = [];
   const rest: PlankWall["rest"] = [];
   for (let i = 0; i < WALL_PLANKS; i++) {
-    const y = 0.35 + i * 0.29;
+    const y = 0.4 + i * 0.33;
     const rz = (rnd() - 0.5) * 0.28;
     const x = (rnd() - 0.5) * 0.25;
-    const m = part(art.box, wood, 2.5 + rnd() * 0.4, 0.22, 0.07, x, y, 0);
+    const m = part(art.box, wood, 2.9 + rnd() * 0.5, 0.24, 0.07, x, y, 0);
     m.rotation.z = rz;
     // nail heads at both ends (children: scale-independent offsets via inverse scale)
     for (const s of [-1, 1]) {
-      const n = part(art.box, nailMat, 0.05 / m.scale.x, 0.05 / m.scale.y, 0.03 / m.scale.z, s * 0.42, 0, 0.6);
+      const n = part(art.box, nailMat, 0.05 / m.scale.x, 0.05 / m.scale.y, 0.03 / m.scale.z, s * 0.42, 0, -0.6); // local -z faces the street
       m.add(n);
     }
     group.add(m);
@@ -462,7 +462,7 @@ export function makePlankWall(art: MissionArt, seed: number): PlankWall {
   // dark crack strokes across the planks; shown as hp falls
   const cracks: THREE.Mesh[] = [];
   for (let i = 0; i < 6; i++) {
-    const c = part(art.box, crackMat, 0.5 + rnd() * 0.5, 0.025, 0.02, (rnd() - 0.5) * 1.6, 0.5 + rnd() * 1.8, 0.05);
+    const c = part(art.box, crackMat, 0.5 + rnd() * 0.5, 0.03, 0.02, (rnd() - 0.5) * 1.8, 0.5 + rnd() * 2.1, -0.05);
     c.rotation.z = (rnd() - 0.5) * 1.6;
     c.visible = false;
     group.add(c);
@@ -472,7 +472,7 @@ export function makePlankWall(art: MissionArt, seed: number): PlankWall {
 }
 
 // ------------------------------------------------------------------ debris
-export const CHUNKS_MAX = 160;
+export const CHUNKS_MAX = 256;
 
 export function makeDebrisMesh(art: MissionArt): { mesh: THREE.InstancedMesh; mat: THREE.MeshLambertMaterial } {
   const mat = new THREE.MeshLambertMaterial({ color: 0xffffff });
