@@ -104,17 +104,26 @@ export function firstSentence(s: string, max = 150): string {
 export function radioLines(messages: readonly unknown[]): RadioLine[] {
   const lines: RadioLine[] = [];
   const taskOf = new Map<string, string>();
+  const labels = new Map<string, string>(); // pid -> label, from tool results (never show a raw pid)
   messages.forEach((raw, i) => {
     const m = raw as Msg;
     const k = kind(m);
     const id = m.id ?? `m${i}`;
     if (k === "human") {
-      const t = firstSentence(text(m.content), 90);
+      const raw = text(m.content).trim();
+      const wave = raw.match(/^Wave (\d+) is coming from the (\w+)/);
+      const t = /^Scout property /.test(raw) ? "scout tonight's fortress"
+        : wave ? `wave ${wave[1]} incoming from the ${SECTOR_NAME[wave[2] as Sector] ?? wave[2]}`
+          : firstSentence(raw, 120);
       if (t) lines.push({ id, who: "You", text: t, tone: "you" });
       return;
     }
     if (k === "ai") {
       const calls = m.tool_calls ?? [];
+      // The agent's own words first (it speaks in addresses and plain words), then what its tool calls mean.
+      const said = firstSentence(text(m.content), 180);
+      if (said) lines.push({ id, who: "HQ", text: said, tone: "hq" });
+      const squads: string[] = [];
       calls.forEach((c, j) => {
         const cid = `${id}-${c.id ?? j}`;
         const a = c.args ?? {};
@@ -124,16 +133,14 @@ export function radioLines(messages: readonly unknown[]): RadioLine[] {
         } else if (c.name === "task") {
           const sub = String(a.subagent_type ?? "scout");
           if (c.id) taskOf.set(c.id, sub);
-          lines.push({ id: cid, who: squad(sub), text: "moving out" });
+          squads.push(squad(sub));
         } else if (c.name === "commit_plan") {
-          const act = String(a.action ?? "hold").toUpperCase();
-          lines.push({ id: cid, who: "HQ", text: `proposing ${act}${a.to_pid ? ` to ${String(a.to_pid)}` : ""}. Your call.`, tone: "warn" });
+          const run = a.action === "run";
+          const to = a.to_pid ? labels.get(String(a.to_pid)) ?? "the fallback" : "the fallback";
+          lines.push({ id: cid, who: "HQ", text: `proposing ${run ? `RUN to ${to}` : "HOLD"}. Your call.`, tone: "warn" });
         }
       });
-      if (!calls.length) {
-        const t = firstSentence(text(m.content), 180);
-        if (t) lines.push({ id, who: "HQ", text: t, tone: "hq" });
-      }
+      if (squads.length) lines.push({ id: `${id}-squads`, who: "HQ", text: `${squads.join(", ")} moving out` });
       return;
     }
     if (k !== "tool") return;
@@ -145,7 +152,8 @@ export function radioLines(messages: readonly unknown[]): RadioLine[] {
         break;
       }
       case "fortress_dossier": {
-        const d = parse<{ label?: string }>(m);
+        const d = parse<{ pid?: string; label?: string }>(m);
+        if (d?.pid && d.label) labels.set(String(d.pid), d.label);
         if (d?.label) lines.push({ id, who: "Intel", text: `dossier on ${d.label} is in` });
         break;
       }
@@ -176,6 +184,7 @@ export function radioLines(messages: readonly unknown[]): RadioLine[] {
       }
       case "find_fallback": {
         const f = parse<Fallback>(m);
+        if (f?.to_pid && f.to_label) labels.set(String(f.to_pid), f.to_label);
         if (f?.to_label) lines.push({ id, who: "HQ", text: `fallback ${f.to_label}${f.distance_band ? ` (${f.distance_band})` : ""}`, tone: "hq" });
         break;
       }

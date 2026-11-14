@@ -104,3 +104,6 @@
   .hud { grid-template-columns: 1fr; grid-template-rows: auto auto auto auto auto; overflow-y: auto; }
   .banner, .left, .right, .actions, .footer { grid-column: 1; grid-row: auto; }
 }
+.tipBox { display: flex; flex-direction: column; gap: 8px; width: 100%; align-items: stretch; }
+.chip2 { font: inherit; font-size: 15px; padding: 8px 12px; border-radius: 999px; border: 1px solid var(--amber); background: rgba(245, 165, 36, 0.12); color: var(--amber); cursor: pointer; }
+.chip2:disabled { opacity: 0.5; cursor: default; }
