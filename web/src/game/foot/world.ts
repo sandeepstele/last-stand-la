@@ -146,6 +146,28 @@ export function createWorld(ctx: FootCtx): System {
         keep(t);
         groundMat.map = t;
         groundMat.emissiveMap = t;
+        // soften the aerial's edge into the street ground over the last ~14 m
+        const size = { value: new THREE.Vector2(rect.x1 - rect.x0, rect.z1 - rect.z0) };
+        const edgeCol = { value: new THREE.Color(0x4b4d52) };
+        groundMat.onBeforeCompile = (sh) => {
+          sh.uniforms.uSize = size;
+          sh.uniforms.uEdge = edgeCol;
+          sh.fragmentShader = sh.fragmentShader
+            .replace("#include <common>", "#include <common>\nuniform vec2 uSize;\nuniform vec3 uEdge;")
+            .replace(
+              "#include <map_fragment>",
+              `#include <map_fragment>
+  float eM = min(min(vMapUv.x, 1.0 - vMapUv.x) * uSize.x, min(vMapUv.y, 1.0 - vMapUv.y) * uSize.y);
+  float eK = smoothstep(0.0, 14.0, eM);
+  diffuseColor.rgb = mix(uEdge, diffuseColor.rgb, eK);`,
+            )
+            .replace(
+              "#include <emissivemap_fragment>",
+              `#include <emissivemap_fragment>
+  totalEmissiveRadiance = mix(emissive * uEdge, totalEmissiveRadiance, eK);`,
+            );
+        };
+        groundMat.customProgramCacheKey = () => "foot-aerial-edge";
         groundMat.needsUpdate = true;
       },
       undefined,
