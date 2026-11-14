@@ -25,7 +25,8 @@ const CONTROLS: { keys: string[]; what: string }[] = [
   { keys: ["Shift"], what: "sprint" },
   { keys: ["Mouse"], what: "look (or drag)" },
   { keys: ["Space"], what: "shove" },
-  { keys: ["E"], what: "enter a building" },
+  { keys: ["E"], what: "enter · nail boards" },
+  { keys: ["Q"], what: "use a medkit" },
   { keys: ["H", "R"], what: "hold or run" },
   { keys: ["1", "2", "3"], what: "answer HQ" },
 ];
@@ -92,9 +93,10 @@ function Card({ n, heroLabel }: { n: number; heroLabel: string }) {
           The records disagree about its walls. <b>Go inside and look.</b> Your report counts: strong, capped, never final.
         </p>
         <div className={styles.pills}>
-          <span className={styles.pill}>Follow the beacon</span>
-          <span className={styles.pill}>Press E at the door</span>
-          <span className={styles.pill}>Survive till dawn</span>
+          <span className={styles.pill}>Beat nightfall to the door</span>
+          <span className={styles.pill}>Bring survivors in</span>
+          <span className={styles.pill}>Hold or run</span>
+          <span className={styles.pill}>File the report at dawn</span>
         </div>
       </>
     );
