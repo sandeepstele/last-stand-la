@@ -93,7 +93,15 @@ async def healthz(request: Request) -> JSONResponse:
         "scene_mode": os.environ.get("RADAR_SCENE_MODE", "ack"),
         "layers": {k: os.environ.get(f"RADAR_LAYER_{k.upper()}", "cached") for k in ("costar", "vexcel")},
         "matterport": os.environ.get("RADAR_MATTERPORT", "auto"),
+        "replay": _replay_label(),
     })
+
+
+def _replay_label() -> str | None:
+    from app import replay
+
+    m = replay.mode()
+    return None if m is None else (f"recording {m[1]}" if m[0] == "record" else m[1])
 
 
 # ------------------------------------------------------------------ case queue and evidence

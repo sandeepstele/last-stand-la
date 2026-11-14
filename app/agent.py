@@ -119,7 +119,18 @@ def models() -> Models:
     )
 
 
-MODELS = models()
+def _replayable(m: Models) -> Models:
+    """RADAR_REPLAY set: every model records or replays its responses (app/replay.py). Unset: unchanged."""
+    from app import replay
+
+    if replay.mode() is None:
+        return m
+    w = replay.wrap
+    return Models(orch=w(m.orch), orch_fallbacks=tuple(w(x) for x in m.orch_fallbacks), spec=w(m.spec),
+                  spec_fallbacks=tuple(w(x) for x in m.spec_fallbacks), worker=w(m.worker), worker_spec=w(m.worker_spec))
+
+
+MODELS = _replayable(models())
 LENS = os.environ.get("RADAR_LENS", "seismic").strip().lower()  # seismic (the pitch) or solar (kept, hidden)
 
 

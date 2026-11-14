@@ -36,6 +36,10 @@ export default function LiveRun() {
     const id = setInterval(() => t0.current !== null && setElapsed((Date.now() - t0.current) / 1000), 250);
     return () => clearInterval(id);
   }, [stream.isLoading]);
+  const [replay, setReplay] = useState<string | null>(null);
+  useEffect(() => {
+    fetch("/api/backend/healthz").then((r) => r.json()).then((h: { replay?: string | null }) => setReplay(h.replay ?? null)).catch(() => {});
+  }, []);
   const open = (pid: string, suite?: string) => {
     const q = suite ? `Check suite ${suite} at building ${pid}: is the tenant on record still there?` : `Check building ${pid}.`;
     setQuestion(q);
@@ -64,6 +68,9 @@ export default function LiveRun() {
             Replay Northridge 1994
           </button>
         </form>
+        {replay && !replay.startsWith("recording") && (
+          <p className={styles.warning}><span className={styles.badge}>REPLAY</span> Model answers are replayed from a recorded run ({replay}); the data, tools and images are live.</p>
+        )}
         {elapsed !== null && (
           <p className={styles.muted}>{stream.isLoading ? `Investigating… ${elapsed.toFixed(0)} s` : `Answered in ${elapsed.toFixed(0)} s`}</p>
         )}

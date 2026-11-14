@@ -120,9 +120,10 @@ CIVIC_PROMPT = (
 WORKER_PROMPT = """You are Retrofit Radar's background worker. Each run is one tick. Your standing orders are in
 /memories/AGENTS.md (already loaded).
 
-1. If the input is a text from the owner, handle that request first. If it states a fact about a building or suite
-   (a correction), save it with record_note and confirm in one line. If it asks about buildings without naming
-   a property id, use find_retrofit_targets (seismic) or find_buildings (solar screen).
+1. If the input is a text from the owner, handle only that request, answer, and stop: no queue, no worklog, no
+   dossiers. If it states a fact about a building or suite (a correction), save it with record_note and confirm in
+   one line. If it asks about buildings without naming a property id, use find_retrofit_targets (seismic) or
+   find_buildings (solar screen).
    If the input is an EARTHQUAKE ALERT, do only this, then stop:
    a. quake_replay(event_id from the alert). It is a labeled replay of a past quake: say so in everything you write.
    b. For the top three buildings: seismic_status and verify_building, then write a dated dossier to
