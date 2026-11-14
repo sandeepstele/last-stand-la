@@ -119,7 +119,7 @@
 .fortress h2 { margin: 2px 0 0; font-family: var(--display); font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; font-size: 22px; line-height: 1.05; }
 .disagree { margin: 6px 0 2px; font-size: 13px; color: var(--amber); }
 .bars { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-.barTop { display: grid; grid-template-columns: 54px 1fr 26px 76px; gap: 7px; align-items: center; }
+.barTop { display: grid; grid-template-columns: 52px 1fr 24px auto; gap: 7px; align-items: center; }
 .barTop .label { justify-self: end; }
 .barTop strong { font-family: var(--display); font-weight: 700; letter-spacing: 0.08em; font-size: 15px; }
 .barTop b { font: 700 14px/1 var(--mono); text-align: right; }
