@@ -3,6 +3,8 @@
 
 import type { DossierState } from "../useGame";
 import type { RadioLine } from "../radio";
+import type { ReactNode } from "react";
+import type { SurvivorState } from "./engine";
 import type { Sector } from "../types";
 
 export type Hint = { key: string; label: string; disabled?: boolean };
@@ -15,6 +17,8 @@ export type DecisionView = {
   sent: string | null; // "Orders sent: RUN" once decided
   error: string | null;
 };
+/** One line of the mission list. main = the story (★), side = optional (◇). */
+export type Objective = { id: string; text: string; kind: "main" | "side"; done: boolean; progress?: string };
 export type HudProps = {
   objective: string;
   banner: Banner | null;
@@ -33,6 +37,13 @@ export type HudProps = {
   badges: { stub: boolean; replay: string | null };
   disclaimer: string;
   attribution: string | null; // "© OpenStreetMap contributors" when OSM outlines are on screen: show it in the footer
+  // ---- missions (v2)
+  objectives: Objective[]; // replaces the single objective line as the main top-left element (keep `objective` as the current hint under it)
+  timer: { label: string; secs: number; urgent: boolean } | null; // "Nightfall" countdown; urgent = under 30 s or night has fallen
+  supplies: { boards: number; medkits: number }; // carried; [Q] uses a medkit
+  survivors: { name: string; state: SurvivorState }[];
+  barricade: { hp: number; max: number } | null; // shown big, bottom-centre, during HOLD
+  hq: ReactNode; // the HQ panel (the agent at work), rendered by the director; place it in the right column under the radio
 };
 
 export function FootHud(p: HudProps) {
