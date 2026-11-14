@@ -105,3 +105,10 @@ def test_ground_is_null_without_the_cached_mosaic(monkeypatch, tmp_path):
     assert fortress._ground() is None
     (tmp_path / fortress.GROUND["image"]).write_bytes(b"\xff\xd8fake")
     assert fortress._ground()["x0"] == fortress.GROUND["x0"]
+
+
+def test_game_tools_refuse_buildings_outside_the_district(monkeypatch):
+    monkeypatch.setattr(fortress, "building", lambda pid: {"pid": "1"} if str(pid) == "1" else None)
+    out = fortress.outside("1", "247386")
+    assert out and "247386 is not a building in this district" in out["error"] and "Scout property" in out["error"]
+    assert fortress.outside("1", None) is None

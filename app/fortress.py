@@ -228,6 +228,18 @@ def building(pid: str) -> dict[str, Any] | None:
     return next((b for b in district()["buildings"] if b["pid"] == str(pid)), None)
 
 
+OUTSIDE = ("{pid} is not a building in this district. The building is the property id in this thread's "
+           "'Scout property <pid>' message; use that one.")
+
+
+def outside(*pids: str | None) -> dict[str, str] | None:
+    """Guard for the game tools: they act only on district buildings (a run once drifted to an auditor demo building)."""
+    for p in pids:
+        if p is not None and not building(str(p).strip()):
+            return {"error": OUTSIDE.format(pid=p)}
+    return None
+
+
 # ------------------------------------------------------------------ scores
 
 
