@@ -24,6 +24,22 @@ from dotenv import load_dotenv
 from langgraph_sdk import get_sync_client
 
 ROOT = Path(__file__).resolve().parent.parent
+LAST_STAND_LOG_SEED = """## Night 2026-11-13
+- walls 737 Broadway; checks=compliance_filings; lead_move=compliance_filings; verdict=leaning; reviewer=not reviewed
+Lesson: City filings moved the odds; check the facade before choosing the next lead.
+"""
+
+
+def reset_night_log(store, dry_run: bool = False) -> int:
+    """Replace the game-only memory with the fixed, code-derived first-night seed."""
+    items = store.search_items(["laststand_log"], limit=100)["items"]
+    if not dry_run:
+        for item in items:
+            store.delete_item(item["namespace"], item["key"])
+        from deepagents.backends.utils import create_file_data
+
+        store.put_item(["laststand_log"], "/latest.md", create_file_data(LAST_STAND_LOG_SEED))
+    return len(items)
 
 
 def main() -> None:
@@ -48,13 +64,14 @@ def main() -> None:
             if a.dry_run:
                 break
         cleared["/".join(prefix)] = n
+    cleared["laststand_log"] = reset_night_log(client.store, a.dry_run)
     for graph, label in (("radar_worker", "paused worker threads"), ("laststand", "paused game threads")):
         paused = [] if a.keep_paused else client.threads.search(metadata={"graph_id": graph}, status="interrupted", limit=100)
         for t in paused:
             if not a.dry_run:
                 client.threads.delete(t["thread_id"])
         cleared[label] = len(paused)
-    print(("would clear " if a.dry_run else "cleared ") + ", ".join(f"{k}: {v}" for k, v in cleared.items()))
+    print(("would clear and seed " if a.dry_run else "cleared and seeded ") + ", ".join(f"{k}: {v}" for k, v in cleared.items()))
     try:
         import httpx
 

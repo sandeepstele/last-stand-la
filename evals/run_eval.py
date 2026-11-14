@@ -20,6 +20,19 @@ def read_cases(path: Path) -> list[dict]:
     return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
 
 
+def selected_checks(row: dict, mode: str, allowed: list[str]) -> list[str]:
+    """Return the full check set or the checks recorded for an agent-selected run."""
+    if mode == "all":
+        return allowed
+    checks = row.get("checks")
+    if not isinstance(checks, list) or not checks:
+        raise ValueError("selected-check evaluation needs a non-empty checks list on every labelled row")
+    unknown = set(checks) - set(allowed)
+    if unknown:
+        raise ValueError(f"selected checks are not valid for {row.get('case')}: {', '.join(sorted(unknown))}")
+    return checks
+
+
 def _offline_vision() -> None:
     """Make missing caches a no-evidence result, never a live request."""
     from app import vision
@@ -56,6 +69,8 @@ def _offline_vision() -> None:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--cases", type=Path, default=DATA)
+    parser.add_argument("--check-mode", choices=("all", "selected"), default="all",
+                        help="all available deterministic checks or each case's recorded checks field")
     args = parser.parse_args()
     load_dotenv(ROOT / ".env", override=True)
     os.environ["RADAR_LAYER_VEXCEL"] = "cached"
@@ -74,13 +89,17 @@ def main() -> None:
     results = []
     for row in labelled:
         spec = evidence.CASES[row["case"]]
-        checks = row.get("checks") or spec["checks"]
+        try:
+            checks = selected_checks(row, args.check_mode, spec["checks"])
+        except ValueError as exc:
+            parser.error(str(exc))
         out = evidence.weigh_case(row["property_id"], row["case"], checks, row.get("suite"))
         lead = out["verdict"]["hypothesis"]
         results.append({"truth": row["truth"], "lead": lead, "label": out["verdict"]["label"],
                         "confidence": out["verdict"]["confidence"], "checks": len(out["checks_used"])})
 
     total_correct = sum(r["truth"] == r["lead"] for r in results)
+    print(f"Check mode: {args.check_mode}")
     print(f"Labelled cases: {len(results)} / {len(rows)}")
     print(f"Hypothesis accuracy: {total_correct / len(results):.1%} ({total_correct}/{len(results)})")
     print(f"Average checks used: {sum(r['checks'] for r in results) / len(results):.2f}")
