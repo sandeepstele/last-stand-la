@@ -206,6 +206,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
   }, [tip]);
   const [hud, setHud] = useState({ health: 100, stamina: 1, yawDeg: 0, threat: 0, nearDoor: false, target: null as null | { label: string; bearingDeg: number; dist: number } });
   const [dronePhoto, setDronePhoto] = useState<{ src: string; caption: string } | null>(null);
+  const [cctvPhoto, setCctvPhoto] = useState<{ src: string; caption: string } | null>(null);
   const [feedCaps, setFeedCaps] = useState({ drone: "DRONE", cctv: "CCTV" });
   const routeTo = useRef<Pt | null>(null);
   const downed = useRef(false);
@@ -770,27 +771,34 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
     if (hero) ctxRef.current?.bus.emit("world:lean", { pid: hero.pid, material: lean });
   }, [hero, lean]);
 
-  // The drone feed shows the agent's own vision check (the real aerial it looked at) for 10 s.
+  // The agent's own vision checks pop up for 10 s: the real aerial it read for case #6 (drone slot), and the real
+  // Matterport tour of suite 1100 it read for case #7 (camera slot), so the judge sees the evidence even when the player
+  // isn't standing there (the stage cut never walks case #7).
   const lastPhotoId = useRef<string | null>(null);
   useEffect(() => {
     if (!hero) return;
     for (let i = game.messages.length - 1; i >= 0; i--) {
       const m = game.messages[i] as Msg;
       if (kind(m) !== "tool" || m.name !== "check_evidence") continue;
-      const r = parse<{ property_id?: string; images?: string[]; callout?: string; finding?: string }>(m);
-      if (!r?.images?.length || String(r.property_id ?? hero.pid) !== hero.pid) continue;
+      const r = parse<{ property_id?: string; suite?: string; images?: string[]; callout?: string; finding?: string }>(m);
+      const pid = String(r?.property_id ?? hero.pid);
+      if (!r?.images?.length || (pid !== hero.pid && pid !== office?.pid)) continue;
       const id = String(m.id ?? i);
       if (id === lastPhotoId.current) return;
       lastPhotoId.current = id;
-      setDronePhoto({ src: evidenceUrl(r.images[0]), caption: `HQ looked: ${r.callout || r.finding || "aerial"}` });
-      feedsRef.current?.setOverride("drone", true);
+      const slot = pid === hero.pid ? "drone" : "cctv";
+      const photo = slot === "drone"
+        ? { src: evidenceUrl(r.images[0]), caption: `HQ looked from above: ${r.callout || r.finding || "aerial"}` }
+        : { src: evidenceUrl(r.images[0]), caption: `HQ looked inside${case7?.suite ? ` suite ${case7.suite}` : ""} (its 3D tour): ${r.callout || r.finding || "tour"}` };
+      (slot === "drone" ? setDronePhoto : setCctvPhoto)(photo);
+      feedsRef.current?.setOverride(slot, true);
       const t = setTimeout(() => {
-        setDronePhoto(null);
-        feedsRef.current?.setOverride("drone", false);
+        (slot === "drone" ? setDronePhoto : setCctvPhoto)(null);
+        feedsRef.current?.setOverride(slot, false);
       }, 10_000);
       return () => clearTimeout(t);
     }
-  }, [game.messages, hero]);
+  }, [game.messages, hero, office, case7]);
 
   // ------------------------------------------------------------------ actions
   function begin() {
@@ -974,7 +982,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
           decision={decision}
           compass={{ yawDeg: hud.yawDeg, waveSector: step === "night" || step === "escape" || step === "hold" ? game.wave?.sector ?? null : null, target: hud.target }}
           threat={hud.threat}
-          feeds={{ drone: { caption: feedCaps.drone, photo: dronePhoto }, cctv: { caption: feedCaps.cctv, photo: null } }}
+          feeds={{ drone: { caption: feedCaps.drone, photo: dronePhoto }, cctv: { caption: feedCaps.cctv, photo: cctvPhoto } }}
           badges={{ stub: game.stub, replay }}
           disclaimer={DISCLAIMER}
           attribution={district.attribution ?? null}
