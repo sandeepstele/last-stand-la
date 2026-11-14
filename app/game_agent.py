@@ -599,6 +599,11 @@ def _warm() -> None:
             fortress.dossier(b["pid"])
     except Exception:  # no kit on this machine (tests, CI): the routes compute on demand instead
         pass
+    for warm in (fortress.city, fortress.solar, fortress.stale, lambda: fortress.suites("254167"), lambda: fortress.suites("249218")):
+        try:  # side-mission data (HTTP only): first clicks at the table should be instant
+            warm()
+        except Exception:
+            pass
 
 
 game_agent = build()
