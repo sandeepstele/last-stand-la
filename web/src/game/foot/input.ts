@@ -17,7 +17,7 @@ export type Input = {
   dispose(): void;
 };
 
-const GAME_KEYS = new Set(["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space", "ShiftLeft", "ShiftRight", "KeyE", "KeyH", "KeyR", "KeyN", "KeyM", "Digit1", "Digit2", "Digit3", "Enter", "Escape"]);
+const GAME_KEYS = new Set(["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space", "ShiftLeft", "ShiftRight", "KeyE", "KeyQ", "KeyH", "KeyR", "KeyN", "KeyM", "Digit1", "Digit2", "Digit3", "Enter", "Escape"]);
 
 export function createInput(el: HTMLElement): Input {
   const down = new Set<string>();

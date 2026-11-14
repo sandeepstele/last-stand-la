@@ -32,6 +32,9 @@ export type Building = {
   // ---- v1.2 optional: the one or two buildings the player can walk into
   /** Door in ABSOLUTE district metres, 1 m outside the wall. facing = outward normal, degrees clockwise from north (-z). */
   door?: { x: number; z: number; facing: number } | null;
+  // ---- v1.4 (planned) optional: supply crates from CoStar tenant categories (never company names)
+  /** e.g. [{kind:"medkit", why:"a medical office is on record here"}]; absent = none known. */
+  supplies?: { kind: "boards" | "medkit"; why: string }[] | null;
 };
 
 /** v1.2: one aerial mosaic for the ground, north-up. Image top edge = z0, left edge = x0 (district metres). */

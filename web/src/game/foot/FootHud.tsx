@@ -2,11 +2,11 @@
 // OWNER: builder D. Keep the props type (the director fills it every frame it changes).
 // Presentation only: every number shown here comes from props (the director, the agent's tool results).
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import type { DossierState } from "../useGame";
 import { SECTOR_NAME, type RadioLine } from "../radio";
 import type { ScoreKey, Sector } from "../types";
-import { FEED_RECTS, SECTOR_DEG } from "./engine";
+import { FEED_RECTS, SECTOR_DEG, type SurvivorState } from "./engine";
 import { Badges, Icon, Keycap, footStyles as styles } from "./ui";
 
 export type Hint = { key: string; label: string; disabled?: boolean };
@@ -19,6 +19,8 @@ export type DecisionView = {
   sent: string | null; // "Orders sent: RUN" once decided
   error: string | null;
 };
+/** One line of the mission list. main = the story (★), side = optional (◇). */
+export type Objective = { id: string; text: string; kind: "main" | "side"; done: boolean; progress?: string };
 export type HudProps = {
   objective: string;
   banner: Banner | null;
@@ -37,9 +39,105 @@ export type HudProps = {
   badges: { stub: boolean; replay: string | null };
   disclaimer: string;
   attribution: string | null; // "© OpenStreetMap contributors" when OSM outlines are on screen: show it in the footer
+  // ---- missions (v2)
+  objectives: Objective[]; // replaces the single objective line as the main top-left element (keep `objective` as the current hint under it)
+  timer: { label: string; secs: number; urgent: boolean } | null; // "Nightfall" countdown; urgent = under 30 s or night has fallen
+  supplies: { boards: number; medkits: number }; // carried; [Q] uses a medkit
+  survivors: { name: string; state: SurvivorState }[];
+  barricade: { hp: number; max: number } | null; // shown big, bottom-centre, during HOLD
+  hq: ReactNode; // the HQ panel (the agent at work), rendered by the director; place it in the right column under the radio
 };
 
-// ------------------------------------------------------------------ top-left: objective + fortress card
+// ------------------------------------------------------------------ top-left: missions, clock, survivors, fortress card
+const clock = (secs: number) => {
+  const s = Math.max(0, Math.ceil(secs));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+};
+
+function Missions({ objectives, now, timer, survivors, badges }: { objectives: Objective[]; now: string; timer: HudProps["timer"]; survivors: HudProps["survivors"]; badges: HudProps["badges"] }) {
+  return (
+    <section className={`${styles.panel} ${styles.missions}`}>
+      <div className={styles.missionHead}>
+        <span className={styles.tag}>Missions</span>
+        <Badges stub={badges.stub} replay={badges.replay} />
+      </div>
+      {timer && (
+        <div className={styles.timer} data-urgent={timer.urgent}>
+          <span>{timer.label}</span>
+          {timer.secs > 0 && <b>{clock(timer.secs)}</b>}
+        </div>
+      )}
+      <ul className={styles.objList}>
+        {objectives.map((o) => (
+          <li key={o.id} data-kind={o.kind} data-done={o.done}>
+            <span className={styles.objMark}>{o.done ? <ObjIcon name="check" /> : <ObjIcon name={o.kind === "main" ? "star" : "diamond"} />}</span>
+            <span className={styles.objText}>{o.text}</span>
+            {o.progress && <b className={styles.objProg}>{o.progress}</b>}
+          </li>
+        ))}
+      </ul>
+      {survivors.length > 0 && (
+        <div className={styles.survivors}>
+          {survivors.map((v, i) => (
+            <span key={`${v.name}-${i}`} className={styles.survivor} data-state={v.state}>
+              {v.state === "safe" && <ObjIcon name="check" size={11} />}
+              {v.name}
+            </span>
+          ))}
+        </div>
+      )}
+      {now && (
+        <p className={styles.now} key={now}>
+          <Icon name="target" size={15} />
+          {now}
+        </p>
+      )}
+    </section>
+  );
+}
+
+function ObjIcon({ name, size = 14 }: { name: "star" | "diamond" | "check" | "plank" | "cross"; size?: number }) {
+  const p = { width: size, height: size, viewBox: "0 0 24 24", "aria-hidden": true } as const;
+  if (name === "star") return <svg {...p}><path fill="currentColor" d="M12 2.5l2.9 6.1 6.6.8-4.9 4.6 1.3 6.6L12 17.3l-5.9 3.3 1.3-6.6-4.9-4.6 6.6-.8z" /></svg>;
+  if (name === "diamond") return <svg {...p}><path fill="none" stroke="currentColor" strokeWidth="2.4" d="M12 3l9 9-9 9-9-9z" /></svg>;
+  if (name === "check") return <svg {...p}><path fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" d="M4 12.5l5 5L20 6.5" /></svg>;
+  if (name === "plank") return <svg {...p}><rect x="2" y="8" width="20" height="8" rx="1.5" fill="#8a5a32" stroke="#c9915a" strokeWidth="1.2" /><circle cx="6" cy="12" r="1.2" fill="#222" /><circle cx="18" cy="12" r="1.2" fill="#222" /></svg>;
+  return <svg {...p}><rect x="2.5" y="2.5" width="19" height="19" rx="4" fill="#f4f4f5" /><path fill="#e5484d" d="M10 6h4v4h4v4h-4v4h-4v-4H6v-4h4z" /></svg>;
+}
+
+// ------------------------------------------------------------------ bottom-centre: the barricade during HOLD
+function BarricadeBar({ b, nail }: { b: { hp: number; max: number }; nail: Hint | null }) {
+  // A hit (hp drops) replays the shake: count hits with state adjusted during render, no effect.
+  const [prev, setPrev] = useState(b.hp);
+  const [hits, setHits] = useState(0);
+  if (b.hp !== prev) {
+    setPrev(b.hp);
+    if (b.hp < prev) setHits((h) => h + 1);
+  }
+  const f = b.max > 0 ? Math.max(0, Math.min(1, b.hp / b.max)) : 0;
+  const low = f < 0.3;
+  return (
+    <div className={styles.barricadeWrap}>
+      <div className={styles.barricade} data-low={low} key={hits} data-hit={hits > 0}>
+        <div className={styles.barricadeHead}>
+          <strong>Barricade</strong>
+          <b>{Math.round(b.hp)} / {Math.round(b.max)}</b>
+        </div>
+        <span className={styles.barricadeTrack}>
+          <span style={{ width: `${f * 100}%` }} />
+        </span>
+      </div>
+      {nail && (
+        <span className={styles.hint} data-disabled={!!nail.disabled}>
+          <Keycap k={nail.key} />
+          {nail.label}
+        </span>
+      )}
+    </div>
+  );
+}
+
+// ------------------------------------------------------------------ the fortress card
 const BARS: { key: ScoreKey; name: string }[] = [
   { key: "walls", name: "Walls" },
   { key: "quake", name: "Quake" },
@@ -78,9 +176,6 @@ function FortressMini({ dossier, heroLabel, wallsNote }: { dossier: DossierState
                   <span className={styles.fill} data-label={s.label} style={{ width: `${v}%` }} />
                 </span>
                 <b>{v}</b>
-              </div>
-              <div className={styles.barSub}>
-                <span />
                 <span className={styles.label} data-label={s.label}>{s.label}</span>
               </div>
               {key === "walls" && wallsNote && (
@@ -176,7 +271,7 @@ function Compass({ compass, threat }: { compass: HudProps["compass"]; threat: nu
 
 // ------------------------------------------------------------------ top-right: the radio
 function Radio({ lines, busy }: { lines: RadioLine[]; busy: boolean }) {
-  const shown = lines.slice(-6);
+  const shown = lines.slice(-5);
   return (
     <section className={`${styles.panel} ${styles.radio}`} data-busy={busy}>
       <div className={styles.radioHead}>
@@ -296,23 +391,23 @@ function FeedFrame({ slot, feed }: { slot: "drone" | "cctv"; feed: FeedView }) {
 export function FootHud(p: HudProps) {
   const low = p.health < 30;
   const hints = p.decision ? p.hints.filter((h) => !["H", "R", "N"].includes(h.key)) : p.hints;
-  // The door prompt is the one thing to do right now: show it big, in the middle of the screen.
-  const interact = hints.find((h) => h.key === "E" && !h.disabled) ?? null;
+  // During HOLD the [E] hint (nail boards) sits by the barricade bar; otherwise the door prompt is the one thing
+  // to do right now: show it big, in the middle of the screen.
+  const nail = p.barricade ? hints.find((h) => h.key === "E") ?? null : null;
+  const interact = p.barricade ? null : hints.find((h) => h.key === "E" && !h.disabled) ?? null;
   return (
     <div className={`${styles.root} ${styles.hud}`}>
       <div className={styles.leftCol}>
-        <section className={`${styles.panel} ${styles.objective}`} key={p.objective}>
-          <Icon name="target" size={22} />
-          <div>
-            <span className={styles.tag}>Objective</span> <Badges stub={p.badges.stub} replay={p.badges.replay} />
-            <p>{p.objective}</p>
-          </div>
-        </section>
+        <Missions objectives={p.objectives} now={p.objective} timer={p.timer} survivors={p.survivors} badges={p.badges} />
         <FortressMini dossier={p.dossier} heroLabel={p.heroLabel} wallsNote={p.wallsNote} />
       </div>
 
       <Compass compass={p.compass} threat={p.threat} />
-      <Radio lines={p.radio} busy={p.busy} />
+      <div className={styles.rightCol}>
+        <Radio lines={p.radio} busy={p.busy} />
+        {p.hq && <div className={styles.hqSlot}>{p.hq}</div>}
+      </div>
+      {p.barricade && <BarricadeBar b={p.barricade} nail={nail} />}
       <BannerView banner={p.banner} />
 
       {p.decision && <Decision d={p.decision} busy={p.busy} />}
@@ -332,6 +427,16 @@ export function FootHud(p: HudProps) {
           </span>
           <span />
         </div>
+        <div className={styles.supplies}>
+          <span data-empty={p.supplies.boards === 0} title="Boards">
+            <ObjIcon name="plank" size={18} />
+            <b>{p.supplies.boards}</b> boards
+          </span>
+          <span data-empty={p.supplies.medkits === 0} title="Medkits">
+            <ObjIcon name="cross" size={16} />
+            <b>{p.supplies.medkits}</b> medkits
+          </span>
+        </div>
       </section>
 
       {interact && (
@@ -343,7 +448,7 @@ export function FootHud(p: HudProps) {
 
       {hints.length > 0 && (
         <div className={styles.hints}>
-          {hints.filter((h) => h !== interact).map((h) => (
+          {hints.filter((h) => h !== interact && h !== nail).map((h) => (
             <span key={`${h.key}-${h.label}`} className={styles.hint} data-disabled={!!h.disabled} data-key={h.key}>
               <Keycap k={h.key} />
               {h.label}
