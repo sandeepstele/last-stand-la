@@ -18,6 +18,7 @@
 // Hard rule: what the player does with their hands (health, sprinting) never feeds the agent or the rolls.
 // The building's fate is the server's seeded roll; the player's fate is the arcade layer. No game over.
 
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import type { Game } from "../useGame";
@@ -143,8 +144,10 @@ function safely(name: string, s: System): System {
  * calls the agent; the night starts on stepping out, H/R work locally and a HOLD always breaches after 5 s.
  * In development, window.__foot = { ctx, step } lets test scripts emit bus events (e.g. a wave) by hand.
  */
-export function FootGame({ game, replay, agentOff = false }: { game: Game; replay: string | null; agentOff?: boolean }) {
+/** presenter (?demo=1): [F] fast-forwards the slow parts (walk to the door, the escape run, the door defence) for a 30-40 s pitch. */
+export function FootGame({ game, replay, agentOff = false, presenter = false }: { game: Game; replay: string | null; agentOff?: boolean; presenter?: boolean }) {
   const { district } = game;
+  const router = useRouter();
   const wrapRef = useRef<HTMLDivElement>(null);
   const ctxRef = useRef<FootCtx | null>(null);
   const feedsRef = useRef<Feeds | null>(null);
@@ -396,6 +399,15 @@ export function FootGame({ game, replay, agentOff = false }: { game: Game; repla
         ctx.camera.lookAt(hero.x, 10, hero.z);
         if (k.has("Enter") && g.district) begin();
         return;
+      }
+      if (presenter && k.has("KeyF")) {
+        // Fast-forward for the pitch: never changes what the agent is sent, only where the player stands / how long HOLD lasts.
+        if (s === "approach") [p.x, p.z] = ctx.collide(heroDoor[0] + dirOf(hero.door?.facing ?? 180)[0] * 2, heroDoor[1] + dirOf(hero.door?.facing ?? 180)[1] * 2, 0.5);
+        if (s === "escape" && fallbackPid) {
+          const at = reachPoint(ctx, fallbackPid, here) ?? routeTo.current;
+          if (at) [p.x, p.z] = ctx.collide(at[0], at[1], 0.5);
+        }
+        if (s === "hold") stepAt.current = ctx.time - DEFEND_MIN_S;
       }
       if (s === "approach") {
         if (!scoutAsked.current && dist(here, heroDoor) < SCOUT_R && g.phase === "dusk") {
@@ -812,7 +824,11 @@ export function FootGame({ game, replay, agentOff = false }: { game: Game; repla
           onPlayAgain={playAgain}
           score={score}
           reportFiled={prog.filed}
-          onFileReport={() => setProg((q) => ({ ...q, filed: true }))}
+          onFileReport={() => {
+            setProg((q) => ({ ...q, filed: true }));
+            // Two doors, one engine: the same agent as the auditor, on this building's case, with the player's report in it.
+            if (!game.stub && !agentOff && hero) router.push(`/?check=${encodeURIComponent(hero.pid)}&from=laststand`);
+          }}
         />
       )}
     </main>

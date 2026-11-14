@@ -39,7 +39,7 @@ function Foot() {
   const params = useSearchParams();
   const game = useGame(params.get("stub") === "1");
   const replay = useReplayMode(!game.stub, game.isLoading);
-  return <FootGame game={game} replay={replay} agentOff={params.get("agent") === "off"} />;
+  return <FootGame game={game} replay={replay} agentOff={params.get("agent") === "off"} presenter={params.get("demo") === "1"} />;
 }
 
 function Play() {
