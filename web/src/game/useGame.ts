@@ -307,7 +307,8 @@ export function useGame(stub: boolean) {
   const decideTag = useCallback((choice: Tag | "none") => {
     if (!tagProposal || tagResult || answered.current === agent.interruptKey) return;
     answered.current = agent.interruptKey;
-    const d: HitlDecision = choice === "none" ? { type: "reject" }
+    // A reject carries a fixed message: a bare reject's tool message holds a fresh call id, and strict replay would miss.
+    const d: HitlDecision = choice === "none" ? { type: "reject", message: "Bob declined to tag this building." }
       : choice === tagProposal.tag ? { type: "approve" }
       : { type: "edit", edited_action: { name: "tag_building", args: { pid: tagProposal.pid, tag: choice } } };
     setTagDecision(choice);

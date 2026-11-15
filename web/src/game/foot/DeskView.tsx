@@ -436,6 +436,7 @@ const STATUS_WORD = { ok: "", missing: "not on file", conflict: "disagrees" } as
 
 /** The card's data, source by source; conflicts between sources glow amber; people as an estimated range. */
 function SourceBlock({ card, slot }: { card: DeskCard; slot?: React.ReactNode }) {
+  const [openSrc, setOpenSrc] = useState<string | null>(null); // a clicked source shows every line it brought
   const ppl = card.people;
   return (
     <div style={{ marginTop: 6, fontSize: 13 }}>
@@ -454,14 +455,17 @@ function SourceBlock({ card, slot }: { card: DeskCard; slot?: React.ReactNode })
       {slot}
       <ul style={{ listStyle: "none", margin: "6px 0 0", padding: 0 }}>
         {(card.sources ?? []).map((src) => (
-          <li key={src.key} style={{ padding: "4px 0", borderTop: `1px solid ${HAIR}`, display: "grid", gridTemplateColumns: "10px minmax(0, 1fr)", columnGap: 6 }}>
+          <li key={src.key} title={`From: ${src.source}. Click to ${openSrc === src.key ? "fold" : "show every line"}.`}
+            onClick={(e) => { e.stopPropagation(); setOpenSrc((k) => (k === src.key ? null : src.key)); }}
+            style={{ padding: "4px 0", borderTop: `1px solid ${HAIR}`, display: "grid", gridTemplateColumns: "10px minmax(0, 1fr)", columnGap: 6, cursor: "pointer" }}>
             <span style={{ color: STATUS_COLOR[src.status] ?? "#94a3b8", fontSize: 10, lineHeight: "18px" }}>●</span>
             <div style={{ minWidth: 0 }}>
               <div style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
                 <span style={{ color: "#c7d2fe", fontWeight: 600 }}>{src.source}</span>
                 {STATUS_WORD[src.status] && <span style={{ marginLeft: "auto", color: STATUS_COLOR[src.status], fontSize: 12 }}>{STATUS_WORD[src.status]}</span>}
               </div>
-              {(src.lines ?? []).slice(0, 2).map((l, i) => <div key={i} style={{ color: MUTED, fontSize: 12.5 }}>{l}</div>)}
+              {(src.lines ?? []).slice(0, openSrc === src.key ? undefined : 2).map((l, i) => <div key={i} style={{ color: MUTED, fontSize: 12.5 }}>{l}</div>)}
+              {openSrc === src.key && <div style={{ color: FAINT, fontSize: 11.5 }}>Source: {src.source}{src.status === "conflict" ? " · disagrees with another source on this card" : src.status === "missing" ? " · not on file for this building" : ""}</div>}
             </div>
           </li>
         ))}

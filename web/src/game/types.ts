@@ -128,7 +128,7 @@ export type HitlValue = { action_requests?: { name: string; args: Record<string,
 /** One decision per pending action request. */
 export type HitlDecision =
   | { type: "approve" }
-  | { type: "reject" }
+  | { type: "reject"; message?: string }
   | { type: "edit"; edited_action: { name: string; args: Record<string, unknown> } };
 
 export const SCORE_KEYS: ScoreKey[] = ["walls", "quake", "roof", "people", "space"];
