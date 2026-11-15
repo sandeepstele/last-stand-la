@@ -153,3 +153,44 @@ def test_critic_reason_is_cleaned_and_lessons_cannot_echo_a_player(monkeypatch):
     runtime = SimpleNamespace(state={"messages": [tip]})
     assert game._echoes_player(runtime, "Remember: the walls look like brick everywhere")
     assert not game._echoes_player(runtime, "Facade reads and filings separate concrete from masonry")
+
+
+def test_critic_model_is_replay_wrapped_when_replay_is_on(monkeypatch):
+    game = _game_module(monkeypatch)
+    from app import replay
+
+    monkeypatch.setenv("GOOGLE_API_KEY", "dummy")
+    monkeypatch.setenv("RADAR_REPLAY", "demo")
+    monkeypatch.setattr(game, "make_model", lambda *a, **k: object())
+    wrapped = []
+    monkeypatch.setattr(replay, "wrap", lambda m: wrapped.append(m) or ("wrapped", m))
+    spec = next(s for s in game._enabled_subagents(game.MODELS) if s["name"] == "critic")
+    assert spec["model"][0] == "wrapped" and len(wrapped) == 2  # the critic and its fallback
+
+
+def test_night_start_clears_tonights_reports_and_reseeds_under_replay(monkeypatch):
+    game = _game_module(monkeypatch)
+    from langchain_core.messages import HumanMessage
+    from langgraph.store.memory import InMemoryStore
+
+    store = InMemoryStore()
+    store.put(("notes", "6375735"), "a", {"note": "concrete"})
+    store.put(("notes", "254167#1100"), "b", {"note": "empty"})
+    store.put(("notes", "247386#300"), "c", {"note": "auditor demo note stays"})
+    store.put(("laststand_cases", "t1"), "6375735:-", {"x": 1})
+    monkeypatch.setenv("RADAR_REPLAY", "demo")
+    rt = SimpleNamespace(store=store)
+    asyncio.run(game.NightStart().abefore_agent({"messages": [HumanMessage("Brief the night shift")]}, rt))
+    assert not store.search(("notes", "6375735")) and not store.search(("notes", "254167#1100"))
+    assert store.search(("notes", "247386#300")) and not store.search(("laststand_cases",))
+    assert store.get(("laststand_log",), "/latest.md")
+    store.put(("notes", "6375735"), "d", {"note": "mid-night"})  # later messages in the same night don't reset
+    asyncio.run(game.NightStart().abefore_agent({"messages": [HumanMessage("Tip: x")]}, rt))
+    assert store.search(("notes", "6375735"))
+
+
+def test_drafts_only_for_cases_opened_tonight(monkeypatch):
+    game = _game_module(monkeypatch)
+    opened = AIMessage(content="", tool_calls=[{"name": "open_case", "args": {"property_id": "6375735"}, "id": "o"}])
+    rt = SimpleNamespace(state={"messages": [opened]})
+    assert game._opened(rt, "6375735", "-") and not game._opened(rt, "254167", "1100")

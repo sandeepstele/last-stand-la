@@ -262,3 +262,10 @@ def test_solar_stamps_come_from_the_screen_readiness():
 
 def test_stale_stamp_mapping():
     assert fortress._STALE_STAMP == {"year_is_renovation": "same_building", "replaced": "replaced"}
+
+
+def test_guards_reject_padded_ids_and_running_to_yourself(monkeypatch):
+    monkeypatch.setattr(fortress, "building", lambda pid: {"pid": pid} if pid == "1" else None)
+    assert fortress.outside(" 1") and fortress.outside("1 ") and fortress.outside("1") is None
+    _stub(monkeypatch)
+    assert fortress.resolve("1", 1, 2026, "run", "1")["pid_final"] == "1" and "on foot" not in fortress.resolve("1", 1, 2026, "run", "1")["why"]

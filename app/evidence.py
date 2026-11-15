@@ -14,6 +14,7 @@ Deltas are judgment calls, stated in each check's `why`, and kept small for weak
 from __future__ import annotations
 
 import json
+from datetime import date
 from functools import lru_cache
 from statistics import median
 from typing import Any, Callable
@@ -29,7 +30,7 @@ CASES: dict[str, dict[str, Any]] = {
             "different_structure": ("The two sources describe different structures at the same address", 0.20),
         },
         "checks": ["compliance_filings", "permit_text", "replacement_permits", "era_and_height", "site_structures",
-                   "look_from_above", "compare_captures"],
+                   "look_from_above", "compare_captures", "interior_geometry"],
     },
     "ghost_tenant": {
         "question": "CoStar records a tenant in this suite, and the suite is listed for lease right now. Is the tenant still there?",
@@ -65,6 +66,7 @@ CHECK_WHAT = {
     "lot_activity": "Cars around the building in the oldest vs the latest aerial capture (building-level, weak)",
     "suite_tour": "A vision read of the suite's own Matterport leasing tour (empty vs in use), double-checked",
     "look_from_above": "A vision read of the Vexcel oblique (side) and top-down images, double-checked by a skeptical second pass",
+    "interior_geometry": "The building's own 3D scan (Matterport mesh and scan spots): ceiling height and how open the floor is",
     "compare_captures": "The oldest vs newest Vexcel capture of the site: same building, or replaced?",
 }
 
@@ -234,6 +236,55 @@ def _vision_result(r: dict[str, Any], effects: list[dict[str, Any]], why: str, c
             "images": r["images"], "callout": callout, "vision": r}
 
 
+def interior_geometry(pid: str, case: str) -> dict[str, Any]:
+    """Measured from the Matterport mesh over the scanned floor (code only, no model): the floor level is where the
+    scan spots stand, the ceiling is the upper quartile of the mesh above head height. Tall ceilings over a wide open
+    floor fit an early concrete-frame loft, but a tall masonry loft of the same era looks alike, so the shift is small."""
+    from pathlib import Path
+
+    rec, _ = _ctx(pid)
+    models = rec.get("matterport_model_ids") or []
+    root = Path(__file__).resolve().parent.parent / "fixtures" / "matterport"
+    model = next((m for m in models if (root / "mesh" / f"{m}_50k.obj").exists() and (root / f"{m}.json").exists()), None)
+    if not model:
+        return {"finding": "no 3D scan of this building on file", "effects": [], "why": "no data"}
+    spots = [l["position"] for l in json.loads((root / f"{model}.json").read_text()).get("locations") or [] if l.get("position")]
+    if len(spots) < 3:
+        return {"finding": "too few scan spots to measure", "effects": [], "why": "no data"}
+    x0, x1 = min(p["x"] for p in spots), max(p["x"] for p in spots)
+    y0, y1 = min(p["y"] for p in spots), max(p["y"] for p in spots)
+    floor = sorted(p["z"] for p in spots)[len(spots) // 2]
+    up = sorted(z for x, y, z in _mesh_vertices(root / "mesh" / f"{model}_50k.obj")
+                if x0 - 1 <= x <= x1 + 1 and y0 - 1 <= y <= y1 + 1 and z > floor + 2.4)
+    if len(up) < 50:
+        return {"finding": "the scan doesn't reach the ceiling", "effects": [], "why": "no data"}
+    ceiling = round(up[int(0.75 * len(up))] - floor, 1)
+    peak = round(up[int(0.98 * len(up))] - floor, 1)
+    span = f"{max(x1 - x0, y1 - y0):.0f} x {min(x1 - x0, y1 - y0):.0f} m"
+    finding = f"ceilings about {ceiling} m" + (f" (wells up to {peak} m)" if peak >= ceiling + 0.5 else "") + \
+        f" over a {span} open scanned floor (3D scan, {len(spots)} spots)"
+    if case != "material_conflict":
+        return {"finding": finding, "effects": [], "why": "measured; it doesn't bear on this case"}
+    if ceiling >= 4.5:
+        return {"finding": finding, "effects": _effects(city_list_current=+0.1),
+                "why": "tall ceilings over an open floor fit an early concrete-frame loft"}
+    if ceiling >= 4.0:
+        return {"finding": finding, "effects": _effects(city_list_current=+0.05),
+                "why": "tall loft ceilings fit a concrete frame, but tall masonry lofts of the era look alike: weak"}
+    return {"finding": finding, "effects": [], "why": "ordinary storey heights don't separate concrete from masonry"}
+
+
+@lru_cache(maxsize=8)
+def _mesh_vertices(path) -> tuple:
+    out = []
+    with open(path) as f:
+        for line in f:
+            if line.startswith("v "):
+                _, x, y, z = line.split()[:4]
+                out.append((float(x), float(y), float(z)))
+    return tuple(out)
+
+
 def look_from_above(pid: str, case: str) -> dict[str, Any]:
     from app import layers, vision
 
@@ -316,7 +367,7 @@ def listing_timeline(pid: str, case: str, suite: str) -> dict[str, Any]:
     kinds = sorted({x["type"] for x in f["listings"]})
     today = date.today().isoformat()
     months = _months(on, today) if on else None
-    finding = (f"listed since {on} ({months} months, {', '.join(kinds)} listing); CoStar records {t['tenant']} here since {t['tenant_since']}"
+    finding = (f"listed since {on} ({months} month{'' if months == 1 else 's'}, {', '.join(kinds)} listing); CoStar records {t['tenant']} here since {t['tenant_since']}"
                + (f", and {len(f['tenants'])} current tenancies in this one suite" if len(f["tenants"]) > 1 else ""))
     if any(k in ("sublet", "assignment") for k in kinds):
         return {"finding": finding, "effects": _effects(subleasing=+0.4, gone_dark=-0.05), "why": "a sublet listing is the tenant offering its own space"}
@@ -355,11 +406,15 @@ def tenancy_trail(pid: str, case: str, suite: str) -> dict[str, Any]:
                 "why": "the company record itself says it is no longer operating here"}
     if f["trail_same_building"]:
         x = f["trail_same_building"][0]
-        return {"finding": f"the same company took suite {x['suite']} in this building on {x['since']}",
+        took = (f"is due to move into suite {x['suite']} in this building on {x['since']} (a future move-in on record)"
+                if x["since"] > date.today().isoformat() else f"took suite {x['suite']} in this building on {x['since']}")
+        return {"finding": f"the same company {took}",
                 "effects": _effects(moved_within=+0.45, gone_dark=-0.1), "why": "a newer suite in the same building fits a move within it"}
     if f["trail_elsewhere"]:
         x = sorted(f["trail_elsewhere"], key=lambda o: o["since"])[0]
-        return {"finding": f"the same company has {len(f['trail_elsewhere'])} newer location(s) elsewhere, first in {x['city']} on {x['since']} (after this listing)",
+        when = (f"due to open in {x['city']} on {x['since']} (a future move-in on record)" if x["since"] > date.today().isoformat()
+                else f"first in {x['city']} on {x['since']} (after this listing)")
+        return {"finding": f"the same company has {len(f['trail_elsewhere'])} newer location(s) elsewhere, {when}",
                 "effects": _effects(gone_dark=+0.3, still_there=-0.1), "why": "it opened elsewhere after this suite went on the market"}
     return {"finding": "no newer location for this company on record", "effects": [], "why": "no trail either way"}
 
@@ -381,6 +436,27 @@ def lot_activity(pid: str, case: str, suite: str) -> dict[str, Any]:
     return {"finding": finding, "effects": _effects(still_there=+0.05), "why": "parking held up; building-level only, so weak"}
 
 
+def _walk_views(pid: str, model: str, spots: int = 3) -> list:
+    """More of the suite: side views from scan spots spread across the tour (fetched for the game's walk; same model
+    only). Two faces from each of three spots, so the read sees the whole suite, not just its entrance."""
+    from app import vision
+
+    f = vision.CACHE / f"feed_{pid}_hops.json"
+    try:
+        hops = [h for h in json.loads(f.read_text()) if h.get("model") == model] if f.is_file() else []
+    except ValueError:
+        return []
+    if len(hops) < spots:
+        return []
+    picks = [hops[round(i * (len(hops) - 1) / (spots - 1))] for i in range(spots)]
+    out = []
+    for h in picks:
+        for face in h.get("faces") or []:
+            if face["face"] in ("f1", "f3") and (vision.CACHE / face["name"]).is_file():
+                out.append(vision.CACHE / face["name"])
+    return out
+
+
 def suite_tour(pid: str, case: str, suite: str) -> dict[str, Any]:
     from app import vision
 
@@ -389,7 +465,7 @@ def suite_tour(pid: str, case: str, suite: str) -> dict[str, Any]:
     if not tour:
         return {"finding": "no tour of this suite on record", "effects": [], "why": "nothing to look at"}
     try:
-        imgs = vision.suite_panos(pid, f["suite"], tour["model"])
+        imgs = vision.suite_panos(pid, f["suite"], tour["model"]) + _walk_views(pid, tour["model"])
         r = vision.ask(pid, f"suite{f['suite']}", imgs, (
             "These are views from a Matterport tour of one office suite. Is the suite empty (no desks, chairs or personal "
             "items), furnished and in use (desks with monitors, papers, personal items), furnished but unoccupied (furniture "
@@ -443,6 +519,7 @@ CHECKS: dict[str, Callable[..., dict[str, Any]]] = {
     "lot_activity": lot_activity,
     "suite_tour": suite_tour,
     "look_from_above": look_from_above,
+    "interior_geometry": interior_geometry,
     "compare_captures": compare_captures,
     "compliance_filings": compliance_filings,
     "permit_text": permit_text,

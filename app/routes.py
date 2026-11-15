@@ -300,7 +300,17 @@ async def demo_reset(request: Request) -> JSONResponse:
 
     # every night starts from the same fixed "previous night", so the briefing reads the recorded memory
     await store.aput(("laststand_log",), "/latest.md", create_file_data(LAST_STAND_LOG_SEED))
-    return JSONResponse({"ok": True, "cleared": cleared, "night_log": "seeded"})
+    # the auditor's standing orders and skills (scripts/seed_store.py), if this server's Store doesn't have them yet:
+    # the bridge's recorded replay depends on them
+    seed = __import__("pathlib").Path(__file__).resolve().parent.parent / "seed"
+    seeded = 0
+    files = [(("memories",), "/AGENTS.md", seed / "memories" / "AGENTS.md")] + \
+        [(("skills",), f"/{d.name}/SKILL.md", d / "SKILL.md") for d in sorted((seed / "skills").glob("*")) if (d / "SKILL.md").is_file()]
+    for ns, key, path in files:
+        if path.is_file() and not await store.aget(ns, key):
+            await store.aput(ns, key, create_file_data(await asyncio.to_thread(path.read_text)))
+            seeded += 1
+    return JSONResponse({"ok": True, "cleared": cleared, "night_log": "seeded", "auditor_seed_files_added": seeded})
 
 
 app = Starlette(

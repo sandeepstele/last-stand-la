@@ -306,7 +306,7 @@ OUTSIDE = ("{pid} is not a building in this district. The building is the proper
 def outside(*pids: str | None) -> dict[str, str] | None:
     """Guard for the game tools: they act only on district buildings (a run once drifted to an auditor demo building)."""
     for p in pids:
-        if p is not None and not building(str(p).strip()):
+        if p is not None and (str(p) != str(p).strip() or not str(p).isdigit() or not building(str(p))):
             return {"error": OUTSIDE.format(pid=p)}
     return None
 
@@ -515,7 +515,7 @@ def find_fallback(pid: str, away_from: str | None = None) -> dict[str, Any]:
 def resolve(pid: str, wave: int, seed: int = SEED, action: str = "hold", to_pid: str | None = None,
             checks: list[str] | tuple[str, ...] = (), notes: list[dict] | None = None) -> dict[str, Any]:
     """The wave hits and an aftershock follows. Seeded rolls against code scores: same inputs, same night."""
-    action = "run" if action == "run" and to_pid else "hold"
+    action = "run" if action == "run" and to_pid and str(to_pid) != str(pid) else "hold"  # running to yourself is holding
     final = str(to_pid) if action == "run" else str(pid)
     w = walls(final, checks if final == str(pid) else (), notes if final == str(pid) else None)
     q = quake_score(final)
@@ -739,6 +739,13 @@ def _stale(radius_m: float = 900.0) -> str:
         v = w["verdict"]
         listed = (retrofit_lists.assess(rec).get("lists") or [{}])[0]
         stamp = _STALE_STAMP.get(v["hypothesis"], "cant_tell") if v["label"] in ("likely", "leaning") else "cant_tell"
+        per_floor = (aer.get("height_m") or 0) / (rec.get("stories") or 1) if aer and aer.get("height_m") and rec.get("stories") else None
+        if per_floor is not None and not 2.4 <= per_floor <= 6.0:
+            # the aerial outline is too short or too tall for the recorded floors: one source likely describes another
+            # structure, so neither "same" nor "replaced" is safe (the walls case applies the same sanity bound)
+            stamp = "cant_tell"
+            v = dict(v, label="unresolved", text=f"Can't tell yet: the aerial height gives about {per_floor:.1f} m per floor for "
+                     f"{rec.get('stories')} recorded floors, so the sources may describe different structures; worth a look")
         out.append({
             "n": n, "pid": pid, "label": _label(rec), "x": b["x"], "z": b["z"],
             "distance_m": round(math.hypot(b["x"] - hero["x"], b["z"] - hero["z"])),
