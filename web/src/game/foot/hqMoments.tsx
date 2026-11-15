@@ -1,5 +1,5 @@
 "use client";
-// OWNER: builder F (HQ panel). "AI moments": big, transient lower-third cards that make the agent the main character.
+// "AI moments": big, transient lower-third cards that make the agent the main character (HQ panel).
 // One card at a time (~4.5 s), queued in the order they happened, triggered only by NEW messages (tracked by id):
 //   HQ'S PLAN (first write_todos) · HQ OPENED A CASE (open_case) · HQ LOOKED AT THE AERIAL (check_evidence with images,
 //   for the fortress) · YOUR REPORT MOVED THE ODDS (weigh_case after your report) · HQ IS DRAFTING YOUR CORRECTIONS.
@@ -9,6 +9,7 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { kind, parse, text, type Msg } from "../radio";
 import { CHECK_NAME, caseWords, hypWords, keyOf, namesIn, norm, scrubber, tipSuite } from "./hqModel";
+import { SHORT, placeName, plain, subjectOf, sureWords } from "./copy";
 import styles from "./hq.module.css";
 
 export type HqMomentsProps = {
@@ -24,7 +25,7 @@ export type Moment = Base & (
   | { kind: "plan"; todos: string[] }
   | { kind: "case"; headline: string; question: string; answers: string[] }
   | { kind: "aerial"; images: string[]; caption: string; finding: string | null }
-  | { kind: "odds"; from: number | null; to: number; words: string; label: string }
+  | { kind: "odds"; from: number | null; to: number; words: string; label: string; lead: string }
   | { kind: "drafting"; cases: string[] }
 );
 
@@ -97,7 +98,7 @@ export function momentsOf(messages: readonly unknown[], heroPid: string | null):
             .slice(0, 4);
           if (todos.length) {
             planned = true;
-            out.push({ id: `plan:${c.id ?? m.id ?? i}`, group: "plan", at: i, kind: "plan", title: "HQ's plan", where: null, todos });
+            out.push({ id: `plan:${c.id ?? m.id ?? i}`, group: "plan", at: i, kind: "plan", title: "HQ wrote its plan", where: null, todos });
           }
         }
       }
@@ -167,7 +168,7 @@ export function momentsOf(messages: readonly unknown[], heroPid: string | null):
         out.push({
           id: idOf(m, i, "odds"), group: `odds:${key}`, at: i, kind: "odds", title: "Your report moved the odds",
           where: where(w.property_id, w.suite), from: typeof before === "number" ? Math.round(before * 100) : null, to: Math.round(to * 100),
-          words: ODDS_WORDS[lead] ?? hypWords(lead), label: w.verdict?.label ?? "",
+          words: ODDS_WORDS[lead] ?? hypWords(lead), label: w.verdict?.label ?? "", lead,
         });
         break;
       }
@@ -202,26 +203,22 @@ export function HqMoments({ messages, busy, heroPid }: HqMomentsProps) {
   );
 }
 
+
 function MomentCard({ m, busy }: { m: Moment; busy: boolean }) {
   return (
     <section className={styles.moment} data-kind={m.kind} style={{ animationDuration: `${HOLD_MS}ms` }}>
-      <header className={styles.momentHead}>
-        <span className={styles.momentKicker}>HQ · AI commander</span>
-        {m.where && <span className={styles.momentWhere}>{m.where}</span>}
-      </header>
+      {m.where && <span className={styles.momentWhere}>{placeName(plain(m.where))}</span>}
       <h3 className={styles.momentTitle}>{m.title}</h3>
       {m.kind === "plan" && (
         <ol className={styles.momentTodos}>
-          {m.todos.map((t, i) => <li key={`${i}-${t}`} style={{ animationDelay: `${0.25 + i * 0.18}s` }}>{t}</li>)}
+          {m.todos.map((t, i) => <li key={`${i}-${t}`} style={{ animationDelay: `${0.2 + i * 0.15}s` }}>{plain(t)}</li>)}
         </ol>
       )}
       {m.kind === "case" && (
         <>
-          <p className={styles.momentLead}><b>{m.headline}:</b> {m.question}</p>
+          <p className={styles.momentLead}>{plain(m.question)}</p>
           {m.answers.length > 0 && (
-            <p className={styles.momentAnswers}>
-              {m.answers.map((a) => <span key={a}>{a}</span>)}
-            </p>
+            <p className={styles.momentSub}>Possible answers: {m.answers.map((a) => plain(a)).join(" · ")}</p>
           )}
         </>
       )}
@@ -232,11 +229,11 @@ function MomentCard({ m, busy }: { m: Moment; busy: boolean }) {
               // eslint-disable-next-line @next/next/no-img-element -- a backend evidence file, not a static asset
               <img key={src} src={src} alt="The image HQ read" onError={(e) => { e.currentTarget.style.visibility = "hidden"; }} />
             ))}
-            <span className={styles.momentTag}>HQ evidence · real image</span>
           </div>
           <div className={styles.momentAerialText}>
-            <p className={styles.momentLead}>{m.caption}</p>
-            {m.finding && <p className={styles.momentSub}>{m.finding}</p>}
+            <p className={styles.momentLead}>{plain(m.caption)}</p>
+            {m.finding && <p className={styles.momentSub}>{plain(m.finding)}</p>}
+            <p className={styles.momentTag}>Real image on file</p>
           </div>
         </div>
       )}
@@ -244,9 +241,9 @@ function MomentCard({ m, busy }: { m: Moment; busy: boolean }) {
       {m.kind === "drafting" && (
         <>
           <p className={styles.momentLead}>
-            {busy && <span className={styles.spin} aria-hidden />} One draft per case, citing the evidence and your reports. A person reviews each one; nothing is sent.
+            {busy && <span className={styles.spin} aria-hidden />}One draft per case, citing the evidence and your reports. A person reviews each one; nothing is sent.
           </p>
-          {m.cases.length > 0 && <p className={styles.momentAnswers}>{m.cases.map((c) => <span key={c}>{c}</span>)}</p>}
+          {m.cases.length > 0 && <p className={styles.momentSub}>{m.cases.map((c) => plain(c)).join(" · ")}</p>}
         </>
       )}
       <span className={styles.momentTimer} style={{ animationDuration: `${HOLD_MS}ms` }} aria-hidden />
@@ -257,19 +254,23 @@ function MomentCard({ m, busy }: { m: Moment; busy: boolean }) {
 function OddsMeter({ m }: { m: Extract<Moment, { kind: "odds" }> }) {
   const from = m.from ?? m.to;
   const d = m.to - from;
+  const what = `${subjectOf(m.lead)}: ${SHORT[m.lead] ?? plain(m.words)}`;
   return (
     <div className={styles.odds2}>
       <div className={styles.oddsNums}>
+        <span className={styles.oddsWords}>{what}</span>
         {m.from != null && <span className={styles.oddsFrom}>{m.from}%</span>}
         {m.from != null && <span className={styles.oddsArrow}>→</span>}
         <strong className={styles.oddsTo}>{m.to}%</strong>
-        <span className={styles.oddsWords}>{m.words}</span>
-        {m.from != null && d !== 0 && <span className={styles.oddsDelta} data-sign={d > 0 ? "up" : "down"}>{d > 0 ? "+" : "−"}{Math.abs(d)} from your report</span>}
       </div>
       <div className={styles.oddsTrack} style={{ "--lo": `${Math.min(from, m.to)}%`, "--span": `${Math.abs(d)}%` } as CSSProperties}>
         <span className={styles.oddsBase} />
         <span className={styles.oddsGain} data-sign={d >= 0 ? "up" : "down"} />
       </div>
+      <p className={styles.momentSub}>
+        {m.from != null && d !== 0 ? `${d > 0 ? "Up" : "Down"} ${Math.abs(d)} after your report` : "Your report is in the evidence"}
+        {m.label ? ` · ${sureWords(m.label)}` : ""}
+      </p>
     </div>
   );
 }
