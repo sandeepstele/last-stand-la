@@ -331,6 +331,10 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
   const cratesTotal = useRef(0);
   const [score, setScore] = useState({ saved: 0, total: 0, found: 0, health: 100, secs: 0, points: 0, rank: "C", downed: 0 });
   const save = useSave();
+  const saveRef = useRef(save);
+  useEffect(() => {
+    saveRef.current = save;
+  }, [save]);
   const [saveNote, setSaveNote] = useState<string | null>(null); // shown on the intro when a saved night can't continue
 
   // ------------------------------------------------------------------ engine: created once per district
@@ -598,7 +602,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
         }
         ctx.camera.position.set(hero.x + Math.sin(ang) * rad, alt, hero.z + Math.cos(ang) * rad);
         ctx.camera.lookAt(hero.x, 10, hero.z);
-        if (k.has("Enter") && g.district) begin();
+        if (k.has("Enter") && g.district) startOrContinue();
         return;
       }
       if (presenter && k.has("KeyF")) {
@@ -1251,6 +1255,14 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
     setStep("dawn");
   }
 
+  /** The intro's Enter / Start: a shift saved mid-way is continued (same thread, nothing re-sent); a fresh shift only
+   *  starts when there is none (Discard on the save bar first). Two shifts at once clear each other's notes. */
+  function startOrContinue() {
+    const sv = saveRef.current;
+    if (sv && sv.checkpoint !== "dawn" && !game.stub && !agentOff) void continueNight(sv);
+    else begin();
+  }
+
   async function continueNight(sv: SaveV1) {
     if (!(await threadAlive(sv.threadId))) {
       clearSave();
@@ -1629,13 +1641,13 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
           Pillars of light: <b>{city.cases.toLocaleString("en-US")} buildings with open cases</b>, of {city.buildings.toLocaleString("en-US")} in CoStar&apos;s LA records
         </div>
       )}
-      {step === "intro" && <IntroOverlay heroLabel={heroLabel} ready={!!district} stub={game.stub} replay={replay} attribution={district.attribution ?? null} onStart={() => begin()} />}
+      {step === "intro" && <IntroOverlay heroLabel={heroLabel} ready={!!district} stub={game.stub} replay={replay} attribution={district.attribution ?? null} onStart={() => startOrContinue()} />}
       {step === "intro" && !save && saveNote && (
         <div style={{ position: "absolute", left: "50%", bottom: 28, transform: "translateX(-50%)", zIndex: 46, background: "rgba(5,7,13,.88)", border: "1px solid #f5a524", padding: "8px 12px", color: "#fde68a", font: "14px system-ui, sans-serif" }}>{saveNote}</div>
       )}
       {step === "intro" && save && !game.stub && !agentOff && (
         <div style={{ position: "absolute", left: "50%", bottom: 28, transform: "translateX(-50%)", zIndex: 46, display: "flex", gap: 10, alignItems: "center", background: "rgba(5,7,13,.88)", border: "1px solid #334155", padding: "8px 12px", color: "#e2e8f0", font: "14px system-ui, sans-serif" }}>
-          <span>Saved night ({CHECKPOINT_WORDS[save.checkpoint]}, {new Date(save.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })})</span>
+          <span>Saved shift ({CHECKPOINT_WORDS[save.checkpoint]}, {new Date(save.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}){save.checkpoint !== "dawn" ? " · Enter continues it; Discard for a new shift" : ""}</span>
           <button type="button" onClick={() => void continueNight(save)} style={{ padding: "6px 12px", border: "none", background: "#f5a524", color: "#111", fontWeight: 700, cursor: "pointer" }}>Continue</button>
           <button type="button" onClick={clearSave} style={{ padding: "6px 10px", border: "1px solid #475569", background: "transparent", color: "#cbd5e1", cursor: "pointer" }}>Discard</button>
         </div>
