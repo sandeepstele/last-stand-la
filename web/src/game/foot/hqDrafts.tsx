@@ -43,6 +43,15 @@ function verdictOf(v: NonNullable<DraftView["verdict"]>): string {
   return v.label === "unresolved" ? `Not settled yet. Best guess: ${words} (${v.pct}%)` : `${cap(sureWords(v.label))} ${words} (${v.pct}%)`;
 }
 
+/** The server swaps an unsafe critic reason (numbers, ids) for this stock phrase, which only makes sense on a flag. */
+const STOCK_WHY = /evidence trail may not support this verdict/i;
+
+function criticLine(c: NonNullable<DraftView["critic"]>): string {
+  if (!c.reviewed) return "No second review on this one.";
+  if (c.follows === false) return `A second agent flagged it: ${c.why ?? "the evidence doesn't settle it."}`;
+  return c.why && !STOCK_WHY.test(c.why) ? `A second agent checked it and agrees: ${c.why}` : "A second agent checked it and agrees with the evidence.";
+}
+
 export function DraftList({ view, variant }: { view: DraftsView; variant: "dawn" | "panel" }) {
   if (!view.requested && !view.drafts.length) return null;
   const pending = view.drafting ? Math.max(0, (view.expected ?? 0) - view.done) : 0;
@@ -65,7 +74,7 @@ export function DraftList({ view, variant }: { view: DraftsView; variant: "dawn"
               {d.verdict && <p className={styles.draftVerdict}>{verdictOf(d.verdict)}</p>}
               {d.critic && (
                 <p className={styles.draftVerdict} style={{ opacity: 0.85 }}>
-                  {!d.critic.reviewed ? "No second review on this one." : d.critic.follows === false ? `A second agent flagged it: ${d.critic.why ?? "the evidence doesn't settle it."}` : `A second agent checked it${d.critic.why ? `: ${d.critic.why}` : "."}`}
+                  {criticLine(d.critic)}
                 </p>
               )}
               <p className={styles.draftText} title={plain(d.text)}>{askOf(d)}</p>
