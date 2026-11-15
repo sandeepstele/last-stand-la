@@ -1971,6 +1971,13 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
         </div>
       )}
       {step === "intro" && <IntroOverlay heroLabel={heroLabel} ready={!!district} stub={game.stub} replay={replay} attribution={district.attribution ?? null} onStart={() => startOrContinue()} />}
+      {step === "intro" && multiDay && !save && (dayNo > 1 || career.log.length > 0) && (
+        // A career in progress in this browser (e.g. the previous player's): say which day this is, and offer a fresh start.
+        <div style={{ position: "absolute", left: "50%", bottom: 28, transform: "translateX(-50%)", zIndex: 46, display: "flex", gap: 10, alignItems: "center", background: "rgba(5,7,13,.88)", border: "1px solid #334155", padding: "8px 12px", color: "#e2e8f0", font: "14px system-ui, sans-serif" }}>
+          <span>Career in progress: Day {dayNo} of {nDays} ({career.log.length} day{career.log.length === 1 ? "" : "s"} done). Enter starts Day {dayNo}.</span>
+          <button type="button" onClick={() => resetCareer()} style={{ padding: "6px 12px", border: "none", background: "#f5a524", color: "#111", fontWeight: 700, cursor: "pointer" }}>New game (Day 1)</button>
+        </div>
+      )}
       {step === "intro" && !save && saveNote && (
         <div style={{ position: "absolute", left: "50%", bottom: 28, transform: "translateX(-50%)", zIndex: 46, background: "rgba(5,7,13,.88)", border: "1px solid #f5a524", padding: "8px 12px", color: "#fde68a", font: "14px system-ui, sans-serif" }}>{saveNote}</div>
       )}
