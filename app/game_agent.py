@@ -73,7 +73,9 @@ def _safe_why(why: str) -> str:
 def _no_suite(suite: str | None) -> str | None:
     """The critic's case_ref uses "-" for a building case; the model sometimes passes it back as a suite. Treat "-",
     "none", "null" and blanks as no suite, so the walls case is never drafted as a ghost-tenant case."""
-    return None if suite is None or str(suite).strip().lower() in ("", "-", "none", "null", "n/a") else suite
+    t = "" if suite is None else str(suite).strip().lower()
+    return None if t in ("", "-", "--", "dash", "none", "null", "n/a", "na", "building", "no suite") or not any(c.isdigit() for c in t) \
+        and len(t) > 3 else suite
 
 
 def _critic_answered(runtime: ToolRuntime, pid: str, suite: str | None) -> bool:
@@ -134,10 +136,26 @@ def horde_status(wave: int) -> dict:
 
 
 @tool
-async def find_fallback(pid: str, away_from: str | None = None) -> dict:
+async def find_fallback(pid: str, runtime: ToolRuntime, away_from: str | None = None) -> dict:
     """The strongest building within 600 m of pid to fall back to, preferring ones that lie away from the horde
-    (away_from: the wave's sector, e.g. "W"). Ranked in code by walls and quake scores."""
-    return await _outside(pid) or await asyncio.to_thread(fortress.find_fallback, pid, away_from)
+    (away_from: the wave's sector, e.g. "W"). Ranked in code by walls and quake scores. Also returns a code
+    side-by-side of staying vs running (tonight's evidence and reports included) and a `suggest` action."""
+    if bad := await _outside(pid):
+        return bad
+    out = await asyncio.to_thread(fortress.find_fallback, pid, away_from)
+    if out.get("to_pid"):
+        _, checks = _wave_and_checks(runtime, pid)
+        notes = await _notes(runtime, pid, None)
+        checks = checks + (["human_report"] if notes and "human_report" not in checks else [])
+
+        def compare() -> dict:
+            here_w, here_q = fortress.walls(pid, checks, notes)["value"], fortress.quake_score(pid)["value"]
+            there = fortress.dossier(out["to_pid"])["scores"]
+            there_w, there_q = there["walls"]["value"] - 10, there["quake"]["value"]  # crossing on foot costs 10
+            return {"compare": f"stay: walls {here_w}, quake {here_q} | run: walls {there_w} on foot, quake {there_q}",
+                    "suggest": "run" if there_w + there_q > here_w + here_q else "hold"}
+        out |= await asyncio.to_thread(compare)
+    return out
 
 
 def _check_available(pid: str, check: str, suite: str | None, case_data: dict) -> bool:
@@ -486,7 +504,12 @@ async def draft_correction(property_id: str, runtime: ToolRuntime, suite: str | 
     notes = await _notes(runtime, property_id, suite)
     draft = await asyncio.to_thread(fortress.draft, property_id, suite, checks, notes)
     if _flag("RADAR_CRITIC"):
-        return _apply_critic(draft, _critic_result(runtime, property_id, suite))
+        review = _critic_result(runtime, property_id, suite)
+        if review is not None and review.get("follows") is False and getattr(runtime, "store", None) and _thread_id(runtime):
+            item = await runtime.store.aget(("laststand_cases", _thread_id(runtime)), _case_key(property_id, suite))
+            if not item:  # the critic had no case file to read: its "no" is a lookup miss, not a review
+                review = None
+        return _apply_critic(draft, review)
     return draft
 
 
@@ -595,9 +618,9 @@ Messages on this channel, in the order a night usually runs:
 
 6. "Wave <n> is coming from the <sector>"
    In ONE message call horde_status(n) and find_fallback(pid, away_from=<sector>) for the scouted building.
-   Your NEXT message MUST call commit_plan, with no answer text before it: compare the scouted building's walls and
-   quake scores (from fortress_dossier or weigh_case) with the fallback's reason, then call commit_plan(pid,
-   action="hold") to stay or commit_plan(pid, action="run", to_pid=<fallback>) to move. A wave message never ends
+   Your NEXT message MUST call commit_plan, with no answer text before it: find_fallback's `compare` puts staying and
+   running side by side (computed in code from tonight's evidence) and `suggest` is the code's pick. Propose it:
+   commit_plan(pid, action="hold") to stay, or commit_plan(pid, action="run", to_pid=<fallback>) to move. A wave message never ends
    without commit_plan: the player answers HOLD or RUN through it and may switch your plan. When the result comes back,
    report it in 2 radio lines using its why text. If the player rejects the plan, say "No orders. Holding." and stop.
 

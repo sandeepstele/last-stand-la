@@ -38,22 +38,42 @@ def _replace(result, text: str):
     return result
 
 
+def latest_verdict(messages) -> str | None:
+    """The newest weigh_case verdict.text since the last human message (code-built, hedged): what a blank answer
+    should have said."""
+    import json
+
+    last_h = max((i for i, m in enumerate(messages) if isinstance(m, HumanMessage)), default=-1)
+    for m in reversed(messages[last_h + 1:]):
+        if isinstance(m, ToolMessage) and m.name == "weigh_case":
+            try:
+                text = ((json.loads(_text(m)) or {}).get("verdict") or {}).get("text")
+            except ValueError:
+                continue
+            if text:
+                return text
+    return None
+
+
 class RetryBlank(AgentMiddleware):
     def __init__(self, fallback: str):
         super().__init__()
         self.fallback = fallback
 
+    def _say(self, request) -> str:
+        return latest_verdict(getattr(request, "messages", []) or []) or self.fallback
+
     def wrap_model_call(self, request, handler):
         r = handler(request)
         if _blank(r):
             r = handler(request)
-        return _replace(r, self.fallback) if _blank(r) else r
+        return _replace(r, self._say(request)) if _blank(r) else r
 
     async def awrap_model_call(self, request, handler):
         r = await handler(request)
         if _blank(r):
             r = await handler(request)
-        return _replace(r, self.fallback) if _blank(r) else r
+        return _replace(r, self._say(request)) if _blank(r) else r
 
 
 def needs_commit_plan(messages) -> bool:
