@@ -149,8 +149,8 @@ def _check_available(pid: str, check: str, suite: str | None, case_data: dict) -
         if check == "site_structures":
             return True
         if check == "look_from_above":
-            return (vision.CACHE / f"{pid}_ortho_latest.jpg").is_file() and bool(
-                list(vision.CACHE.glob(f"{pid}_oblique_*.jpg")))
+            return ((vision.CACHE / f"{pid}_ortho_latest.jpg").is_file() or (vision.CACHE / f"feed_{pid}_ortho.jpg").is_file()) \
+                and bool(list(vision.CACHE.glob(f"{pid}_oblique_*.jpg")) or list(vision.CACHE.glob(f"feed_{pid}_oblique_*.jpg")))
         if check == "lot_activity":
             return (vision.CACHE / f"{pid}_cars.json").is_file()
         try:
@@ -586,9 +586,11 @@ Messages on this channel, in the order a night usually runs:
    walls/quake/roof scores, and the final verdict using verdict.text word for word. If there is no case, skip the checks.
 
 5. "Tip: I'm inside the building. ..."  (a report about the walls of the scouted building)
-   Call record_note(property_id=<the scouted building>, note, source="the player", supports=<city_list_current if they
-   say concrete | costar_current if they say brick | omit if they can't tell>). Next message: weigh_case for the
-   material_conflict with the checks you ran before plus human_report. Answer in 2 lines: how the odds moved (from the
+   In ONE message call record_note(property_id=<the scouted building>, note, source="the player", supports=
+   <city_list_current if they say concrete | costar_current if they say brick | omit if they can't tell>) AND, if
+   check_hints lists interior_geometry as available, run_check(case="material_conflict", check="interior_geometry",
+   why=<one line: you're measuring the room the player is standing in from its 3D scan>). Next message: weigh_case for
+   the material_conflict with the checks you ran before plus interior_geometry (if you ran it) plus human_report. Answer in 2 lines: how the odds moved (from the
    tool) and that a person's report is strong but capped, never final.
 
 6. "Wave <n> is coming from the <sector>"

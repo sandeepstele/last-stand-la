@@ -72,6 +72,9 @@ def ortho(pid: str, aer: dict[str, Any], collection: str | None = None) -> Path:
     out = CACHE / f"{pid}_ortho_{tag}.jpg"
     if out.exists():
         return out
+    feed = CACHE / f"feed_{pid}_ortho.jpg"  # the game's fetched top-down photo (scripts/fetch_feeds.py), latest only
+    if not collection and feed.exists():
+        return feed
     body: dict[str, Any] = {"wkt": _area(aer), "srid": 4326, "layer": "urban,urban-r,wide-area,urban-g", "crop": "bounding_box",
                             "image-format": "jpeg"}
     if collection:
@@ -82,7 +85,7 @@ def ortho(pid: str, aer: dict[str, Any], collection: str | None = None) -> Path:
 
 
 def oblique(pid: str, aer: dict[str, Any]) -> Path | None:
-    hits = sorted(CACHE.glob(f"{pid}_oblique_*.jpg"))
+    hits = sorted(CACHE.glob(f"{pid}_oblique_*.jpg")) or sorted(CACHE.glob(f"feed_{pid}_oblique_*.jpg"))
     if hits:
         return hits[0]
     if _CACHE_ONLY.get():
