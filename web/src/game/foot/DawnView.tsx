@@ -13,6 +13,7 @@ import { DESK, type ShiftReport, type Tag } from "../useGame";
 import { placeName, plain } from "./copy";
 import { draftsModel } from "./hqModel";
 import { HqDrafts } from "./hqDrafts";
+import { AgentScoreboard } from "./AgentScoreboard";
 import { ShiftReportView } from "./ShiftReport";
 import d from "./ShiftReport.module.css";
 import { Keycap, footStyles as styles } from "./ui";
@@ -67,6 +68,7 @@ function DeskDawn({ title, lines, messages, loading, onPlayAgain, score, reportF
           <ShiftReportView report={report} precalls={precalls} loading={loading} score={report ? score : null} />
           <div className={d.colR}>
             <div className={d.scrollR}>
+              <AgentScoreboard messages={messages} report={report} />
               {drafts.length > 0 && (
                 <section className={d.cases}>
                   <h2>
