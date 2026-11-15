@@ -10,7 +10,7 @@ Merged Sun Nov 15, ~1:15 am, from the 10:30 pm drafts (DEVPOST_DRAFT.md) and the
 **Bob's Desk** [TEAM: or "Bob's Shift" as in the older draft; pick one and use it everywhere]
 
 ## Tagline
-**One shift at the LA building office. A deep agent does the work, you correct it, and the aftershock grades you both.**
+**Four shifts at the LA building office. A deep agent does the work, you correct it, and dawn grades you both.**
 
 ## Short description (Devpost "elevator pitch", ≤ 200 characters)
 Play an LA building officer, one shift a day: settle record conflicts, tag buildings after a simulated quake, see at dawn who you kept safe. The AI analyst remembers your calls.
@@ -78,7 +78,7 @@ On records alone the code suggests red for all four; Bob's walk-in reports move 
 
 **A human-feedback loop you can watch.** The agent is the main character, and people correct it at four levels:
 1. **Evidence:** Bob's site report is weighed as evidence, capped at 0.35.
-2. **Decision:** Bob approves or overrides each placard (a human-in-the-loop interrupt), and the aftershock grades both of them.
+2. **Decision:** Bob approves or overrides each placard (a human-in-the-loop interrupt), and dawn grades both of them: the simulated aftershock on Day 1, the code's screening on Days 2 to 4.
 3. **Review:** a second model (the critic) reviews every correction draft, and a person approves any record change.
 4. **Memory:** the override and its outcome go into the shift log, and the next shift opens with it. The log carries across days until a new game, so by Day 4 the agent has a record of how often Bob overruled it and how each call was graded. This is in-context learning from human corrections. The first shift after a reset opens from a seeded previous shift (601 Broadway); after that, each shift opens with what Bob actually corrected last time.
 

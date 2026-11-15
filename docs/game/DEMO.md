@@ -24,7 +24,17 @@ One pitch for the judging table and the video voice-over (the shots are in VIDEO
 - records fixed;
 - the Agent vs Bob record.
 
-**Before the next judge, use New game (or `demo_reset`), never Next day**, so every judge starts on Day 1 from the seeded line.
+**Between judges, never Next day.** The career is saved per browser, so do both steps:
+1. Press **New game**, either on the dawn screen or on the intro's "Career in progress: Day k of 4 … New game (Day 1)" bar.
+2. Reset the server: `uv run python scripts/demo_reset.py`.
+
+If New game isn't reachable, run this in the browser console:
+
+```js
+localStorage.removeItem("laststand.career.v1"); localStorage.removeItem("laststand.track.v1"); localStorage.removeItem("laststand.feedback.v1")
+```
+
+Every judge then starts on Day 1 from the seeded line.
 
 | Day | Building (office suite) | Records disagree on | People | Dawn |
 |---|---|---|---|---|
