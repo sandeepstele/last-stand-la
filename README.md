@@ -8,7 +8,7 @@ You're the night shift for an AI auditor of CoStar's building records. It works 
 |---|---|
 | **Deep-agent game** | Your commander is a LangChain **deepagents** agent. It plans the night with its own todos, sends four sub-agents in parallel (records, aerial, interior, city), picks its own evidence and says why, pauses for your HOLD/RUN call, and drafts the corrections at dawn |
 | **Real CoStar data** | 1,581 real LA buildings and their 156 open cases, from CoStar's kit (328 in the queue across LA and Houston). You walk on the Vexcel aerial and into the buildings' own Matterport 3D tours. The city's retrofit orders, permits and the 1994 Northridge ShakeMap are in play too |
-| **Real feedback enforcement** | Your report from inside a building is weighed as evidence: strong, but **capped at 0.35**, so it moves the odds without ever deciding alone. It **decides your survival**: a "concrete" report makes the walls hold, "brick" lets the horde in. At dawn the agent drafts a correction **citing your words**, and "File" opens the real auditor case with your report in it. Code sets every number; nothing changes a record without human approval |
+| **Real feedback enforcement** | Your report from inside a building is weighed as evidence: strong, but **capped at 0.35**, so it moves the odds without ever deciding alone. On the demo night it **decides your survival**: a "concrete" report makes the walls hold, "brick" lets the horde in. At dawn the agent drafts a correction **citing your words**, and "File" opens the real auditor case with your report in it. Code sets every number; nothing changes a record without human approval |
 
 **Track:** Entertainment. **Also:** CoStar "Inside and Out", LangChain "Best use of deepagents". Built at HackPrinceton Fall 2026.
 
@@ -44,7 +44,7 @@ Everything about the game is in **[docs/game/](docs/game/README.md)**:
 | **Case #7** | Walk into **suite 1100** at 122 7th St (its real tour). Answer: is anyone working here? | `Check suite 1100 at building 254167: is the tenant on record still there?`: it opens the ghost-tenant case and **chooses** checks (listing timeline, lease terms, tenancy trail, the suite's tour), then weighs them. Your `Tip: I'm inside suite 1100. …` becomes a capped human report | Odds per hypothesis. The 3-person office on record comes with you only if the evidence leans "present" and you didn't report the suite empty |
 | **The cross** | About 370 m through the horde to 737 Broadway (sprint never runs dry; the route is drawn) | — | Real streets: OSM outlines on the Vexcel mosaic |
 | **Case #6, the fortress** | Walk into **737 Broadway's own tour**. Answer: concrete, brick or can't tell? | `Scout property 6375735`: four squads in parallel (records, aerial, interior, city), `open_case` (CoStar masonry vs the city's concrete list), its checks, including **a vision read of the aerial** (shown on screen), then `weigh_case`. Your tip is weighed in | **Walls** = the case's odds × wall strength per material |
-| **Night** | The horde comes from the west. **HOLD** (defend the door: boards, shoves, flares, the flashlight stun) or **RUN** (about 290 m to the fallback) | `Wave 1 is coming from the W`: `horde_status`, `find_fallback`, then `commit_plan`, which **pauses for your decision** (approve or edit) | A seeded roll (seed 2026). **Your report decides HOLD:** "concrete" holds (76 vs 75), "brick" or "can't tell" break in. RUN holds. Then the aftershock roll |
+| **Night** | The horde comes from the west. **HOLD** (defend the door: boards, shoves, flares, the flashlight stun) or **RUN** (about 290 m to the fallback) | `Wave 1 is coming from the W`: `horde_status`, `find_fallback`, then `commit_plan`, which **pauses for your decision** (approve or edit) | A seeded roll (seed 2026). **On the demo night your report decides HOLD:** "concrete" holds (the walls just beat the roll of 75), "brick" or "can't tell" break in; a different set of checks picked live can shift that. RUN holds. Then the aftershock roll |
 | **Dawn** | Score and rank; **File tonight's reports → open the auditor** | `Debrief the night shift`: `draft_correction` for each case it worked, citing your report | The drafts are hedged; a person approves them |
 
 - **2-minute stage cut** (`?demo=1`): right after the briefing the agent works case #7 from the records, while you go straight to case #6. [F] fast-forwards the walk, the defence and the escape. See [docs/game/DEMO.md](docs/game/DEMO.md).
@@ -182,7 +182,7 @@ cd web && npm install && npm run dev            # http://127.0.0.1:3000/play?mod
 **Demo:**
 - Start the server with `RADAR_REPLAY=game RADAR_REPLAY_STRICT=1` (never put `RADAR_REPLAY` in `.env`).
 - Use `npm run build && npm start`.
-- Run `uv run python scripts/demo_reset.py` between judges.
+- Run `uv run python scripts/demo_reset.py && uv run python scripts/seed_store.py` between judges, and never reload the page without it (only Play again resets by itself). One browser tab on the game.
 - In git worktrees, run `next dev --webpack`.
 
 ---

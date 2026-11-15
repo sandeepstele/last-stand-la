@@ -1319,7 +1319,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
           onChoose={() => {}}
         />
       )}
-      {step === "visit" && visitB && <SuiteSweep pid={visitB.pid} onScore={setSweep} />}
+      {step === "visit" && visitB && <SuiteSweep pid={visitB.pid} skip={case7?.suite != null ? String(case7.suite) : null} onScore={setSweep} />}
       {step === "suite" && office && (
         <InsideView
           faces={officeFaces}

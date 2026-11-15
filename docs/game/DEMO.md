@@ -85,7 +85,9 @@ Your report from inside changes the real case. That's "Inside and Out". Case #7 
    - **Never put `RADAR_REPLAY` in `.env`:** under `langgraph dev`, `.env` overrides the shell, so the server would be stuck in replay.
    - **Verify or re-record:** `scripts/game_nights.py` (see CONTRACT.md).
 2. **Web:** `cd web && npm run build && npm start` (production; port 3000). Open `http://127.0.0.1:3000/play?mode=foot` once to warm it up.
-3. **Between judges:** `uv run python scripts/demo_reset.py`, then press Enter on the dawn screen (or reload).
+3. **Between judges:** `uv run python scripts/demo_reset.py && uv run python scripts/seed_store.py` (the reset clears the notes and restores the night log; the seed puts back the store the auditor bridge reads). Then press Enter on the dawn screen.
+   - **Never reload the page mid-session without running both first.** Only Play again (Enter at dawn) resets by itself; a reload, a crash or a second tab starts a night on the previous night's notes, and strict replay then misses (scout, walls tip, wave result, debrief).
+   - **One browser tab** on the game during judging. Close every other tab on :3000 / :3110.
 4. **Fallback ladder:**
    1. Live mode, if replay misbehaves (`RADAR_REPLAY` unset; timings in CONTRACT.md).
    2. The map mode `/play` (live only).
@@ -97,6 +99,7 @@ Your report from inside changes the real case. That's "Inside and Out". Case #7 
 ## New since 6 pm (show at the table, not in the 2-minute cut)
 - **All of LA:** the intro dive over 1,581 buildings and the 156 open LA cases (86 buildings).
 - **Walk into 16 real buildings:** any lit door, [E]. 750 Broadway is a good one near the fortress.
-- **Inside 737 Broadway:** walk its 10 real scan spots ([A]/[D] or click the floor plan).
+- **Inside 737 Broadway:** walk its 19 real scan spots ([W]/[S], or click the floor plan), with the untextured 3D scan.
+- **Side missions, careful:** don't stamp "Same building?" at 217 8th St on stage (its record says 13 stories in a ~22 m building, which a CoStar judge will catch). Solar never says "go solar" because roof age is taken from building age; don't present "check the roof first" as a finding about the roof.
 - **Walk-by aerials:** the corner view shows the nearest building's real Vexcel image when one is on file (106 buildings), labelled "Real aerial on file".
 - **Honesty:** real images and tours only where they're on file. Otherwise the corner views are game renders. Images feed the screen only; the agent's recorded evidence is unchanged.
