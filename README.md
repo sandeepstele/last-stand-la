@@ -144,4 +144,4 @@ cd web && npm install && npm run dev            # http://127.0.0.1:3000/play?mod
 
 ## Team
 
-[TEAM: names, Discord usernames]. Built at HackPrinceton Fall 2026.
+Discord: **hawktuahhh123_00532**, **sandeepstele**. Built at HackPrinceton Fall 2026.
