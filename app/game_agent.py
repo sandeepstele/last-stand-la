@@ -77,7 +77,8 @@ def _critic_answered(runtime: ToolRuntime, pid: str, suite: str | None) -> bool:
 def _case_key(pid: str, suite: str | None) -> str:
     from app.tenants import norm_suite
 
-    return f"{pid}:{norm_suite(suite) if suite else '-'}"
+    su = _no_suite(suite)  # "-" is the building case: it must key the same as no suite at all
+    return f"{pid}:{(norm_suite(su) if su else None) or '-'}"
 
 
 async def _remember_case(runtime: ToolRuntime, pid: str, suite: str | None, value: dict) -> None:

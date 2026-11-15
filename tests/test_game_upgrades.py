@@ -136,3 +136,9 @@ def test_dash_suite_is_a_building_case_and_drafts_wait_for_the_critic(monkeypatc
     assert not game._critic_answered(runtime, "6375735", None)  # asked, not answered yet
     runtime.state["messages"].append(ToolMessage(content="{}", tool_call_id="t1", name="task"))
     assert game._critic_answered(runtime, "6375735", None)
+
+
+def test_case_key_treats_dash_as_the_building_case(monkeypatch):
+    game = _game_module(monkeypatch)
+    assert game._case_key("6375735", None) == game._case_key("6375735", "-") == "6375735:-"
+    assert game._case_key("254167", "Suite 1100") == "254167:1100"
