@@ -1,24 +1,30 @@
 # Last Stand LA: demo script and ops
 
-## The 2-minute stage cut (current; Entertainment track; `?demo=1` on strict replay)
+## The 2-minute pitch: a deep-agent game, real CoStar data, real feedback enforcement
 
-The user's decisions (1:50 pm): **Entertainment**; the deep agent is always visible and running; two doors stays (dawn flips to the auditor).
+**One-liner (open and close with it):** "Last Stand LA is a deep-agent game built on real CoStar data, where your feedback is enforced: what you see inside a real building changes the AI's case, your survival, and a real record."
 
-- **Normal mode** is the full Night Shift (a judge who plays walks both cases).
-- **`?demo=1`** is the stage cut:
-  - case #7 is worked by the agent from the records right after the briefing, while you head for case #6;
-  - [F] fast-forwards the walk, the defence and the escape.
-- **Never** use `agent=off` or `stub=1` on stage.
+Run `?demo=1` on strict replay, reset first. Press [F] to skip walks. **Never** use `agent=off` or `stub=1` on stage.
 
-| Time | On screen | Say |
-|---|---|---|
-| 0:00 | Intro: the camera starts over **all of LA**: 1,581 CoStar LA buildings coloured by their records, light pillars on the 328 open cases (amber = material conflict, teal = ghost tenant, red = stale entry), and dives into tonight's district | "Building records go stale. CoStar's record of this building says masonry; the city's retrofit list says concrete. Nobody has gone to look. Our deep agent works CoStar's queue of 328 cases like this, and tonight you're its eyes." |
-| 0:12 | Enter. The HQ panel shows the agent's briefing (#6 and #7 from the real queue), then works #7. F to the door; scout radio; the drone shows the aerial it looked at | "It plans the night from the real queue, sends four squads in parallel, and looks at the aerial itself. Code weighs it." |
-| 0:35 | E: inside the building's real 3D tour. [1] Concrete; the odds move | "So I go in and look. My report is evidence: capped, never final." |
-| 0:55 | Step out; the horde; HQ proposes RUN or HOLD. Press the key; F | "The agent proposes; I decide. Code rolls the walls against the 1994 Northridge shaking at this block." |
-| 1:10 | Aftershock, dawn, "File the report" | "And the night produced something real." |
-| 1:15 | The auditor: the case file with your report as a person's report, the draft correction, the queue (#6 of 328; #7 already worked) | "Same agent, auditing CoStar's records: it worked case 7 from the data while I ran. **It checks CoStar's records against the city's lists, Vexcel aerials and Matterport tours together: 328 open cases in the queue. Tonight you saw two of them.** The other 326 it works overnight." |
-| 1:50 | Close | "Settle tonight's cases and make it to dawn: every night, real records get checked." |
+| Time | Claim | On screen | Say |
+|---|---|---|---|
+| 0:00 | — | The intro over all of LA: 1,581 buildings, 328 case pillars | The one-liner |
+| 0:10 | **Real CoStar data** | The dive into tonight's district; the HQ panel lists case #6 and #7 of 328 | "Every building and every case is real, from CoStar's kit: 328 places where the records disagree." |
+| 0:20 | **Deep agent** | Enter. The agent's own plan; four squads light up; "HQ looked at the aerial" (the real image); "why HQ chose this check" | "The commander is a LangChain deep agent. It plans, sends four sub-agents in parallel, picks its own evidence and tells you why." |
+| 0:40 | **Real CoStar data** | F to 737 Broadway; E: the building's own 3D tour; W to walk | "CoStar says masonry, the city says concrete. Nobody's been inside. Now I am: this is the building's real scan." |
+| 0:55 | **Feedback enforcement** | Press 1, Concrete. "Your report moved the odds: 66% → 72%" | "My report counts as evidence, capped at 0.35: strong, never final. Code enforces that, not the model." |
+| 1:05 | **Feedback enforcement** | Step out; HQ proposes RUN; press H; hold the door; the walls hold, 76 vs 75 | "The agent proposes, and it waits for me. I held, and the walls held because of what I saw. Brick, and they'd have broken in." |
+| 1:25 | **Feedback enforcement** | Dawn: the agent drafts the correction citing my words; File opens the auditor case with my report in it | "And it reaches the real record: a draft correction citing my words. A human approves it." |
+| 1:45 | — | The auditor queue (328) | "Same agent, all night, every case. Deep agent, real CoStar data, real feedback enforcement." |
+
+**If asked "what's enforced?":**
+- code sets every number (odds, caps, rolls);
+- a person's report is capped at 0.35;
+- the agent's own image reads are capped at 0.2, with a second look;
+- "can't tell" is valid;
+- nothing changes a record without human approval.
+
+**If asked "is it live?":** "The stage run is a recorded replay of the real agent, so it's repeatable. Here's one live case." Then open `/` and ask about a case (about 15 s).
 
 **Why 737 Broadway is the winning card:** it's the only address where all three sponsor layers meet:
 - the CoStar record;

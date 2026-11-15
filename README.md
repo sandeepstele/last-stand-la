@@ -1,15 +1,16 @@
 # Last Stand LA
 
-**Settle tonight's cases and make it to dawn.**
+**A deep-agent game, built on real CoStar data, with real feedback enforcement.**
 
-Last Stand LA is a survival game set on real downtown Los Angeles buildings. Its main character is a **LangChain deep agent**: an AI auditor that works CoStar's real queue of 328 open cases, where a building's records disagree with each other.
+You're the night shift for an AI auditor of CoStar's building records. It works CoStar's real queue of open cases, where a building's records disagree, and sends you into real downtown LA buildings to look. What you report is **enforced feedback**: it changes the AI's case, your survival, and a draft correction to a real record. Every number is set by code, and a human approves every change.
 
-- At nightfall the agent **briefs the night shift**. It picks the open cases inside your blocks and sends you, its eyes on the ground, to look.
-- You walk into the buildings' **real Matterport 3D tours** and report what you see. Your report becomes capped evidence in the **real case**.
-- When the horde comes, the agent proposes **HOLD or RUN** and waits for your call. Code rolls every number against the evidence and the city's 1994 Northridge shaking data.
-- At dawn the agent **drafts tonight's corrections live**, citing your words. "File tonight's reports" opens the same agent as the auditor, on that case.
+| The claim | What it means in the game |
+|---|---|
+| **Deep-agent game** | Your commander is a LangChain **deepagents** agent. It plans the night with its own todos, sends four sub-agents in parallel (records, aerial, interior, city), picks its own evidence and says why, pauses for your HOLD/RUN call, and drafts the corrections at dawn |
+| **Real CoStar data** | 1,581 real LA buildings and 328 real open cases from CoStar's kit. You walk on the Vexcel aerial and into the buildings' own Matterport 3D tours. The city's retrofit orders, permits and the 1994 Northridge ShakeMap are in play too |
+| **Real feedback enforcement** | Your report from inside a building is weighed as evidence: strong, but **capped at 0.35**, so it moves the odds without ever deciding alone. It **decides your survival**: a "concrete" report makes the walls hold, "brick" lets the horde in. At dawn the agent drafts a correction **citing your words**, and "File" opens the real auditor case with your report in it. Code sets every number; nothing changes a record without human approval |
 
-**Track:** Entertainment. **Sponsor data:** CoStar records, Vexcel aerials, Matterport tours, plus LA open data and USGS. Built at HackPrinceton Fall 2026 (Nov 13-15).
+**Track:** Entertainment. **Also:** CoStar "Inside and Out", LangChain "Best use of deepagents". Built at HackPrinceton Fall 2026.
 
 > **For AI agents and new contributors:** this README is the full context. Read it top to bottom, then the linked docs. Section 9 lists the rules you must follow before changing anything.
 

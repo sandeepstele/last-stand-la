@@ -8,28 +8,36 @@ Drafted Sat Nov 14, ~4:00 pm. **Track: Entertainment.** Specials to consider: Co
 **Last Stand LA**
 
 ## Tagline
-**Settle tonight's cases and make it to dawn.**
+**A deep-agent game on real CoStar data, where your feedback is enforced.**
 
 ## Short description
-A survival night on real downtown LA buildings, where your squad commander is an AI auditor. It works CoStar's real queue of building records that disagree, sends you into the buildings' real 3D tours to look, weighs your report as evidence, and asks you to call HOLD or RUN when the horde comes. At dawn, your night has produced real draft corrections.
+You're the night shift for an AI auditor of CoStar's building records. A LangChain deep agent works CoStar's real queue of cases where records disagree, sends you into real LA buildings (their own 3D tours) to look, and enforces your report as evidence: capped, but strong enough to decide whether your walls hold tonight, and cited in the correction it drafts at dawn.
 
 ## Inspiration
-Building records go stale quietly. CoStar's record of a downtown tower says masonry; the city's earthquake-retrofit list says concrete. Nobody has gone to look. We built an AI deep agent that audits those records by checking permits and filings and reading aerial photos itself. Then we asked: what if checking a record was the most exciting thing you did all night?
+Building records go stale quietly. CoStar's record of a downtown tower says masonry; the city's earthquake-retrofit list says concrete. Nobody has gone to look. AI can work a queue of 328 cases like this overnight, but its weak spot is human eyes on the building. So we made the human the player, and made the player's feedback count, within limits code enforces.
 
 ## What it does
-- **The briefing:** at nightfall, the AI commander (a LangChain deep agent) pulls the open cases inside your blocks from CoStar's real queue of **328** cases where records disagree, and writes tonight's plan.
-- **Case #7:** CoStar records a 3-person office in suite 1100, but the suite is listed for lease. You walk into **that suite's real Matterport tour** and report what you see.
-- **Case #6, your fortress:** CoStar says 737 Broadway is masonry; the city's retrofit list says non-ductile concrete. Four squads (sub-agents) check in parallel. The agent **chooses its own evidence** and says why: the city filings, and **a look at the Vexcel aerial itself** (the image pops up on screen). Then you walk into the building's own 3D tour and report the walls.
-- **The night:**
-  - The horde comes. The agent reads it, finds a fallback building, and proposes HOLD or RUN. It waits for you: a human-in-the-loop interrupt.
-  - **Your report decides the outcome:** a "concrete" report makes the walls hold; "brick" means they break in.
-  - Code rolls every number against the evidence and the **1994 Northridge shaking** at that block.
-- **Dawn:** the agent drafts tonight's corrections live, **citing your words**. "File tonight's reports" opens the same agent as the auditor, on that case, with your report in the case file.
+**1. A deep-agent game.** Your commander is a LangChain **deepagents** agent, and you can watch it work:
+- it plans the night from CoStar's real case queue with its own todo list;
+- it sends four sub-agents in parallel (records, aerial, interior, city);
+- it chooses which evidence to check, and says why;
+- it **looks at the aerial photo itself** (the image pops up);
+- it **pauses for your HOLD/RUN decision** (a human-in-the-loop interrupt);
+- it drafts corrections at dawn.
 
-**Also in the game:**
-- the intro flies over all **1,581** LA buildings in CoStar's kit with the **328** open cases lit up;
-- you can walk into **16** real buildings' Matterport interiors and between **10** real scan spots inside the fortress;
-- real Vexcel aerials appear for the **106** buildings that have them.
+**2. Real CoStar data.**
+- The intro flies over **1,581 real LA buildings** with **328 open cases** lit up.
+- Tonight's cases are real: 737 Broadway (CoStar masonry vs the city's concrete list) and suite 1100 at 122 7th St (a 3-person office on record, but the suite is listed for lease).
+- You walk on the Vexcel aerial and into the buildings' own **Matterport 3D tours**, stepping between real scan spots.
+- City retrofit orders, permits and the 1994 Northridge ShakeMap set the stakes.
+
+**3. Real feedback enforcement.**
+- **What you report inside counts as evidence.** It moves the odds (66% → 72%), but it's **capped at 0.35**: strong testimony, never final.
+- **It decides your survival.** A "concrete" report makes the walls hold (76 vs a roll of 75); "brick" lets the horde in.
+- **It reaches the real record.** At dawn the agent drafts a correction **citing your words**, and "File" opens the real auditor case with your report in it.
+- **Code sets every number,** what the agent sees is capped at 0.2 with a second look, and **no record changes without human approval**.
+
+**Side missions** are other real case types from CoStar's queue: is the office on record still there, is it the same building the city listed, and is this roof worth solar. Each is answered by code from the records, and "can't tell yet" is often the honest answer.
 
 ## How we built it
 - **The deep agent:** LangChain **deepagents** on LangGraph.
