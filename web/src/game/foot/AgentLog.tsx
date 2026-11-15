@@ -7,7 +7,7 @@
 import { useEffect, useRef, useState } from "react";
 import { SHORT, plain } from "./copy";
 
-type Math = {
+export type LogMath = {
   start: Record<string, number>; shifts: { check: string; hypothesis: string; shift: number }[];
   sum: Record<string, number>; floor: number; total: number; result: Record<string, number>;
   leader?: string; confidence?: number; label?: string; rule: string;
@@ -15,7 +15,7 @@ type Math = {
 export type LogStep =
   | { n: number; kind: "player"; text: string }
   | { n: number; kind: "call"; actor: string; tool: string; source?: string; args?: Record<string, unknown> }
-  | { n: number; kind: "result"; tool: string; summary: string; math?: Math }
+  | { n: number; kind: "result"; tool: string; summary: string; math?: LogMath }
   | { n: number; kind: "say"; actor: string; text: string };
 
 /** The thread the game is playing (the second screen follows it). */
@@ -60,7 +60,7 @@ const pct = (x: number | undefined) => (typeof x === "number" ? `${Math.round(x 
 const sign = (x: number) => `${x >= 0 ? "+" : "−"}${Math.abs(x).toFixed(2)}`;
 
 /** start → each shift → sum → ÷ total → %, one column per explanation. */
-function MathTable({ m, big }: { m: Math; big: boolean }) {
+export function MathTable({ m, big }: { m: LogMath; big: boolean }) {
   const keys = Object.keys(m.start);
   const cell: React.CSSProperties = { padding: big ? "4px 10px" : "2px 6px", textAlign: "right", whiteSpace: "nowrap" };
   const head: React.CSSProperties = { ...cell, textAlign: "left", color: "#94a3b8", fontWeight: 400 };

@@ -348,9 +348,7 @@ export function FootHud(p: HudProps) {
   const im = interact?.label.match(/^(Optional|Nearby):\s*(.*)$/i);
   const s = p.supplies;
   const supplies = [
-    `Boards ${s.boards}`,
-    s.medkits > 0 ? `Medkits ${s.medkits}` : "",
-    s.flares !== undefined ? `Flares ${s.flares}` : "",
+    s.medkits > 0 ? `Medkits ${s.medkits}` : "", // the desk shift: no boards, no flares
   ].filter(Boolean);
   return (
     <div className={`${styles.root} ${styles.hud}`} data-compact={compact} data-deciding={!!p.decision} data-holding={!!p.barricade}>

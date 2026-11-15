@@ -198,6 +198,8 @@ export type FootCtx = {
   time: number;
   /** 0 = night .. 1 = dawn. The director tweens it; world lighting and the sky read it. */
   dawn: number;
+  /** 0 = no sun .. 1 = full daylight (the desk shift). Blends on top of dawn; the 5 pm quake fades it to night. */
+  day: number;
   stub: boolean;
   /** URL for an image file name served by the backend (/evidence/image/{name}). */
   imageUrl(name: string): string;

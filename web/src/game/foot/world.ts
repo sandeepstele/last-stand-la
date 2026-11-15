@@ -50,6 +50,8 @@ export function createWorld(ctx: FootCtx): System {
   // ================================================================== sky, fog, lights
   const NIGHT = { top: C(0x03060f), mid: C(0x16203a), low: C(0x0c1222), fog: C(0x111a2e), hemiSky: C(0x6878b0), hemiGround: C(0x1c1a1a), moon: C(0xa8bcff) };
   const DAWN = { top: C(0x5b7cc4), mid: C(0xf3a27e), low: C(0xe9b892), fog: C(0xd8b0a0), hemiSky: C(0xd4dcef), hemiGround: C(0x7a6c62), moon: C(0xffd0a6) };
+  // Full daylight (the desk shift, 9 am to 5 pm). ctx.day blends on top of the night/dawn mix: 1 = noon, 0 = no sun.
+  const DAY = { top: C(0x3d7fd6), mid: C(0x9cc6ef), low: C(0xd6e6f4), fog: C(0xc9dbea), hemiSky: C(0xeaf2ff), hemiGround: C(0x8a8478), moon: C(0xfff4e0) };
   const skyU = { uTop: { value: NIGHT.top.clone() }, uMid: { value: NIGHT.mid.clone() }, uLow: { value: NIGHT.low.clone() }, uMoon: { value: new THREE.Vector3(-0.45, 0.55, -0.7).normalize() }, uStars: { value: 1 } };
   const sky = add(
     new THREE.Mesh(
@@ -607,36 +609,38 @@ export function createWorld(ctx: FootCtx): System {
     update(dt) {
       const t = ctx.time;
       const dawn = Math.max(0, Math.min(1, ctx.dawn));
+      const day = Math.max(0, Math.min(1, ctx.day ?? 0));
+      const lit = Math.max(dawn, day); // how much the night is gone (lamps, stars, fog distance)
       const cam = ctx.camera.position;
       sky.position.copy(cam);
 
       // sky + fog + light
-      skyU.uTop.value.copy(NIGHT.top).lerp(DAWN.top, dawn);
-      skyU.uMid.value.copy(NIGHT.mid).lerp(DAWN.mid, dawn);
-      skyU.uLow.value.copy(NIGHT.low).lerp(DAWN.low, dawn);
-      skyU.uStars.value = 1 - dawn;
-      fog.color.copy(NIGHT.fog).lerp(DAWN.fog, dawn);
+      skyU.uTop.value.copy(NIGHT.top).lerp(DAWN.top, dawn).lerp(DAY.top, day);
+      skyU.uMid.value.copy(NIGHT.mid).lerp(DAWN.mid, dawn).lerp(DAY.mid, day);
+      skyU.uLow.value.copy(NIGHT.low).lerp(DAWN.low, dawn).lerp(DAY.low, day);
+      skyU.uStars.value = 1 - lit;
+      fog.color.copy(NIGHT.fog).lerp(DAWN.fog, dawn).lerp(DAY.fog, day);
       (scene.background as THREE.Color).copy(fog.color);
       const lift = Math.max(0, cam.y - 20);
-      fog.near = lerp(40, 160, dawn) + lift * 1.3;
-      fog.far = lerp(220, 900, dawn) + lift * 3.6;
-      hemi.color.copy(NIGHT.hemiSky).lerp(DAWN.hemiSky, dawn);
-      hemi.groundColor.copy(NIGHT.hemiGround).lerp(DAWN.hemiGround, dawn);
-      hemi.intensity = lerp(2.0, 2.4, dawn);
-      moon.color.copy(NIGHT.moon).lerp(DAWN.moon, dawn);
-      moon.intensity = lerp(1.8, 2.6, dawn);
-      moon.position.set(lerp(-160, 320, dawn) + cam.x, lerp(260, 140, dawn), lerp(-220, -60, dawn) + cam.z);
+      fog.near = lerp(40, 160, lit) + lift * 1.3;
+      fog.far = lerp(220, 900, lit) + lift * 3.6 + day * 300;
+      hemi.color.copy(NIGHT.hemiSky).lerp(DAWN.hemiSky, dawn).lerp(DAY.hemiSky, day);
+      hemi.groundColor.copy(NIGHT.hemiGround).lerp(DAWN.hemiGround, dawn).lerp(DAY.hemiGround, day);
+      hemi.intensity = lerp(lerp(2.0, 2.4, dawn), 2.6, day);
+      moon.color.copy(NIGHT.moon).lerp(DAWN.moon, dawn).lerp(DAY.moon, day);
+      moon.intensity = lerp(lerp(1.8, 2.6, dawn), 3.0, day);
+      moon.position.set(lerp(lerp(-160, 320, dawn), 120, day) + cam.x, lerp(lerp(260, 140, dawn), 420, day), lerp(lerp(-220, -60, dawn), -140, day) + cam.z);
       moonTarget.position.set(cam.x, 0, cam.z);
-      for (const m of groundMats) m.emissive.copy(groundTint.night).lerp(groundTint.dawn, dawn * 0.85);
-      night.value = 1 - dawn * 0.9;
+      for (const m of groundMats) m.emissive.copy(groundTint.night).lerp(groundTint.dawn, lit * 0.85);
+      night.value = 1 - lit * 0.9;
 
       // lamps + doors fade at dawn
-      const lampOn = 1 - dawn;
+      const lampOn = 1 - lit;
       poolMat.opacity = 0.32 * lampOn;
       haloMat.opacity = 0.85 * lampOn;
-      headMat.color.setHex(0xffd7a0).lerp(tmpC.setHex(0x5a5d63), dawn);
+      headMat.color.setHex(0xffd7a0).lerp(tmpC.setHex(0x5a5d63), lit);
       for (const l of lampLights) l.intensity = 60 * lampOn;
-      for (const l of doorLights) l.intensity = 40 * (1 - dawn * 0.7);
+      for (const l of doorLights) l.intensity = 40 * (1 - lit * 0.7);
       // name labels: never bigger than LABEL_MAX_PX on screen; hidden during the director's flyover
       const viewH = renderer.domElement.clientHeight || 900;
       const perPx = (2 * Math.tan((ctx.camera.fov * Math.PI) / 360)) / viewH; // world metres per px at 1 m

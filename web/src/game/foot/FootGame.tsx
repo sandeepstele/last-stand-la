@@ -42,6 +42,7 @@ import { createCityMap, type City } from "./cityMap";
 import { createRoofObjects, type RoofSystem } from "./roofObjects";
 import { SuiteSweep, type SweepScore } from "./SuiteSweep";
 import { AgentLogPanel, rememberLogThread } from "./AgentLog";
+import { DeskView, type DeskCase } from "./DeskView";
 import { CHECKPOINT_WORDS, clearSave, threadAlive, useSave, writeSave, type Checkpoint, type SaveV1 } from "./save";
 import { InsideMesh3D } from "./InsideMesh3D";
 import { PauseMenu } from "./PauseMenu";
@@ -279,6 +280,11 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
   // Pause (P / Esc / the button): the sim freezes; agent runs in flight keep streaming.
   const [paused, setPausedState] = useState(false);
   const [logOpen, setLogOpen] = useState(false); // L: the deep agent's live log beside the game
+  const [deskOpen, setDeskOpen] = useState(false); // Tab: Bob's desk (inbox, building cards, map, calculation sheet, radio)
+  const deskOpenRef = useRef(false);
+  useEffect(() => {
+    deskOpenRef.current = deskOpen;
+  }, [deskOpen]);
   // The second screen (/play/log) follows whichever night this tab is playing.
   useEffect(() => {
     if (!game.stub && !agentOff) rememberLogThread(game.threadId);
@@ -345,6 +351,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
       cameraOwner: "director",
       time: 0,
       dawn: 0,
+      day: 1,
       stub: gRef.current.stub,
       imageUrl: evidenceUrl,
       collide: makeCollide(colliders, bounds),
@@ -502,6 +509,13 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA")) return;
       if (e.code === "KeyL" && !e.metaKey && !e.ctrlKey && !e.altKey) setLogOpen((v) => !v);
+      if (e.code === "Tab" && playing()) {
+        e.preventDefault();
+        const open = !deskOpenRef.current;
+        if (open) ctxRef.current?.input.unlock();
+        else ctxRef.current?.input.lock();
+        setDeskOpen(open);
+      }
       if (e.code === "KeyP" || (e.code === "Escape" && !document.pointerLockElement)) {
         if (pausedRef.current) setPaused(false);
         else if (playing()) {
@@ -537,11 +551,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
       const since = ctx.time - stepAt.current;
 
       // The dusk clock: at nightfall the streets fill up (arcade pressure; the agent's wave still waits for your report).
-      if (!nightFallen.current && ctx.time > nightfallAt.current && (s === "office" || s === "suite" || s === "approach" || s === "inside")) {
-        nightFallen.current = true;
-        ctx.bus.emit("horde:ambient", { count: 40 });
-        setBanner({ title: "Night has fallen", sub: "The streets are crawling. Get inside.", tone: "bad" }, 3500);
-      }
+      // (The desk shift has no nightfall horde: it's daylight until the 5 pm quake.)
       const fireDebris = () => {
         if (debrisFired.current) return;
         debrisFired.current = true;
@@ -970,7 +980,8 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
       const m = ctx.mission;
       const st = stepRef.current;
       const left = nightfallAt.current - ctx.time;
-      const timer = st === "office" || st === "suite" || st === "approach" || st === "inside" ? (nightFallen.current ? { label: "Night has fallen", secs: 0, urgent: true } : { label: "Nightfall", secs: Math.max(0, Math.round(left)), urgent: left < 30 }) : null;
+      void left; // the desk shift has no nightfall countdown (the quake comes when you step out of the inspection)
+      const timer = null;
       const next = { flares: m.flares, boards: m.boards, medkits: m.medkits, found: m.found, crates: cratesTotal.current, survivors: m.survivors.map((v) => ({ name: v.name, state: v.state })), barricade: m.barricade.active ? { hp: Math.round(m.barricade.hp), max: m.barricade.max } : null, timer };
       setMhud((c) => (JSON.stringify(c) === JSON.stringify(next) ? c : next));
       const f = feedsRef.current;
@@ -1098,10 +1109,10 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
     ctx.cameraOwner = "player";
     ctx.player.frozen = false;
     ctx.input.lock();
-    ctx.bus.emit("horde:ambient", { count: 14 });
     const door = doorOf(ctx, hero)!;
     const plan = planMission(ctx, hero.pid, door, [ctx.player.x, ctx.player.z]);
     plan.survivors = []; // survivors are the office on record (case #7), spawned only if the agent says they're still there
+    plan.supplies = []; // no crate hunt in the desk shift
     cratesTotal.current = plan.supplies.length;
     ctx.bus.emit("mission:setup", plan);
     ctx.mission.flares = 3;
@@ -1121,6 +1132,10 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
       // The Night Shift: the agent briefs the night from the real queue (fresh thread), then case #7 at the office.
       briefAsked.current = gRef.current.say("Brief the night shift", true);
       gRef.current.select(office.pid);
+      if (!presenter) {
+        ctx.input.unlock();
+        setDeskOpen(true); // the shift starts at the desk: the inbox fills as the agent briefs
+      }
       ctx.bus.emit("world:beacon", { pid: office.pid });
       setStep("office");
       setBanner({ title: "Settle tonight's cases. Make it to dawn.", sub: `HQ is picking tonight's cases from the open-case queue. Start at ${office.label}.`, tone: "info" }, 5500);
@@ -1327,7 +1342,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
     ...(stale.some((c) => c.x > -500 && c.x < 140 && c.z > -300 && c.z < 200) ? [{ id: "stale", kind: "side" as const, text: "Same building? Check the city's list", done: stale.some((c) => staleStamps[c.pid]), progress: `${Object.keys(staleStamps).length} checked` }] : []),
     ...(stale.length ? [{ id: "stale-more", kind: "side" as const, text: `${stale.length} more "same building?" cases across LA, in the auditor`, done: false }] : []),
     ...(solar.length ? [{ id: "solar", kind: "side" as const, text: "Survey roofs for solar", done: Object.keys(solarStamps).length >= solar.length, progress: `${Object.keys(solarStamps).length}/${solar.length}` }] : []),
-    { id: "crates", kind: "side", text: "Find boards for the barricade", done: mhud.crates > 0 && mhud.found >= mhud.crates, progress: `${mhud.found}/${mhud.crates}` },
+
   ];
 
   const decision =
@@ -1491,7 +1506,27 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
           playAgain();
         }} />
       )}
-      {logOpen && !paused && step !== "intro" && step !== "dawn" && !agentOff && !game.stub && <AgentLogPanel threadId={game.threadId} onClose={() => setLogOpen(false)} />}
+      {logOpen && !paused && !deskOpen && step !== "intro" && step !== "dawn" && !agentOff && !game.stub && <AgentLogPanel threadId={game.threadId} onClose={() => setLogOpen(false)} />}
+      {deskOpen && !paused && step !== "intro" && step !== "dawn" && (
+        <DeskView
+          messages={game.messages}
+          threadId={game.stub || agentOff ? null : game.threadId}
+          cases={(brief?.cases ?? []).map((c) => ({ ...c, property_id: String(c.property_id), suite: c.suite ? String(c.suite) : null })) as DeskCase[]}
+          clock="9:00 am"
+          busy={game.isLoading}
+          onClose={() => {
+            setDeskOpen(false);
+            ctxRef.current?.input.lock();
+          }}
+          onVisit={(c) => {
+            setDeskOpen(false);
+            ctxRef.current?.input.lock();
+            const first = !!case7 && suiteTip.sentAt === null && c.property_id !== String(case7.property_id);
+            if (first) setBanner({ title: `Start with case #${case7!.n}`, sub: `The agent briefed suite ${case7!.suite} at ${office?.label ?? "the office"} first. It's right here.`, tone: "info" }, 4500);
+            else setBanner({ title: `Site visit: ${c.label}`, sub: c.suite ? `Go in at the lit door and check suite ${c.suite}.` : "Follow the beacon and go in at the lit door.", tone: "info" }, 4000);
+          }}
+        />
+      )}
       {step === "intro" && city && (
         <div className={footStyles.cityLine}>
           Pillars of light: <b>{city.cases.toLocaleString("en-US")} buildings with open cases</b>, of {city.buildings.toLocaleString("en-US")} in CoStar&apos;s LA records
