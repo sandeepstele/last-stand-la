@@ -132,19 +132,18 @@ export function DawnView({ title, lines, messages, loading, onPlayAgain, score, 
           </section>
         )}
 
-        <section className={styles.found}>
-          <h2>The full case file</h2>
-          {hasCase ? (
-            <>
-              <p>What HQ checked, how it weighed your report, and the draft it leaves for a person to approve.</p>
-              <div className={styles.caseWrap}>
-                <CaseFile messages={messages} loading={loading} />
-              </div>
-            </>
-          ) : (
-            <p className={styles.outcomeEmpty}>{loading ? "HQ is still writing up the case file." : "No case file was opened tonight."}</p>
-          )}
-        </section>
+        {hasCase ? (
+          <details className={styles.caseFile}>
+            <summary>
+              The full case file <span>What HQ checked, how it weighed your report, and the draft it leaves for a person</span>
+            </summary>
+            <div className={styles.caseWrap}>
+              <CaseFile messages={messages} loading={loading} />
+            </div>
+          </details>
+        ) : (
+          <p className={styles.outcomeEmpty}>{loading ? "HQ is still writing up the case file." : "No case file was opened tonight."}</p>
+        )}
 
         <button type="button" className={styles.again} onClick={onPlayAgain}>
           Play again <Keycap k="Enter" />

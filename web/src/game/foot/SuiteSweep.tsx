@@ -75,7 +75,7 @@ export function SuiteSweep({ pid, onScore }: { pid: string; onScore(s: SweepScor
       <h3>
         Case #{s.n} · {cap(suiteName(s.suite))}
       </h3>
-      <p className={styles.sweepWhy}>On record: {plain(s.who)}. The suite is also listed for lease.</p>
+      <p className={styles.sweepWhy}>On record: {plain(s.who)}. It is also listed for lease.</p>
       <ul className={styles.clues}>
         {s.clues.slice(0, 3).map((c) => (
           <li key={c.check}>

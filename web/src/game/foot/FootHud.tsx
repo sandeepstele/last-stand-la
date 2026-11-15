@@ -231,7 +231,7 @@ function BannerView({ banner }: { banner: Banner | null }) {
 
 // ------------------------------------------------------------------ bottom-centre: HOLD / RUN orders
 function Decision({ d, busy }: { d: DecisionView; busy: boolean }) {
-  const sentAction = d.sent ? (/\bRUN\b/.test(d.sent) ? "run" : "hold") : null;
+  const sentAction = d.sent ? (/\brun\b/i.test(d.sent) ? "run" : "hold") : null;
   const order = (which: "hold" | "run", key: string, text: string, disabled = false) => (
     <div
       className={styles.order}
@@ -341,7 +341,7 @@ export function FootHud(p: HudProps) {
   // Night, HOLD and escape: the director's line is the objective (it says what to do this second).
   const compact = !!p.decision || !!p.barricade || !!p.compass.waveSector || /^Run to /.test(p.objective);
   const rest = hints.filter((h) => h !== interact && h !== nail);
-  const main = compact ? p.objective : p.objectives[0]?.text ?? p.objective;
+  const main = p.decision ? p.objectives[0]?.text ?? p.objective : compact ? p.objective : p.objectives[0]?.text ?? p.objective;
   // "Optional: look inside 750 Broadway" -> the word "Optional" stays quiet next to the action.
   const im = interact?.label.match(/^(Optional|Nearby):\s*(.*)$/i);
   const s = p.supplies;

@@ -32,7 +32,7 @@
 .keycap[data-size="sm"] { min-width: 18px; height: 18px; padding: 0 4px; font-size: 11px; border-width: 1px; }
 .keycap[data-tone="amber"] { color: var(--amber); }
 /* REPLAY / synthetic data: small grey words in a corner. */
-.badges { display: inline-flex; gap: 10px; font: 500 12px/1 var(--ui); color: var(--faint); text-shadow: none; }
+.badges { display: inline-flex; gap: 10px; font: 500 12px/1 var(--font-ui), "IBM Plex Sans Condensed", sans-serif; color: rgba(244, 241, 234, 0.5); text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6); }
 .badge { white-space: nowrap; }
 
 /* ------------------------------------------------------------------ INTRO */
@@ -59,7 +59,7 @@
 
 .briefRow { width: min(640px, 100%); transition: opacity 0.6s ease 0.25s; }
 .briefRow[data-show="false"] { opacity: 0; pointer-events: none; }
-.brief { min-height: 196px; padding: 18px 22px 20px; border-radius: 3px; background: var(--panel); display: flex; flex-direction: column; gap: 10px; animation: cardIn 0.45s ease both; }
+.brief { min-height: 160px; padding: 18px 22px 20px; border-radius: 3px; background: var(--panel); display: flex; flex-direction: column; gap: 10px; animation: cardIn 0.45s ease both; }
 @keyframes cardIn { from { opacity: 0; transform: translateY(6px); } }
 .briefHead { font: 500 13px/1 var(--ui); color: var(--faint); }
 .brief h2 { margin: 0; font: 700 clamp(24px, 2.2vw, 30px)/1.12 var(--ui); color: var(--ink); }
@@ -85,8 +85,9 @@
 @keyframes dotFill { from { transform: scaleX(0); } }
 .skipHint { font-size: 13px; color: var(--faint); display: inline-flex; align-items: center; gap: 6px; }
 .credits { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
-.cityLine { position: absolute; left: 24px; bottom: 64px; z-index: 45; pointer-events: none; font: 500 14px/1.4 var(--ui); color: var(--muted); text-shadow: var(--shadow); }
-.cityLine b { color: var(--ink); font-weight: 600; }
+.cityLine { position: absolute; left: 24px; bottom: 64px; z-index: 45; pointer-events: none; font: 500 14px/1.4 var(--font-ui), "IBM Plex Sans Condensed", sans-serif;
+  color: rgba(244, 241, 234, 0.7); text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9), 0 0 12px rgba(0, 0, 0, 0.55); }
+.cityLine b { color: #f4f1ea; font-weight: 600; }
 
 /* ------------------------------------------------------------------ HUD */
 .hud { --feedsW: 568px; --slotL: 256px; pointer-events: none; z-index: 3; text-shadow: var(--shadow); }
@@ -354,6 +355,10 @@
 .found { display: flex; flex-direction: column; gap: 8px; }
 .found h2 { margin: 0; font: 600 22px/1.25 var(--ui); color: #fff; }
 .found > p { margin: 0; font-size: 16px; color: var(--muted); }
+.caseFile { animation: fadeUp 0.8s 0.8s ease both; }
+.caseFile summary { cursor: pointer; font: 600 20px/1.3 var(--ui); color: #fff; list-style-position: outside; }
+.caseFile summary span { display: block; font-size: 15px; font-weight: 400; color: var(--muted); }
+.caseFile[open] summary { margin-bottom: 10px; }
 .caseWrap { border-radius: 3px; overflow: hidden; }
 /* The dawn screen files the report itself; hide the case file's own approve/reject buttons here (the auditor keeps them). */
 .caseWrap button { display: none !important; }
@@ -390,12 +395,26 @@
 .pauseBtns { display: flex; gap: 10px; margin-top: 18px; }
 .btnMain { padding: 10px 20px; border: 0; border-radius: 3px; background: var(--amber); color: #17130d; font: 700 16px/1 var(--ui); cursor: pointer; }
 .btnQuiet { padding: 10px 20px; border: 0; border-radius: 3px; background: rgba(255, 255, 255, 0.1); color: var(--ink); font: 600 16px/1 var(--ui); cursor: pointer; }
+/* the pause button: two drawn bars (the glyph in the markup is hidden) */
 .pauseBtn { position: absolute; top: 14px; z-index: 41; width: 30px; height: 30px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 3px;
-  background: rgba(12, 12, 13, 0.5); color: var(--muted); font: 600 12px/1 var(--ui); letter-spacing: -1px; cursor: pointer; }
-.pauseBtn:hover { color: var(--ink); background: rgba(12, 12, 13, 0.7); }
+  background: rgba(12, 12, 13, 0.45); color: rgba(244, 241, 234, 0.7); font-size: 0; cursor: pointer; }
+.pauseBtn::before { content: ""; width: 4px; height: 12px; border-left: 3px solid currentColor; border-right: 3px solid currentColor; }
+.pauseBtn:hover { color: #f4f1ea; background: rgba(12, 12, 13, 0.7); }
 
-/* ------------------------------------------------------------------ the side mission: sweep the suites */
-.sweep { position: absolute; inset: 16px 16px auto auto; width: 360px; z-index: 37; text-shadow: none; padding: 14px 16px 12px; border-radius: 3px; background: var(--panel-strong); pointer-events: auto; }
+/* ------------------------------------------------------------------ side missions: sweep the suites, solar roof, same building? */
+.sweep, .side { position: absolute; width: 360px; text-shadow: none; padding: 14px 16px 12px; border-radius: 3px; background: var(--panel-strong); pointer-events: auto; }
+.sweep { inset: 52px 16px auto auto; z-index: 37; max-height: calc(100vh - 68px); overflow: auto; }
+/* on the street: under the objective, clear of HQ (right) and the camera views */
+.side { inset: 132px auto auto 16px; z-index: 45; max-height: calc(100vh - 132px - 110px); overflow: auto; }
+.sideImg { display: block; width: 100%; max-height: 150px; object-fit: cover; margin-top: 8px; border-radius: 2px; }
+.facts { margin: 8px 0 0; display: grid; grid-template-columns: 1fr 1fr; gap: 6px 14px; }
+.facts div { display: flex; flex-direction: column; }
+.facts dt { font-size: 13px; color: var(--muted); }
+.facts dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
+.stamps[data-n="3"] { grid-template-columns: repeat(3, 1fr); }
+.sweepNav button { display: inline-flex; align-items: center; gap: 6px; }
+/* inside a building: HQ's strip sits top-centre (the caption is top-left, side missions top-right) */
+.hqInside { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); width: 300px; z-index: 30; pointer-events: none; }
 .sweepHead { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font: 500 13px/1.2 var(--ui); color: var(--muted); }
 .sweepHead b { color: var(--amber); font-weight: 600; }
 .sweep h3 { margin: 6px 0 2px; font: 600 19px/1.2 var(--ui); color: var(--ink); }
@@ -417,7 +436,7 @@
 @media (max-height: 760px) {
   .letterbox { height: 40px; }
   .stage { gap: 14px; }
-  .brief { min-height: 186px; padding: 14px 18px 16px; }
+  .brief { min-height: 150px; padding: 14px 18px 16px; }
   .brief p { font-size: 16px; }
   .banner { top: 19%; }
 }
