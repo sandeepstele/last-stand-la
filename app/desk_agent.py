@@ -178,12 +178,23 @@ async def tag_building(pid: str, tag: str, runtime: ToolRuntime) -> dict:
     return await asyncio.to_thread(desk.tag, pid, tag, checks, notes)
 
 
+def _result(content) -> dict | None:
+    """A tool result as a dict, also when the interrupt prefixed it ("a human reviewer replaced this tool call ...
+    Tool response: {...}"), which is what an edited tag looks like."""
+    from app.agentlog import _json
+
+    d = _payload(content)
+    if d is None:
+        d = _json(content)
+    return d if isinstance(d, dict) else None
+
+
 def _tags(runtime: ToolRuntime) -> list[dict]:
     """The tags Bob confirmed on this thread (tag_building results, latest per building)."""
     out: dict[str, dict] = {}
     for m in (getattr(runtime, "state", None) or {}).get("messages", []):
         if isinstance(m, ToolMessage) and m.name == "tag_building":
-            d = _payload(m.content)
+            d = _result(m.content)
             if d and d.get("pid") and not d.get("error"):
                 out[str(d["pid"])] = d
     return list(out.values())
@@ -193,7 +204,7 @@ def _drafts(runtime: ToolRuntime) -> list[dict]:
     out = []
     for m in (getattr(runtime, "state", None) or {}).get("messages", []):
         if isinstance(m, ToolMessage) and m.name == "draft_correction":
-            d = _payload(m.content)
+            d = _result(m.content)
             if d and not d.get("error"):
                 out.append(d)
     return out
@@ -222,7 +233,7 @@ async def _log_text(runtime: ToolRuntime) -> str:
 def _shift_facts(runtime: ToolRuntime) -> list[str]:
     lines = []
     for m in (getattr(runtime, "state", None) or {}).get("messages", []):
-        d = _payload(m.content) if isinstance(m, ToolMessage) and m.name == "shift_report" else None
+        d = _result(m.content) if isinstance(m, ToolMessage) and m.name == "shift_report" else None
         if d:
             lines = [f"- {r['label']}: tag={r['tag']}; aftershock={r['outcome']}; people_safe={r['people_safe']}"
                      for r in d.get("buildings") or []]

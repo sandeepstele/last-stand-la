@@ -35,3 +35,19 @@ def test_fema_and_hazus_classes():
     assert desk._hazus_class("C1", 9, 1913) == ("C1M", "pre")
     assert desk._hazus_class("URM", 9, 1960) == ("URMM", "low")
     assert desk._hazus_class("C1", 2, 1980) == ("C1L", "high")
+
+
+def test_edited_tag_result_is_read_past_the_reviewer_note(monkeypatch):
+    import threading
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "dummy-key-for-compile-only")
+    with monkeypatch.context() as m:
+        m.setattr(threading.Thread, "start", lambda self: None)
+        from app import desk_agent
+    from types import SimpleNamespace
+
+    from langchain_core.messages import ToolMessage
+    edited = ('Note: a human reviewer replaced this tool call before it ran. ...\n\nTool response:\n'
+              '{"pid": "123", "tag": "red", "suggested": "yellow"}')
+    rt = SimpleNamespace(state={"messages": [ToolMessage(content=edited, name="tag_building", tool_call_id="1")]})
+    assert desk_agent._tags(rt) == [{"pid": "123", "tag": "red", "suggested": "yellow"}]
