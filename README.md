@@ -10,7 +10,7 @@ You're **Bob**, a building officer at the city of LA, for **four days**: one shi
 | **Real CoStar data** | All 1,581 LA buildings in CoStar's kit, screened in code on the city map; CoStar's real open-case queue (328 cases; 156 in LA). Each building card lists every source on its own line (CoStar record, Vexcel aerial, Matterport 3D scan, LA retrofit lists, permits, the 1994 Northridge ShakeMap) and glows where two sources disagree |
 | **Real feedback enforcement** | What Bob reports from a site visit is weighed as evidence: strong, **capped at 0.35**, never final. At 737 Broadway the report moves the walls from 66% to 73% concrete (with the 3D-scan read), which moves the screening, the proposed tag and the people at stake. At dawn the agent drafts a correction **citing Bob's words**, the critic reviews it, and "File" opens the real auditor case. Code sets every number; nothing changes a record without human approval |
 
-**The human-feedback loop:** Bob's report is capped evidence; his approve/override is graded at dawn (by the simulated aftershock on Day 1, by the building's own odds on Days 2 to 4); the override and its outcome go into the shift log, and the next shift's first line names the correction (the first shift after a reset opens from a seeded previous shift (601 Broadway); after that, each shift opens with what Bob actually corrected last time.); every decision and every 👍/👎 is saved as preference data in the RLHF/DPO format (JSONL export). **No weights are trained;** the agent learns in context.
+**The human-feedback loop:** Bob's report is capped evidence; his approve/override is graded at dawn (by the simulated aftershock on Day 1, by the building's own odds on Days 2 to 4); the override and its outcome go into the shift log, and the next shift's first line names the correction (Day 1 opens from a seeded previous shift (601 Broadway); each later day opens with what Bob corrected the day before.); every decision and every 👍/👎 is saved as preference data in the RLHF/DPO format (JSONL export). **No weights are trained;** the agent learns in context.
 
 **Track:** Entertainment. **Also:** CoStar "Inside and Out", LangChain "Best use of deepagents". Built at HackPrinceton Fall 2026.
 
@@ -41,9 +41,9 @@ You're **Bob**, a building officer at the city of LA, for **four days**: one shi
 | Day | Building (office suite) | Records disagree on | People | Dawn |
 |---|---|---|---|---|
 | 1 | 737 Broadway (suite 1100, 122 7th St) | Masonry on the CoStar record vs concrete on the city's list | 251 | Simulated aftershock: complete damage, red right |
-| 2 | 621 Spring St (suite 404, 724 Spring St) | Steel vs concrete | 106 | Expected outcome |
-| 3 | 730 Los Angeles St (suite 1400, 122 7th St) | Masonry vs concrete | 201 | Expected outcome |
-| 4 | 620 Main St (a suite at 724 Spring St) | Masonry vs concrete | 40 | Expected outcome |
+| 2 | 730 Los Angeles St (suite 404, 724 Spring St) | Masonry vs concrete | 201 | Expected outcome |
+| 3 | 620 Main St (suite 1400, 122 7th St) | Masonry vs concrete | 40 | Expected outcome |
+| 4 | 621 Spring St (a suite at 724 Spring St) | Steel vs concrete | 106 | Expected outcome |
 
 On records alone the code suggests red for all four.
 

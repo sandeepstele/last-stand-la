@@ -16,7 +16,7 @@ One pitch for the judging table and the video voice-over (the shots are in VIDEO
 | 1:20–1:42 | Dawn: complete damage; RED kept 251 of 251 safe; "Rescue: 2 of 2"; **Agent vs Bob**: "Bob was right; the agent was wrong" | "Complete damage. Red kept all 251 safe; yellow would have left 25 inside. I overrode the agent and I was right, and that goes into its log for tomorrow. Every call is also saved as a preference pair, the format RLHF uses. We didn't train anything tonight; we collect it." |
 | 1:42–2:00 | `/play/log` scrolling; File the reports → the auditor case with Bob's report | "Every number is published maths in code: FEMA screening, HAZUS damage, ATC-20 placards. Tomorrow is a different building, and the agent opens it with today's correction. Bob's Desk: a deep agent does the work, you correct it, the aftershock grades you both." |
 
-**The memory line on stage:** The first shift after a reset opens from a seeded previous shift (601 Broadway); after that, each shift opens with what Bob actually corrected last time. So the opening line in the pitch is the seeded one; say "what it learned last shift", not "from me today".
+**The memory line on stage:** Day 1 opens from a seeded previous shift (601 Broadway); each later day opens with what Bob corrected the day before. So the opening line in the pitch is the seeded one; say "what it learned last shift", not "from me today".
 
 **After the pitch: the next days (at the table, not in the 2-minute cut).** At dawn, **Next day (k of 4)** (Enter) keeps the history; **New game** resets it. Day 2's first radio line names the correction the judge just made on Day 1, which is the best live proof of the memory. **Days 2 to 4 have no aftershock** (no clock, no rescue): dawn shows the expected outcome of Bob's tag on the building's own odds, and whether it matches the code's suggestion. After Day 4, the **career summary** totals:
 - tags right (Day 1 against the aftershock, Days 2 to 4 against the screening);
@@ -39,17 +39,17 @@ Every judge then starts on Day 1 from the seeded line.
 | Day | Building (office suite) | Records disagree on | People | Dawn |
 |---|---|---|---|---|
 | 1 | 737 Broadway (suite 1100, 122 7th St) | Masonry vs concrete | 251 | Simulated aftershock |
-| 2 | 621 Spring St (suite 404, 724 Spring St) | Steel vs concrete | 106 | Expected outcome |
-| 3 | 730 Los Angeles St (suite 1400, 122 7th St) | Masonry vs concrete | 201 | Expected outcome |
-| 4 | 620 Main St (a suite at 724 Spring St) | Masonry vs concrete | 40 | Expected outcome |
+| 2 | 730 Los Angeles St (suite 404, 724 Spring St) | Masonry vs concrete | 201 | Expected outcome |
+| 3 | 620 Main St (suite 1400, 122 7th St) | Masonry vs concrete | 40 | Expected outcome |
+| 4 | 621 Spring St (a suite at 724 Spring St) | Steel vs concrete | 106 | Expected outcome |
 
-If a judge plays Day 2, a good line: "red on 621 Spring when the code says yellow keeps everyone out of harm but displaces about 26 people. That's the trade-off a real officer makes."
+If a judge reaches Day 4, a good line: "red on 621 Spring when the code says yellow keeps everyone out of harm but displaces about 26 people. That's the trade-off a real officer makes."
 
 **Read the numbers off the screen** (66%, 73%, 251, 25, YELLOW → RED). If the recording differs, say what the screen shows. If Bob doesn't get Maya and Luis out, the aftershock still hits at 0:45 (dawn waits up to 75 s after the quake); say "I didn't make it to them" and move on.
 
 **Simulated:** say "simulated quake" and "game outcome" at least once each. The video's lower third carries "Simulated post-quake placards. Game outcomes, not engineering assessments."
 
-**Ops:** one client at a time on the agent server (a second tab or a script starting a shift clears the first one's notes). A reload mid-shift shows "Saved shift … Enter continues it". New game (or Play again) between judges, not Next day. **Replay by day:** Day 1 is the strict, recorded stage. Days 2 to 4 run in **fill** mode: the first play of a day calls the live model (about 15 s per inspect step) and records it, so later plays of the same path replay fast. Before pressing Next day for a judge, say "this day is live, so the agent takes a few seconds per step". Better still, play Days 2 to 4 once before judging so their usual paths are already recorded. The night game (Last Stand LA) is the fallback: `NEXT_PUBLIC_GAME_GRAPH=laststand`; its script is below.
+**Ops:** one client at a time on the agent server (a second tab or a script starting a shift clears the first one's notes). A reload mid-shift shows "Saved shift … Enter continues it". New game (or Play again) between judges, not Next day. **Replay by day:** Day 1 replays from the recording; any step that isn't recorded goes to the live model and is saved. Days 2 to 4 are live the first time (about 15 s per inspect step), and that run is saved, so later plays of the same path replay fast. Before pressing Next day for a judge, say "this day is live, so the agent takes a few seconds per step". Better still, play Days 2 to 4 once before judging so their usual paths are already recorded. The night game (Last Stand LA) is the fallback: `NEXT_PUBLIC_GAME_GRAPH=laststand`; its script is below.
 
 ## If a judge asks
 
@@ -62,7 +62,7 @@ If a judge plays Day 2, a good line: "red on 621 Spring when the code says yello
   - ATC-20 posting categories; yellow at half the red threshold, from ATC-138.
 - **"Why does better evidence still end in red?"** "Settling masonry versus concrete matters less than the building's age and the shaking. The evidence made the record more accurate, and the odds still said 'old building, strong shaking.'"
 - **"Isn't yellow always safest?"** "Not any more. Yellow allows limited entry, so 10% are exposed if the damage is serious, and 25% are displaced if it's minor. Both are labelled game shares."
-- **"Is the agent learning, is this RLHF?"** "It learns in context: my override and how it turned out go into its shift log, and the next shift opens with that lesson. (On stage we start from a reset, so the first shift opens from a seeded previous shift; play a second shift and it opens with your real correction.) Every decision and every thumbs up or down is also saved as preference pairs in the format RLHF and DPO use. We didn't train any weights tonight; we collect the data."
+- **"Is the agent learning, is this RLHF?"** "It learns in context: my override and how it turned out go into its shift log, and the next shift opens with that lesson. (Day 1 opens from a seeded previous shift; play Day 2 and it opens with your real Day 1 correction.) Every decision and every thumbs up or down is also saved as preference pairs in the format RLHF and DPO use. We didn't train any weights tonight; we collect the data."
 - **"Is there more than one day?"** "Yes, four. Each day is a different real building in the district, and the agent carries its log forward, so it opens Day 2 with your Day 1 call. The aftershock is Day 1 only; on later days the code grades your tag on the building's own odds. After Day 4 you get a career summary: people kept safe, tags right, and you versus the agent. Same honesty: it's in-context memory; no weights change." Offer to press Next day.
 - **"Is it live?"** "The stage run is a recorded replay of the real agent, so it's repeatable. The data, tools and images are live." Offer one live building card from the map.
 - **"What about the whole city?"** "All 1,581 LA buildings in the kit, screened from records alone: 918 green, 446 yellow, 217 red suggestions. Those are odds for a commercial sample, not a prediction."
