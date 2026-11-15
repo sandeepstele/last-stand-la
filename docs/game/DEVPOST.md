@@ -1,4 +1,100 @@
-# Devpost draft + video shot list: Last Stand LA
+# Devpost draft + video shot list: Bob's Shift
+
+Rewritten Sat Nov 14, ~11:30 pm, after the pivot from the night game. **Track: Entertainment.** Specials to consider: CoStar "Inside and Out", LangChain "Best use of deepagents". Items marked **[TEAM]** need a human.
+
+---
+
+## Title
+**Bob's Shift** [TEAM: confirm the name]
+
+## Tagline
+**A deep-agent game on real CoStar data, where your feedback is enforced.**
+
+## Short description
+You're Bob, a building officer at the city of LA on retrofit-deadline day. Real open cases from CoStar's queue land on your desk. Your analyst is a LangChain deep agent: its squads pull every building's data, code weighs the evidence, and you go see for yourself. At 5:02 pm a simulated quake hits; the agent screens each building and proposes a placard, and you post it. At dawn a simulated aftershock tests your tags: people kept safe, records fixed.
+
+## Inspiration
+Building records go stale quietly. CoStar's record of a downtown tower says masonry; the city's earthquake-retrofit list says concrete. Nobody has gone to look. AI can work a queue of 328 such cases (156 in LA), but its weak spot is human eyes on the building, and the person who has to make the call. So we made that person the player: a city building officer, with an AI analyst whose numbers are all computed in code.
+
+## What it does
+**1. A deep-agent game.** Bob's analyst is a LangChain **deepagents** agent you can watch work:
+- it plans the shift from CoStar's real queue;
+- it sends four squads in parallel (records, aerial, interior, city);
+- it chooses its evidence and says why, and **looks at the aerial photo itself**;
+- after the quake it screens the building and **proposes a placard, then pauses for Bob's call** (a human-in-the-loop interrupt);
+- at dawn it drafts corrections, and **a second agent (the critic) reviews each one**.
+- Judges can follow every step: the desk's calculation sheet, the **L** log beside the game, and `/play/log` on a second screen.
+
+**2. Real CoStar data.**
+- **Bob's desk** shows a live card per building, one line per source (CoStar record, Vexcel aerial, Matterport scan, LA retrofit lists, permits, the 1994 Northridge ShakeMap), with the fields where **two sources disagree glowing amber**.
+- **The city map screens all 1,581 LA buildings** in CoStar's kit, in code, ranked by people at risk; click any one for its card (Vexcel pulled live if not cached).
+- Site visits walk into the buildings' own **Matterport 3D tours**.
+
+**3. Real feedback enforcement.**
+- **What Bob reports on a site visit is evidence:** with the 3D-scan read it moves 737 Broadway from 66% to 73% concrete, **capped at 0.35**, never final.
+- **It changes the decision:** the walls odds feed the screening score, the chance of serious damage, the people at stake and the tag the code suggests.
+- **It reaches the real record:** the dawn draft cites Bob's words, the critic reviews it, and "File" opens the real auditor case with his report in it.
+- **Code sets every number**; no record changes without human approval.
+
+**The numbers behind a placard** (all code, cited): a FEMA P-154-style rapid screening score per material, weighted by today's odds; people inside from IBC occupant loads and HAZUS time-of-day shares (shown as an estimated range); ATC-20-style placards (green = safe to occupy, yellow = limited entry, red = unsafe). **Placards, the quake and the aftershock are simulated: game outcome, not an engineering assessment.**
+
+## How we built it
+- **The deep agent:** LangChain **deepagents** on LangGraph (graph `desk`): planning, four parallel sub-agents, case tools (open a case, choose checks with code-computed statistics, weigh the evidence), the desk tools (`building_card`, `screen_building`, `triage`, `tag_building` as an interrupt, `shift_report`), a critic sub-agent, and a small shift log it reads the next morning.
+- **Rule: the agent makes the calls, code does the maths, Bob decides.** The proposed tag is pinned in code to the screening's suggestion; vision effects are capped at 0.2 with a second look; a person's report at 0.35.
+- **Models:** Gemini on Vertex AI. A strict replay mode records model answers so the stage demo is repeatable; data, tools and images stay live.
+- **The game:** Next.js, React and three.js; a Vexcel aerial mosaic for the ground; about 190 real building outlines with heights (OpenStreetMap, LA County); a day-to-night sky; Matterport tours and an untextured 3D scan inside; a save/continue that reattaches the agent's thread.
+- **Data:** the CoStar hackathon kit (records, tenants, listings), Vexcel (aerials, obliques), Matterport (3D tours), LA open data (seismic-retrofit orders, permits), USGS ShakeMap.
+
+## Challenges
+- **We pivoted at 9 pm** from a zombie night game to Bob's office, because the user wanted a real mission the agent must calculate. The engine, the agent tools and the data carried over; the horde didn't.
+- **Making the AI the main character:** its cards, maths and proposals are on screen, not in a chat box.
+- **Honesty under game pressure:** records "disagree", never "wrong"; "unfinished" retrofit ≠ non-compliant; every placard labelled simulated; no colour before the quake (the agent can't pre-judge a building from records alone).
+- **Making yellow cost something:** an early version made yellow a free win; limited entry now exposes people under serious damage, and dawn shows what each tag would have done on average.
+- **A live demo with an AI:** strict replay, exact message contracts, one client at a time, and a reset between judges.
+
+## Accomplishments
+- A player's report from inside a real building becomes **capped evidence in a real case**, changes the placard decision, and lands in a reviewed draft correction.
+- The same agent runs as both the game's analyst and a working records auditor (328 open cases).
+
+## What we learned
+**[TEAM: 2–3 honest sentences.]**
+
+## What's next
+- More case types on the desk (stale city-list entries with before/after aerials; ghost tenants across a whole building).
+- A calibration set so evidence weights are learned, not hand-set.
+- Multi-building shifts after the quake: triage order as a puzzle.
+
+## Built with
+langchain, deepagents, langgraph, python, gemini, vertex-ai, next.js, react, three.js, costar, vexcel, matterport, openstreetmap, usgs, la-open-data
+
+## Honesty notes (keep on Devpost)
+- Licensed CoStar, Vexcel and Matterport data is not in the repo; it is matched locally.
+- The quake, placards and aftershock are simulated game events; the screening uses published methods (FEMA P-154, ATC-20, HAZUS occupancy) but is not an engineering assessment.
+- **[TEAM: confirm with CoStar whether real addresses may appear in screenshots and the video.]**
+
+---
+
+# The 2-minute video shot list
+
+Record on the production build (`npm run build && npm start`) against strict replay. Reset first, use `?demo=1`, F to skip walks, Tab for the desk.
+
+| # | Time | Shot | Voice-over |
+|---|---|---|---|
+| 1 | 0:00–0:10 | Intro dive over all of LA; title "BOB'S SHIFT" | "I'm Bob. LA building office, retrofit-deadline day. Real buildings, from CoStar's data." |
+| 2 | 0:10–0:28 | The desk: the inbox fills; cards fill line by line, each naming its source; the masonry-vs-concrete amber box; the city map | "My analyst is a deep agent. Four squads pull every building's data, and code weighs it. Here the records disagree." |
+| 3 | 0:28–0:45 | Site visit: 737 Broadway's own 3D tour; press 1, concrete; the calc sheet 66% → 73% | "So I go look. My report is evidence: capped, never final." |
+| 4 | 0:45–1:00 | Step out: "Simulated quake at 5:02 pm"; day to night; HQ proposes YELLOW, "code suggests YELLOW" | "A simulated quake. The agent screens the building and proposes a placard, and waits for me." |
+| 5 | 1:00–1:10 | Press 3: RED | "251 people inside, the records still disagree. Red." |
+| 6 | 1:10–1:30 | Dawn shift report: complete damage, RED was right, 251 of 251 safe, the "on average" row; the critic's review on the drafts | "The aftershock tests my tags. Every number is code, and a second agent checked the drafts." |
+| 7 | 1:30–1:45 | File → the auditor case with my report | "Same agent, as CoStar's auditor. Nothing changes a record without a human." |
+| 8 | 1:45–2:00 | `/play/log` step list scrolling; title card | "Every step on the record. Bob's Shift." |
+
+**Capture tips:** 1920×1080 at 60 fps; V mutes in-game sound; hide the cursor; never show `?stub=1` or `agent=off`. **[TEAM: no street addresses unless CoStar OKs it.]**
+
+---
+
+# Appendix: the night game's Devpost draft (Last Stand LA, fallback)
+
 
 Drafted Sat Nov 14, ~4:00 pm. **Track: Entertainment.** Specials to consider: CoStar "Inside and Out", LangChain "Best use of deepagents". Items marked **[TEAM]** need a human.
 
