@@ -204,6 +204,29 @@ async def game_mesh(request: Request) -> Response:
     return Response(data, media_type="text/plain", headers={"cache-control": "private, max-age=3600"})
 
 
+THREAD = re.compile(r"^[0-9a-f-]{36}$")
+
+
+async def game_log(request: Request) -> JSONResponse:
+    # GET /game/log/{thread_id}: a judge-readable log of one night (or auditor run): who acted, which data it pulled,
+    # and the arithmetic behind each verdict. Read-only; built from the thread's own messages.
+    import httpx
+
+    from app import agentlog
+
+    tid = request.path_params["thread_id"]
+    if not THREAD.match(tid):
+        return JSONResponse({"error": "bad thread id"}, status_code=404)
+    port = request.url.port or 2024
+    async with httpx.AsyncClient(timeout=20) as c:
+        r = await c.get(f"http://127.0.0.1:{port}/threads/{tid}/state")
+    if r.status_code != 200:
+        return JSONResponse({"error": "no such thread"}, status_code=404)
+    msgs = ((r.json() or {}).get("values") or {}).get("messages") or []
+    steps = await asyncio.to_thread(agentlog.build, msgs)
+    return JSONResponse({"thread_id": tid, "steps": steps, "count": len(steps)})
+
+
 async def game_stale(request: Request) -> JSONResponse:
     from app import fortress
 
@@ -324,6 +347,7 @@ app = Starlette(
         Route("/game/suites/{pid}", game_suites, methods=["GET"]),
         Route("/game/solar", game_solar, methods=["GET"]),
         Route("/game/stale", game_stale, methods=["GET"]),
+        Route("/game/log/{thread_id}", game_log, methods=["GET"]),
         Route("/game/mesh/{pid}", game_mesh, methods=["GET"]),
         Route("/game/dossier/{pid}", game_dossier, methods=["GET"]),
         Route("/game/resolve", game_resolve, methods=["POST"]),
