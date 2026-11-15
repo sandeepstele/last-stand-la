@@ -1,4 +1,30 @@
-# Last Stand LA: demo script and ops
+# Demo: Bob's Shift (the 2-minute pitch)
+
+Run `?demo=1` on strict replay (`/play?mode=foot&demo=1`), reset first (Play again does it). Press **F** to skip the walks, **Tab** for the desk. Open `/play/log` on a second screen facing the judges. Never use `agent=off` or `stub=1` on stage.
+
+| Time | Claim | On screen | Say |
+|---|---|---|---|
+| 0:00 | Hook | Intro dive over all of LA | "I'm Bob. I work at LA's building office, and it's retrofit-deadline day. These are real buildings, from CoStar's data." |
+| 0:15 | **Deep agent** | Enter → the desk opens: the inbox fills with real open cases, the cards fill line by line, each line naming its source | "My analyst is a deep agent. It reads CoStar's real queue, sends four squads in parallel, and every line it brings back says where it came from." |
+| 0:35 | **Real CoStar data** | The 737 Broadway card: the amber box "CoStar record says masonry · LA retrofit list says concrete"; the city map, all 1,581 buildings screened in code | "The records disagree. CoStar says masonry, the city says concrete. Nobody's been inside. The map is every LA building in the kit, ranked by people at risk, in code." |
+| 0:50 | **Feedback enforcement** | Site visit (F, E): the building's own 3D tour. Press **1**, concrete. The calc sheet: 66% → **73%** | "So I go and look. My report is evidence: it moves the odds, capped at 0.35, never final. Code enforces that, not the model." |
+| 1:10 | The quake | Step out: **"Simulated quake at 5:02 pm"**; day turns to night. HQ proposes **YELLOW**; "code suggests YELLOW"; the strip shows score, damage odds, people inside at 5 pm | "A simulated quake. The agent screens the building and proposes a placard, and it waits for me." |
+| 1:25 | **My call** | Press **3**: RED (override) | "The records still disagree and 251 people are inside. I post red." |
+| 1:35 | Dawn | The shift report: the aftershock did complete damage; RED was the right tag; **251 of 251 kept safe**; "on average, each tag would have…"; the critic's review on each draft | "The aftershock tests my tags. Every number here is code. And the agent drafted the correction citing what I saw, and a second agent checked it." |
+| 1:50 | Close | File the reports → the auditor case with my report in it | "One engine, two doors: the game and the real auditor. Nothing changes a record without a human." |
+
+**If you approve HQ's YELLOW instead** (press 2): the dawn report shows 226 safe, 25 exposed, about 5 hurt, and "wrong tag". That's an honest way to show the stakes, but the override to RED is the stronger moment. Decide before the video.
+
+**Numbers (strict replay, recorded 11 pm):** walls 66% → 73% concrete; 737 Broadway 251 people at stake (150–501 inside by day, an estimate); tags and aftershock are simulated. Re-check the % on screen before quoting.
+
+**If asked what's enforced:** the report cap (0.35), the vision cap (0.2), the screening score and the tag the code suggests, people at stake, the aftershock roll; the model picks checks and proposes, code computes, Bob decides, a human approves any record change.
+
+**Ops:** one client at a time on the agent server (a second tab or script starting a shift clears the first one's notes). Play again between judges. The night game (Last Stand LA) is the fallback: set `NEXT_PUBLIC_GAME_GRAPH=laststand`; its script is below.
+
+---
+
+# Appendix: Last Stand LA (the night game, fallback)
+
 
 ## The 2-minute pitch: a deep-agent game, real CoStar data, real feedback enforcement
 

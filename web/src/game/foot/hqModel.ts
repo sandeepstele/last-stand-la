@@ -192,7 +192,7 @@ type NightCase = { n?: number; case?: string; property_id?: unknown; suite?: unk
 type NightCases = { total?: number; cases?: NightCase[] };
 
 const VISION = new Set(["look_from_above", "compare_captures", "suite_tour"]);
-const PRIORITY = ["commit_plan", "draft_correction", "task", "check_evidence", "weigh_case", "record_note", "open_case", "night_cases",
+const PRIORITY = ["tag_building", "shift_report", "screen_building", "building_card", "triage", "log_shift", "commit_plan", "draft_correction", "task", "check_evidence", "weigh_case", "record_note", "open_case", "night_cases",
   "find_fallback", "horde_status", "fortress_dossier", "log_night", "read_file", "write_todos"];
 const STATUS_BY_CALL: Record<string, string> = {
   draft_correction: "drafting tonight's corrections",
@@ -207,6 +207,12 @@ const STATUS_BY_CALL: Record<string, string> = {
   horde_status: "reading the horde",
   find_fallback: "looking for a fallback",
   commit_plan: "deciding: hold or run",
+  building_card: "pulling the building's card",
+  screen_building: "screening the building",
+  triage: "ranking the district by risk",
+  tag_building: "proposing a tag: your call",
+  shift_report: "writing the shift report",
+  log_shift: "logging the shift",
   read_file: "reading last night's log",
   log_night: "logging the night",
 };
@@ -257,10 +263,10 @@ export function hqModel(messages: readonly unknown[], heroPid: string | null, bu
     const k = kind(m);
     if (k === "human") {
       const t = text(m.content).trim();
-      if (/^Brief the night shift/i.test(t)) briefAt = i;
-      else if (/^Scout property /.test(t)) {
+      if (/^(Brief the night shift|Start Bob's shift)/i.test(t)) briefAt = i;
+      else if (/^(Scout property|Inspect building) /.test(t)) {
         scoutAt = i;
-        const pid = t.match(/^Scout property (\S+)/)?.[1];
+        const pid = t.match(/^(?:Scout property|Inspect building) (\S+)/)?.[1];
         if (pid && !labels.has(pid)) labels.set(pid, "the building");
       } else if (/^Tip:/i.test(t)) {
         const body = t.replace(/^Tip:\s*/i, "");
@@ -562,7 +568,7 @@ export function draftsModel(messages: readonly unknown[], busy: boolean): Drafts
   const ms = messages as readonly Msg[];
   let from = -1;
   ms.forEach((m, i) => {
-    if (kind(m) === "human" && /^Debrief the night shift/i.test(text(m.content).trim())) from = i;
+    if (kind(m) === "human" && /^(Debrief the night shift|End the shift)/i.test(text(m.content).trim())) from = i;
   });
   const { labels, tenants } = namesIn(ms);
   const clean = scrubber(labels, tenants);

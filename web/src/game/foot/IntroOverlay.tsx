@@ -24,8 +24,9 @@ const CARDS = 3;
 const CONTROLS: { keys: string[]; what: string }[] = [
   { keys: ["W", "A", "S", "D"], what: "Move" },
   { keys: ["Shift"], what: "Sprint" },
-  { keys: ["E"], what: "Go inside" },
-  { keys: ["H", "R"], what: "Hold or run" },
+  { keys: ["Tab"], what: "Your desk" },
+  { keys: ["E"], what: "Go inside (site visit)" },
+  { keys: ["1", "2", "3"], what: "Tag after the quake" },
   { keys: ["P"], what: "Menu and all controls" },
 ];
 
@@ -39,7 +40,7 @@ function Card({ n, heroLabel }: { n: number; heroLabel: string }) {
           A <em>deep-agent</em> game
         </h2>
         <p>
-          Your commander is an AI agent. It plans the night, sends four squads, picks its own evidence, and <b>waits for your call.</b>
+          You&apos;re Bob, at LA&apos;s building office. Your analyst is an AI agent: it plans the day, sends four squads for the data, picks its own evidence, and <b>waits for your call.</b>
         </p>
         <p className={styles.flowLine}>HQ is a LangChain deep agent.</p>
       </>
@@ -62,7 +63,7 @@ function Card({ n, heroLabel }: { n: number; heroLabel: string }) {
           Real <em>feedback</em> enforcement
         </h2>
         <p>
-          What you see inside counts. It moves the odds, decides your walls, and reaches the real record. <b>Code enforces the limits.</b>
+          What you see on a site visit counts. It moves the odds, shapes the tag you post after the 5 pm quake, and reaches the real record. <b>Code enforces the limits.</b>
         </p>
         <p className={styles.flowLine}>
           First stop: <b>{heroLabel || "the lit building"}</b>
