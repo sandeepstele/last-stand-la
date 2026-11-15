@@ -168,6 +168,9 @@ export function ShiftReportView({ report, precalls = {}, loading, score, notes =
   const calledIt = graded.filter(([pid, t]) => rows.find((b) => b.pid === pid)?.tag === t).length;
   const loose = Object.entries(precalls).filter(([pid]) => !inReport.has(pid));
   const records = report.records ?? [];
+  // Days 2+ have no aftershock: tags are compared with the code's suggestion, not graded right or wrong.
+  const noShock = (report as { aftershock?: boolean }).aftershock === false;
+  const tagsGood = report.tags_right ?? (report as { tags_matching_screening?: number }).tags_matching_screening ?? 0;
   return (
     <section className={s.report} aria-label="Shift report">
       <header className={s.head}>
@@ -190,9 +193,9 @@ export function ShiftReportView({ report, precalls = {}, loading, score, notes =
             <dd>{n(report.people_displaced)}</dd>
           </div>
           <div>
-            <dt>tags right</dt>
+            <dt>{noShock ? "tags matching the code" : "tags right"}</dt>
             <dd>
-              {n(report.tags_right)} of {n(report.tags ?? rows.length)}
+              {n(tagsGood)} of {n(report.tags ?? rows.length)}
             </dd>
           </div>
           <div title="Correction drafts a second agent reviewed and agreed with">
@@ -252,7 +255,7 @@ export function ShiftReportView({ report, precalls = {}, loading, score, notes =
             <span className={s.from}>
               from {n(report.people_safe)} people kept safe, {n(report.records_fixed)} record{report.records_fixed === 1 ? "" : "s"} fixed
               {graded.length > 0 ? `, ${calledIt} called from outside` : ""}
-              {score.rescued ? `, ${score.rescued} brought out before the aftershock (+${score.rescued * 100}, simulated)` : ""} · tags right {n(report.tags_right)} of {n(report.tags ?? rows.length)}
+              {score.rescued ? `, ${score.rescued} brought out before the aftershock (+${score.rescued * 100}, simulated)` : ""} · {noShock ? "tags matching the code" : "tags right"} {n(tagsGood)} of {n(report.tags ?? rows.length)}
             </span>
           </div>
         )}
