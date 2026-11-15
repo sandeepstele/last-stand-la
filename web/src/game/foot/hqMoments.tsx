@@ -9,7 +9,7 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { kind, parse, text, type Msg } from "../radio";
 import { CHECK_NAME, caseWords, hypWords, keyOf, namesIn, norm, scrubber, tipSuite } from "./hqModel";
-import { SHORT, placeName, plain, subjectOf, sureWords } from "./copy";
+import { SHORT, placeName, plain, subjectOf } from "./copy";
 import styles from "./hq.module.css";
 
 export type HqMomentsProps = {
@@ -269,7 +269,7 @@ function OddsMeter({ m }: { m: Extract<Moment, { kind: "odds" }> }) {
       </div>
       <p className={styles.momentSub}>
         {m.from != null && d !== 0 ? `${d > 0 ? "Up" : "Down"} ${Math.abs(d)} after your report` : "Your report is in the evidence"}
-        {m.label ? ` · ${sureWords(m.label)}` : ""}
+        {m.label === "likely" ? " · now likely" : m.label === "leaning" ? " · now probable" : m.label ? " · still not settled" : ""}
       </p>
     </div>
   );

@@ -123,7 +123,7 @@
 .momentLead { margin: 0; font-size: 16px; line-height: 1.38; color: var(--ink); }
 .momentLead .spin { margin-right: 6px; vertical-align: -1px; }
 .momentSub { margin: 0; font-size: 14px; color: var(--muted); }
-.momentTodos { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 1px; font-size: 15px; color: var(--ink); }
+.momentTodos { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 2px; font-size: 16px; color: var(--ink); }
 .momentTodos li { animation: fadeRight 0.5s ease both; }
 .momentTodos li::marker { color: var(--muted); }
 @keyframes fadeRight { from { opacity: 0; transform: translateX(-6px); } to { opacity: 1; transform: none; } }

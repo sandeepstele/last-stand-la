@@ -4,8 +4,9 @@
 // number, it only words the tools' numbers.
 
 import { useMemo } from "react";
+import { kind, type Msg } from "../radio";
 import { hqModel, type BriefView, type CaseView, type EvidenceView, type HqView, type SquadView } from "./hqModel";
-import { cap, moveWords, oddsLine, placeName, plain, subjectOf, sureWords } from "./copy";
+import { cap, fmtDates, moveWords, oddsLine, placeName, plain, subjectOf, sureWords } from "./copy";
 import styles from "./hq.module.css";
 import { DraftList } from "./hqDrafts";
 
@@ -24,8 +25,22 @@ const proposalWords = (p: string) =>
   : /^HQ proposes HOLD/.test(p) ? "Proposes holding here."
   : "Hold or run?";
 
+/** True when the agent's newest plan was written after the newest order it got (else its in-progress item is stale). */
+function planIsFresh(messages: readonly unknown[]): boolean {
+  let human = -1;
+  let todos = -1;
+  messages.forEach((raw, i) => {
+    const m = raw as Msg;
+    const k = kind(m);
+    if (k === "human") human = i;
+    else if (k === "ai" && (m.tool_calls ?? []).some((c) => c?.name === "write_todos")) todos = i;
+  });
+  return todos > human;
+}
+
 export function HqPanel({ messages, busy, heroPid, compact }: HqProps) {
   const view = useMemo(() => hqModel(messages, heroPid, busy), [messages, heroPid, busy]);
+  const fresh = useMemo(() => planIsFresh(messages), [messages]);
   const working = view.squads.some((s) => s.state === "working");
   return (
     <section className={styles.panel} data-compact={compact} data-busy={busy} aria-label="HQ, the AI commander: what it is doing now">
@@ -34,18 +49,20 @@ export function HqPanel({ messages, busy, heroPid, compact }: HqProps) {
         <b className={styles.who}>HQ</b>
         <span className={styles.status} aria-live="polite">{cap(view.status)}</span>
       </header>
-      {view.waiting && <p className={styles.wait}>{proposalWords(view.waiting.proposal)} Your call.</p>}
-      {view.drafts.drafting && (
+      {view.waiting && <p className={styles.wait}>{proposalWords(view.waiting.proposal)}</p>}
+      {view.drafts.drafting && !!view.drafts.expected && (
         <p className={styles.line}>
-          Drafting tonight&apos;s corrections{view.drafts.expected ? ` · ${view.drafts.done} of ${view.drafts.expected}` : ""}
+          {view.drafts.done} of {view.drafts.expected} drafted
         </p>
       )}
-      {/* its own plan item, only while it is working on it: never a stale to-do */}
-      {busy && view.current && !view.waiting && <p className={styles.line}><span className={styles.k}>Now</span> {plain(view.current.text)}</p>}
+      {/* its own plan item, only while it is working on it and the plan is current: never a stale to-do */}
+      {compact && busy && fresh && view.current && !view.waiting && !view.drafts.drafting && (
+        <p className={styles.line}><span className={styles.k}>Now</span> {plain(view.current.text)}</p>
+      )}
       {working && <Squads squads={view.squads} />}
       {view.caseView && (compact || !view.caseView.bars.length ? <OddsLine c={view.caseView} /> : <CaseBlock c={view.caseView} />)}
       {view.noCase && <p className={styles.muted}>The records agree on this building. No case to open.</p>}
-      {!compact && <Full view={view} busy={busy} />}
+      {!compact && <Full view={view} busy={busy} fresh={fresh} />}
     </section>
   );
 }
@@ -106,7 +123,7 @@ function Squads({ squads }: { squads: SquadView[] }) {
 }
 
 // ---------------------------------------------------------------- full: the night call, the briefing
-function Full({ view, busy }: { view: HqView; busy: boolean }) {
+function Full({ view, busy, fresh }: { view: HqView; busy: boolean; fresh: boolean }) {
   const shown = view.evidence.slice(0, MAX_CARDS);
   return (
     <>
@@ -123,7 +140,7 @@ function Full({ view, busy }: { view: HqView; busy: boolean }) {
           </ul>
         </div>
       )}
-      {busy && view.todos.length > 0 && (
+      {busy && fresh && view.todos.length > 0 && !view.drafts.drafting && (
         <div className={styles.section}>
           <h4 className={styles.h}>HQ&apos;s plan</h4>
           <ol className={styles.todos}>
@@ -144,12 +161,12 @@ function EvidenceRow({ e, why }: { e: EvidenceView; why: boolean }) {
   return (
     <li className={styles.card} data-pending={e.pending}>
       <div className={styles.cardHead}>
-        <span>{plain(e.name).replace(/^Vision: /, "")}</span>
+        <span>{cap(plain(e.name).replace(/^Vision: /, ""))}</span>
         <span className={styles.effects}>
-          {e.pending ? "checking…" : e.effects.length ? e.effects.map((x) => plain(x.text)).join(", ") : e.human ? "" : "no change"}
+          {e.pending ? "checking…" : e.effects.length ? e.effects.map((x) => plain(x.text).replace("city's concrete", "concrete")).join(", ") : e.human ? "" : "no change"}
         </span>
       </div>
-      {e.finding && <p>{plain(e.finding)}</p>}
+      {e.finding && <p>{plain(fmtDates(e.finding))}</p>}
       {why && e.why && <p className={styles.why}>Why: {plain(e.why)}</p>}
     </li>
   );
