@@ -83,8 +83,10 @@ turn together in one message, each with the property id:
 3. Only if open_case returned a case: investigate it. In one message, call check_evidence for the two or three
    checks you judge most likely to separate that case's hypotheses (not all of them by habit; for a
    material_conflict, look_from_above is usually the most direct: it looks at the facade), plus write_todos
-   adding "Investigate: <case>" as completed. If open_case returned team_notes, ALSO run human_report in that same
-   message: a person's report is added to your chosen checks, never instead of one. Then, in the next message,
+   adding "Investigate: <case>" as completed. If open_case returned team_notes, the checks are fixed so every screen
+   agrees: for a material_conflict run look_from_above, compliance_filings, interior_geometry (if listed) and
+   human_report; for a ghost_tenant run your two choices plus human_report. A person's report is added, never
+   instead of a check. Then, in the next message,
    weigh_case with exactly the checks you ran (human_report included). Skip this step when there is no case. If open_case lists ghost_suites, say in one sentence how many
    suites here are occupied on record but listed for lease, and offer to check one.
 4. Answer in at most five sentences: (a) the retrofit order: which list, the order date, and which step is

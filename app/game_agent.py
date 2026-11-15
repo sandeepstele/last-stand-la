@@ -30,7 +30,7 @@ from pydantic import BaseModel
 
 from app import evidence, fortress, layers, prompts, vision
 from app.agent import MODELS, _errors, _specialists, make_model
-from app.guards import ForceCommitPlan, RetryBlank
+from app.guards import ForceCommitPlan, OutcomeDisclaimer, RetryBlank
 from app.tools import _notes, record_note
 
 
@@ -551,9 +551,11 @@ async def draft_correction(property_id: str, runtime: ToolRuntime, suite: str | 
     draft = await asyncio.to_thread(fortress.draft, property_id, suite, checks, notes)
     if _flag("RADAR_CRITIC"):
         review = _critic_result(runtime, property_id, suite)
-        if review is not None and review.get("follows") is False and getattr(runtime, "store", None) and _thread_id(runtime):
-            item = await runtime.store.aget(("laststand_cases", _thread_id(runtime)), _case_key(property_id, suite))
-            if not item:  # the critic had no case file to read: its "no" is a lookup miss, not a review
+        if review is not None and review.get("follows") is False:
+            missed = review.get("weakest_link") == "case_file" or "case file" in str(review.get("why", "")).lower()
+            item = await runtime.store.aget(("laststand_cases", _thread_id(runtime)), _case_key(property_id, suite)) \
+                if getattr(runtime, "store", None) and _thread_id(runtime) else None
+            if missed or not item:  # the critic couldn't read the case file: a lookup miss, not a review
                 review = None
         return _apply_critic(draft, review)
     return draft
@@ -707,7 +709,7 @@ def build(store=None, checkpointer=None, m=None):
         model=m.orch,
         tools=_enabled_tools(),
         system_prompt=_enabled_prompt(),
-        middleware=[NightStart(), todos, _errors(), RetryBlank("Static on the line. Say again?"), ForceCommitPlan(),
+        middleware=[NightStart(), todos, _errors(), RetryBlank("Static on the line. Say again?"), ForceCommitPlan(), OutcomeDisclaimer(),
                     ModelFallbackMiddleware(*m.orch_fallbacks)],
         subagents=_enabled_subagents(m),
         # Its own scratch space only: the auditor's memories and worklog (other buildings) stay out of the game.

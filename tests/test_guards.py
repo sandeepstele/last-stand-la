@@ -45,3 +45,13 @@ def test_wave_forces_commit_plan_after_the_fallback():
     assert not needs_commit_plan(asked)
     assert not needs_commit_plan(wave[:3])  # fallback not in yet
     assert not needs_commit_plan([HumanMessage("Tip: x"), ToolMessage(content="{}", name="find_fallback", tool_call_id="a")])
+
+
+def test_wave_outcome_always_carries_the_disclaimer():
+    from app.guards import OutcomeDisclaimer
+
+    msgs = [HumanMessage("Wave 1 is coming from the W"), ToolMessage(content="{}", name="commit_plan", tool_call_id="c")]
+    out = OutcomeDisclaimer().wrap_model_call(Req(msgs), lambda r: AIMessage(content="The walls held."))
+    assert out.content.endswith("Game outcome, not an engineering assessment.")
+    kept = OutcomeDisclaimer().wrap_model_call(Req([HumanMessage("Scout property 1")]), lambda r: AIMessage(content="ok"))
+    assert kept.content == "ok"

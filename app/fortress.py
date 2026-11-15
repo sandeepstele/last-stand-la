@@ -744,6 +744,8 @@ def _stale(radius_m: float = 900.0) -> str:
             # the aerial outline is too short or too tall for the recorded floors: one source likely describes another
             # structure, so neither "same" nor "replaced" is safe (the walls case applies the same sanity bound)
             stamp = "cant_tell"
+            v = dict(v, label="unresolved", text=f"Can't tell yet: the aerial height gives about {per_floor:.1f} m per floor for "
+                     f"{rec.get('stories')} recorded floors, so the sources may describe different structures; worth a look")
         out.append({
             "n": n, "pid": pid, "label": _label(rec), "x": b["x"], "z": b["z"],
             "distance_m": round(math.hypot(b["x"] - hero["x"], b["z"] - hero["z"])),

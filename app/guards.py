@@ -96,3 +96,28 @@ class ForceCommitPlan(AgentMiddleware):
 
     async def awrap_model_call(self, request, handler):
         return await handler(self._force(request))
+
+
+DISCLAIMER = "Game outcome, not an engineering assessment."
+
+
+class OutcomeDisclaimer(AgentMiddleware):
+    """The radio report of a wave's outcome always carries the disclaimer: added in code if the model dropped it."""
+
+    @staticmethod
+    def _fix(request, result):
+        msgs = getattr(request, "messages", []) or []
+        last_h = max((i for i, m in enumerate(msgs) if isinstance(m, HumanMessage)), default=-1)
+        if not any(isinstance(m, ToolMessage) and m.name == "commit_plan" for m in msgs[last_h + 1:]):
+            return result
+        ai = _last_ai(result)
+        if ai is None or ai.tool_calls or "not an engineering assessment" in _text(ai).lower() or not _text(ai).strip():
+            return result
+        return _replace(result, _text(ai).rstrip() + "\n" + DISCLAIMER)
+
+    def wrap_model_call(self, request, handler):
+        return self._fix(request, handler(request))
+
+    async def awrap_model_call(self, request, handler):
+        return self._fix(request, await handler(request))
+
