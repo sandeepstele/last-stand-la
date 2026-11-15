@@ -204,7 +204,7 @@ export function ShiftReportView({ report, precalls = {}, loading, score }: Shift
         {!rows.length && <li className={s.empty}>No building was tagged before the aftershock.</li>}
         {loose.map(([pid, t]) => (
           <li key={pid} className={s.loose}>
-            Building {pid}: you called <TagChip tag={t} /> from outside; it was never tagged, so the aftershock didn&apos;t grade it.
+            You called <TagChip tag={t} /> from outside on a building that was never tagged, so the aftershock didn&apos;t grade it.
           </li>
         ))}
         {records.length > 0 && (
