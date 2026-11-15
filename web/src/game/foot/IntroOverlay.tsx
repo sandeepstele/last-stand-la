@@ -29,33 +29,29 @@ const CONTROLS: { keys: string[]; what: string }[] = [
   { keys: ["P"], what: "Menu and all controls" },
 ];
 
-// Card 1 carries the point (judges press Enter early): the AI agent is the commander.
+// The pitch frame (user decision): a deep-agent game, real CoStar data, real feedback enforcement. Card 1 first: the AI agent.
 function Card({ n, heroLabel }: { n: number; heroLabel: string }) {
   let body: ReactNode;
   if (n === 1) {
     body = (
       <>
         <h2>
-          Your commander, HQ, is <em>an AI agent.</em>
+          A <em>deep-agent</em> game
         </h2>
         <p>
-          A LangChain deep agent. It reads the real open-case queue, picks tonight&apos;s cases and checks the evidence itself.{" "}
-          <b>It proposes. You decide.</b>
+          Your commander is an AI agent. It plans the night, sends four squads, picks its own evidence, and <b>waits for your call.</b>
         </p>
-        <p className={styles.flowLine}>
-          Case queue → <b>HQ checks the evidence</b> → hold or run? → <b>your call</b>
-        </p>
+        <p className={styles.flowLine}>HQ is a LangChain deep agent.</p>
       </>
     );
   } else if (n === 2) {
     body = (
       <>
         <h2>
-          Every building is <em>real.</em>
+          Real <em>CoStar</em> data
         </h2>
         <p>
-          Property records, city retrofit lists, aerial photos and 3D interior scans describe each one. Where they disagree, nobody knows yet.{" "}
-          <b>You go and look.</b>
+          Every building and case is real: <b>1,581 LA buildings, 156 open cases</b> where the records disagree.
         </p>
       </>
     );
@@ -63,10 +59,13 @@ function Card({ n, heroLabel }: { n: number; heroLabel: string }) {
     body = (
       <>
         <h2>
-          Settle tonight&apos;s cases. <em>Make it to dawn.</em>
+          Real <em>feedback</em> enforcement
         </h2>
         <p>
-          First stop: <b>{heroLabel || "the lit building"}</b>. The records disagree about its walls.
+          What you see inside counts. It moves the odds, decides your walls, and reaches the real record. <b>Code enforces the limits.</b>
+        </p>
+        <p className={styles.flowLine}>
+          First stop: <b>{heroLabel || "the lit building"}</b>
         </p>
         <ul className={styles.ctrlGrid}>
           {CONTROLS.map((c) => (
@@ -127,7 +126,7 @@ export function IntroOverlay({ heroLabel, ready, stub, replay, attribution, onSt
           <h1 className={styles.title}>
             Last Stand <span>LA</span>
           </h1>
-          <p className={styles.tagline}>One night. Real buildings. An AI commander.</p>
+          <p className={styles.tagline}>A deep-agent game on real CoStar data, where your feedback is enforced.</p>
         </header>
 
         <div className={styles.briefRow} data-show={idx > 0}>
