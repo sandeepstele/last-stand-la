@@ -25,10 +25,18 @@ export const DESK = GAME_GRAPH === "desk";
 export type Tag = "green" | "yellow" | "red";
 /** tag_building's result: the posted tag, what the agent suggested, and the people it protects. */
 export type TagResult = { pid: string; label?: string; tag: Tag | null; suggested?: Tag; agreed?: boolean; people_at_stake?: number; why?: string };
-export type ShiftBuilding = { pid: string; label?: string; tag?: Tag | null; outcome?: "held" | "damaged"; roll?: number; need?: number; people_at_stake?: number; people_safe?: number; people_displaced?: number };
+/** The aftershock's damage states, in the order the roll walks them (HAZUS). */
+export type DamageState = "none" | "slight" | "moderate" | "extensive" | "complete";
+export type ShiftBuilding = {
+  pid: string; label?: string; tag?: Tag | null; outcome?: "held" | "damaged"; roll?: number; need?: number; people_at_stake?: number; people_safe?: number; people_displaced?: number;
+  damage?: DamageState; right_tag?: Tag; tag_right?: boolean; odds?: Partial<Record<DamageState, number>>; people_hurt?: number; why?: string;
+  people_exposed?: number; // v1.2: inside under serious damage (yellow = limited entry lets some in)
+  expected?: Partial<Record<Tag, { exposed?: number; displaced?: number }>>; // v1.2: each tag's average outcome over the odds
+};
+export type ShiftRecord = { label?: string | null; verdict?: string | null; critic?: string | null };
 export type ShiftReport = {
   buildings?: ShiftBuilding[]; people_safe?: number; people_at_stake?: number; people_displaced?: number; records_fixed?: number;
-  records?: unknown[]; disclaimer?: string;
+  records?: ShiftRecord[]; disclaimer?: string; people_hurt?: number; tags_right?: number; tags?: number; rule?: string;
 };
 
 export type Phase = "dusk" | "scout" | "night" | "aftershock" | "dawn";
