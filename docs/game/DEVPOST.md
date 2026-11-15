@@ -32,7 +32,7 @@ Building records go stale quietly. CoStar's record of a downtown tower says maso
 - City retrofit orders, permits and the 1994 Northridge ShakeMap set the stakes.
 
 **3. Real feedback enforcement.**
-- **What you report inside counts as evidence.** It moves the odds (66% → 72%), but it's **capped at 0.35**: strong testimony, never final.
+- **What you report inside counts as evidence.** Together with HQ's read of the 3D scan, it moves the odds (66% → 73% in the current recording), but your report is **capped at 0.35**: strong testimony, never final.
 - **It decides your survival tonight.** On the demo night a "concrete" report makes the walls hold (they just beat a roll of 75); "brick" lets the horde in.
 - **It reaches the real record.** At dawn the agent drafts a correction **citing your words**, and "File" opens the real auditor case with your report in it.
 - **Code sets every number,** what the agent sees is capped at 0.2 with a second look, and **no record changes without human approval**.
@@ -101,7 +101,7 @@ Record on the production build (`npm run build && npm start`) against strict rep
 | 1 | 0:00–0:08 | The intro over all of LA (1,581 buildings, 86 case pillars, 156 open cases), diving into tonight's district; title "LAST STAND LA" | "Building records go stale. Here are 156 in LA where they disagree. Nobody goes to look." |
 | 2 | 0:08–0:18 | Enter. The HQ panel: "Tonight's cases: #6 and #7"; the plan appears | "Our AI commander works CoStar's real queue of 328 cases (LA and Houston) where records disagree, and plans the night." |
 | 3 | 0:18–0:32 | F to 737 Broadway's door. The radio; four squad chips light up; **"HQ looked at the aerial"** moment with the real image | "Four squads in parallel. It picks its own evidence and looks at the aerial itself." |
-| 4 | 0:32–0:45 | E: the real 3D tour. Press 1, Concrete. **"Your report moved the odds: 66% → 72%"** | "Then I go in and look. My report is evidence: capped, never final." |
+| 4 | 0:32–0:45 | E: the real 3D tour. Press 1, Concrete. The odds move (read the % off the screen) | "Then I go in and look. My report and HQ's read of the 3D scan move the odds. My report is evidence: capped, never final." |
 | 5 | 0:45–1:00 | Step out facing the horde; HQ proposes RUN; press H instead; hold the door: shove, flare, stun, nail boards | "The agent proposes. I decide." |
 | 6 | 1:00–1:10 | Walls hold (76 vs 75); the aftershock shakes the screen | "My concrete report is why the walls held. Code rolls every number." |
 | 7 | 1:10–1:25 | Dawn: rank, "Records checked tonight", **the AI drafting corrections citing my words** | "At dawn it drafts real corrections, citing what I saw." |
