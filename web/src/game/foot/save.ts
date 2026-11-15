@@ -75,8 +75,8 @@ export function useSave(): SaveV1 | null {
 }
 
 export const CHECKPOINT_WORDS: Record<Checkpoint, string> = {
-  suite: "after your suite report: head for the fortress",
-  walls: "inside the fortress, your report filed: step out into the night",
+  suite: "after your suite report: head for 737 Broadway",
+  walls: "inside 737 Broadway, your report filed: step out",
   dawn: "dawn: the drafts are ready to file",
 };
 
