@@ -15,9 +15,9 @@ export type HqDraftsProps = {
   variant?: "dawn" | "panel"; // dawn: wide, two columns (default); panel: fits the HQ panel
 };
 
-export function HqDrafts({ messages, busy, variant = "dawn" }: HqDraftsProps) {
+export function HqDrafts({ messages, busy, variant = "dawn", error = null }: HqDraftsProps & { error?: string | null }) {
   const view = useMemo(() => draftsModel(messages, busy), [messages, busy]);
-  return <DraftList view={view} variant={variant} />;
+  return <DraftList view={view} variant={variant} error={error} />;
 }
 
 /** The evidence names, said plainly. */
@@ -52,7 +52,7 @@ function criticLine(c: NonNullable<DraftView["critic"]>): string {
   return c.why && !STOCK_WHY.test(c.why) ? `A second agent checked it and agrees: ${c.why}` : "A second agent checked it and agrees with the evidence.";
 }
 
-export function DraftList({ view, variant }: { view: DraftsView; variant: "dawn" | "panel" }) {
+export function DraftList({ view, variant, error = null }: { view: DraftsView; variant: "dawn" | "panel"; error?: string | null }) {
   if (!view.requested && !view.drafts.length) return null;
   const pending = view.drafting ? Math.max(0, (view.expected ?? 0) - view.done) : 0;
   const count = view.drafting ? (view.expected ? `${view.done} of ${view.expected}` : "") : String(view.done);
@@ -101,7 +101,7 @@ export function DraftList({ view, variant }: { view: DraftsView; variant: "dawn"
           ))}
         </ol>
       ) : (
-        <p className={styles.muted}>{view.drafting ? "HQ is reading back through the night…" : "No drafts this time."}</p>
+        <p className={styles.muted}>{view.drafting ? "HQ is reading back through the night…" : error ? "HQ couldn't finish the drafts this time (the recorded demo had no answer for this step). Press Play again for a fresh shift." : "No drafts this time."}</p>
       )}
       <p className={styles.draftFoot}>Drafts only. A person reviews each one before anything changes; nothing is sent.</p>
     </section>

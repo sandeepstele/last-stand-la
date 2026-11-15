@@ -28,6 +28,8 @@ export type DawnProps = {
   /** Final objective: "File the report" = the draft correction goes to a human researcher for review (local; nothing is sent). */
   reportFiled: boolean;
   onFileReport(): void;
+  /** The agent run failed (e.g. a replay miss): the drafts panel says so instead of "No drafts". */
+  agentError?: string | null;
   // ---- the desk shift (DESK): the server's shift_report (null until it arrives) and Bob's calls from outside
   report?: ShiftReport | null;
   precalls?: Record<string, Tag>;
@@ -47,7 +49,7 @@ export function DawnView(props: DawnProps) {
 }
 
 /** The desk shift's dawn: the shift report on the left; tonight's cases, HQ's drafts and "File the reports" on the right. */
-function DeskDawn({ title, lines, messages, loading, onPlayAgain, score, reportFiled, onFileReport, report, precalls }: DawnProps) {
+function DeskDawn({ title, lines, messages, loading, onPlayAgain, score, reportFiled, onFileReport, report, precalls, agentError }: DawnProps) {
   const hasCase = messages.some((m) => kind(m as Msg) === "tool" && (m as Msg).name === "open_case");
   const drafts = useMemo(() => draftsModel(messages, loading).drafts, [messages, loading]);
   const queue = useMemo(() => latestResult<{ total?: number }>(messages, "night_cases")?.total ?? null, [messages]);
@@ -92,7 +94,7 @@ function DeskDawn({ title, lines, messages, loading, onPlayAgain, score, reportF
                   </span>
                 </p>
               )}
-              <HqDrafts messages={messages} busy={loading} />
+              <HqDrafts messages={messages} busy={loading} error={agentError ?? null} />
               {extra.map((l) => (
                 <p key={l} className={d.extra}>
                   {plain(l)}
@@ -128,7 +130,7 @@ function DeskDawn({ title, lines, messages, loading, onPlayAgain, score, reportF
 }
 
 /** The night game's dawn (NEXT_PUBLIC_GAME_GRAPH=laststand): unchanged. */
-function NightDawn({ title, lines, messages, loading, onPlayAgain, score, reportFiled, onFileReport }: DawnProps) {
+function NightDawn({ title, lines, messages, loading, onPlayAgain, score, reportFiled, onFileReport, agentError }: DawnProps) {
   const hasCase = messages.some((m) => kind(m as Msg) === "tool" && (m as Msg).name === "open_case");
   // The headline counts what is shown below it: the cases HQ drafted tonight (and who worked each).
   const drafts = useMemo(() => draftsModel(messages, loading).drafts, [messages, loading]);
@@ -182,7 +184,7 @@ function NightDawn({ title, lines, messages, loading, onPlayAgain, score, report
             </span>
           </p>
         )}
-        <HqDrafts messages={messages} busy={loading} />
+        <HqDrafts messages={messages} busy={loading} error={agentError ?? null} />
 
         <section className={styles.fileCard}>
           <button type="button" className={styles.fileBtn} disabled={reportFiled} onClick={onFileReport}>

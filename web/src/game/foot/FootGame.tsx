@@ -1643,6 +1643,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
       {step === "dawn" && (
         <DawnView
           title={DESK ? "Dawn. The shift is over." : "Dawn. You made it."}
+          agentError={game.agentError}
           lines={outcomeLines}
           messages={game.messages}
           loading={game.isLoading}
