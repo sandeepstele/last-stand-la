@@ -1,6 +1,6 @@
 # Devpost: Bob's Desk
 
-Merged Sun Nov 15, ~1:15 am, from the 10:30 pm drafts (DEVPOST_DRAFT.md) and the build on `desk` a4279e2 (merged into `game`). One document; the video shot list is in VIDEO_SHOTLIST.md and the spoken pitch in DEMO.md. Not posted. Items marked **[TEAM]** need a human decision.
+Merged Sun Nov 15, ~1:15 am, from the 10:30 pm drafts (DEVPOST_DRAFT.md) and the build on `desk` a4279e2 (merged into `game`). Updated ~1 am for the multi-day game: four days and a career summary, from the backend's `days` branch (f20408e). The simulated aftershock is Day 1 only. One document; the video shot list is in VIDEO_SHOTLIST.md and the spoken pitch in DEMO.md. Not posted. Items marked **[TEAM]** need a human decision.
 
 **Track:** Entertainment. **Special tracks (if allowed):** CoStar "Inside and Out: AI for the Built World"; LangChain "Best use of deepagents".
 
@@ -10,10 +10,10 @@ Merged Sun Nov 15, ~1:15 am, from the 10:30 pm drafts (DEVPOST_DRAFT.md) and the
 **Bob's Desk** [TEAM: or "Bob's Shift" as in the older draft; pick one and use it everywhere]
 
 ## Tagline
-**One shift at the LA building office. A deep agent does the work, you correct it, and the aftershock grades you both.**
+**Four shifts at the LA building office. A deep agent does the work, you correct it, and dawn grades you both.**
 
 ## Short description (Devpost "elevator pitch", ≤ 200 characters)
-Play a city building officer for one shift on real LA buildings: settle record conflicts by day, tag buildings after a simulated quake, and see at dawn who your tags kept safe.
+Play an LA building officer, one shift a day: settle record conflicts, tag buildings after a simulated quake, see at dawn who you kept safe. The AI analyst remembers your calls.
 
 ---
 
@@ -23,9 +23,9 @@ After the 1994 Northridge earthquake, inspectors evaluated 66,546 buildings and 
 We wanted a game where that judgment is the whole game. The paperwork is real: open record cases from the CoStar hackathon kit, the city's own retrofit lists, the 1994 shaking at each building. The arithmetic is published: FEMA's rapid screening score, HAZUS damage and casualty rates. An AI analyst does the legwork. The decision stays with you, and the aftershock grades it.
 
 ## What it does
-You are **Bob**, a building officer in downtown Los Angeles, for one shift.
+You are **Bob**, a building officer in downtown Los Angeles, for a short career: **four days**, one shift a day, each on a different real building in the district. Day 1, at 737 Broadway, runs the full arc below, ending in a simulated aftershock. Days 2 to 4 run the same desk, walk-in and placard on other buildings, without the aftershock (see "Day after day").
 
-**Morning: the agent remembers.** The analyst opens the shift with what it learned last time, from its own shift log: *"Last shift Bob changed my yellow to red at 601 Broadway, and the aftershock showed red was right."*
+**Morning: the agent remembers.** The analyst opens the shift from its own shift log. The first shift after a reset opens from a seeded previous shift (601 Broadway); after that, each shift opens with what Bob actually corrected last time.
 
 **Day: the desk.** Bob's inbox holds real open cases from the CoStar queue, where two sources disagree about the same building. His analyst is a LangChain deep agent. It plans the shift, sends **four squads in parallel** (records, aerial, interior, city), and builds a **card per building** with one line per source:
 - the CoStar record;
@@ -43,9 +43,9 @@ Fields where two sources disagree glow amber. Across the 62-building district th
 - **On the records alone,** 737 Broadway is probably masonry (55%), and the code suggests **RED**.
 - **After Bob reports concrete,** the odds move to concrete 73%, and the suggestion drops to **YELLOW**.
 
-**5 pm: a simulated quake.** The clock hits 5:02 pm and the screen shakes. The streets react: pedestrians run into the open, cars stop with hazards flashing. A **simulated aftershock clock** starts (45 s on stage), and **two people are trapped** at 737 Broadway's door: Bob can lead them to a marked assembly point before it hits, at his own risk. The agent screens the building and proposes a placard, and the proposal is pinned in code to the screening's suggestion. Then it **stops and waits for Bob** (a human-in-the-loop interrupt): approve, or change the tag. At 5 pm the people count uses the HAZUS commute share, because offices are emptying and homes are filling.
+**5 pm: a simulated quake.** The clock hits 5:02 pm and the screen shakes. The streets react: pedestrians run into the open, cars stop with hazards flashing. On Day 1 a **simulated aftershock clock** starts (45 s on stage), and **two people are trapped** at 737 Broadway's door: Bob can lead them to a marked assembly point before it hits, at his own risk. The agent screens the building and proposes a placard, and the proposal is pinned in code to the screening's suggestion. Then it **stops and waits for Bob** (a human-in-the-loop interrupt): approve, or change the tag. At 5 pm the people count uses the HAZUS commute share, because offices are emptying and homes are filling.
 
-**Dawn: the aftershock grades the tags.** A seeded aftershock draws each tagged building's damage from that building's own odds. What Bob checked changes his tag, never the building. For 737 Broadway the draw is **complete damage**, and the report shows what every tag would have done:
+**Dawn on Day 1: the aftershock grades the tag.** A seeded aftershock draws each tagged building's damage from that building's own odds. What Bob checked changes his tag, never the building. For 737 Broadway the draw is **complete damage**, and the report shows what every tag would have done:
 
 | Bob's tag | People kept safe | Exposed | Hurt (HAZUS indoor rates) |
 |---|---|---|---|
@@ -57,13 +57,30 @@ Fields where two sources disagree glow amber. Across the 62-building district th
 
 Each row also shows the tag's **expected** outcome over the building's odds, so a good call that meets bad luck still reads as a good call. The shift score is **people kept safe plus records fixed**. A record fix counts only when a second model, the critic, agrees the evidence supports the correction draft.
 
+**Day after day, then a career summary.** At dawn Bob chooses **Next day (k of 4)** (Enter), which keeps the history, or **New game**, which resets it. The HUD and the desk header show "Day k of 4". Each next day brings a different district building whose records disagree about its material, plus an office suite to check, and the analyst opens it with Bob's last real correction.
+
+On Days 2 to 4 there is **no aftershock**, no aftershock clock and no rescue. Dawn grades Bob's placard in code: the **expected** people exposed and displaced under his tag on the building's own HAZUS odds, and whether it matches the code's suggestion. For example, posting red on Day 2 when the code suggests yellow exposes about 0 people and displaces about 26.
+
+| Day | Building (and office suite) | What the records disagree on | People at stake | Graded by |
+|---|---|---|---|---|
+| 1 | 737 Broadway (suite 1100, 122 7th St) | Masonry on the CoStar record; concrete on the city's retrofit list | 251 | The simulated aftershock (complete damage) |
+| 2 | 621 Spring St (suite 404, 724 Spring St) | Steel on the record; concrete on the city's list | 106 | Expected outcome on its own odds |
+| 3 | 730 Los Angeles St (suite 1400, 122 7th St: a 12-person office on record) | Masonry vs concrete; 15 Matterport scans | 201 | Expected outcome on its own odds |
+| 4 | 620 Main St (an office suite at 724 Spring St) | Masonry vs concrete | 40 | Expected outcome on its own odds |
+
+On records alone the code suggests red for all four; Bob's walk-in reports move the odds. During play a "Your career so far: day k of 4" block grows at each dawn. After Day 4 it becomes the **career summary**:
+- tags right: Day 1 against the aftershock, Days 2 to 4 against the screening;
+- people kept safe: Day 1 actual plus Days 2 to 4 expected, labelled as such;
+- records fixed;
+- the Agent vs Bob record.
+
 **The whole city, in code.** The map screens **all 1,581 LA buildings** in the kit from their records alone: **918 green, 446 yellow and 217 red** suggestions. Click any one for its card.
 
 **A human-feedback loop you can watch.** The agent is the main character, and people correct it at four levels:
 1. **Evidence:** Bob's site report is weighed as evidence, capped at 0.35.
-2. **Decision:** Bob approves or overrides each placard (a human-in-the-loop interrupt), and the aftershock grades both of them.
+2. **Decision:** Bob approves or overrides each placard (a human-in-the-loop interrupt), and dawn grades both of them: the simulated aftershock on Day 1, the code's screening on Days 2 to 4.
 3. **Review:** a second model (the critic) reviews every correction draft, and a person approves any record change.
-4. **Memory:** the override and its outcome go into the shift log, and the next shift opens with it. This is in-context learning from human corrections. The first shift after a reset opens from a seeded previous shift (601 Broadway); after that, each shift opens with what Bob actually corrected last time.
+4. **Memory:** the override and its outcome go into the shift log, and the next shift opens with it. The log carries across days until a new game, so by Day 4 the agent has a record of how often Bob overruled it and how each call was graded. This is in-context learning from human corrections. The first shift after a reset opens from a seeded previous shift (601 Broadway); after that, each shift opens with what Bob actually corrected last time.
 
 Every placard decision, and every 👍/👎 Bob gives a finding, a source or a draft, is also saved as **preference data in the format used for RLHF/DPO** (chosen/rejected pairs plus ratings), downloadable as JSONL. **No model weights were trained tonight;** the data is collected, not used.
 
@@ -94,6 +111,11 @@ Code computes every number; the model never sets one. Each step is a published m
     - The agent's own image reads are capped at 0.2 and need a second look.
     - A person's report is capped at 0.35.
   - **Human feedback:** `log_shift` stores, per tagged building, the agent's suggestion, Bob's tag and the right tag; the next shift's briefing reads it, so the agent's first line names the correction. The frontend keeps an Agent vs Bob track record and exports preference pairs (JSONL).
+  - **Days:** `GET /desk/days` lists the four days (day, hero and office buildings and suite, doors, the disagreement, people at stake, the records-only suggestion); Day 1 is the stage day.
+    - "Next day" sends "Start Bob's shift, day k" on the next building and keeps the shift log.
+    - "New game" resets the log to the seeded line.
+    - Day 1's dawn runs the simulated aftershock; Days 2 to 4 are graded by the screening's expected outcomes.
+    - The frontend totals the career summary from the days' shift reports.
 - **Models:** Gemini on Vertex AI. A strict replay mode records model answers so the judged demo is repeatable; the data, tools and images stay live.
 - **The game:** Next.js, React and three.js. The ground is a Vexcel aerial mosaic, with real building outlines and heights. The day turns to night, and you walk into Matterport tours. Traffic and pedestrians run on lanes derived from the building grid and react to the quake. Near a building with real Vexcel imagery, the drone and camera views switch to the real photos. The aftershock clock and the rescue reuse the engine's survivor and debris systems. A side panel and a second screen (`/play/log`) show every step the agent takes, for judges.
 - **Data:**
@@ -145,7 +167,8 @@ langchain, deepagents, langgraph, python, gemini, vertex-ai, next.js, react, thr
 ## Honesty notes (keep on the Devpost page)
 - Licensed CoStar, Vexcel and Matterport data is not in the repository; it is matched locally.
 - The quake, the placards, the aftershock clock, the trapped occupants and the aftershock are simulated game events. The NPC traffic and pedestrians are decoration.
-- "Human feedback" here means in-context learning from Bob's overrides (the shift log) and collected preference data. No model was fine-tuned or RL-trained. The screening uses published methods (FEMA P-154, HAZUS, ATC-20, ATC-138, IBC) but is not an engineering assessment.
+- "Human feedback" here means in-context learning from Bob's overrides (the shift log, carried across days until a new game) and collected preference data. No model was fine-tuned or RL-trained; no weights change from day to day.
+- The aftershock is Day 1 only: a simulated event on 737 Broadway. Days 2 to 4 have no aftershock; their dawn shows expected outcomes from each building's HAZUS odds, labelled as expected, never as something that happened. The days are game days, not a timeline of a real earthquake sequence. The screening uses published methods (FEMA P-154, HAZUS, ATC-20, ATC-138, IBC) but is not an engineering assessment.
 - The P-154 probability is a ranking signal at a code-level design earthquake, not a forecast of 1994 shaking.
 - The 1,581-building screen comes from records only. Its share of red (about 14%) is a forecast of damage odds for a commercial-real-estate sample, not comparable to the roughly 6% posted red after Northridge.
 - Game choices are labelled as such: the red threshold, yellow's entry and displacement shares, the assumed occupancy share when no count exists, and the fragility dispersion.
