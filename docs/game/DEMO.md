@@ -8,14 +8,14 @@ Run `?demo=1` on strict replay, reset first. Press [F] to skip walks. **Never** 
 
 | Time | Claim | On screen | Say |
 |---|---|---|---|
-| 0:00 | — | The intro over all of LA: 1,581 buildings, 328 case pillars | The one-liner |
-| 0:10 | **Real CoStar data** | The dive into tonight's district; the HQ panel lists case #6 and #7 of 328 | "Every building and every case is real, from CoStar's kit: 328 places where the records disagree." |
+| 0:00 | — | The intro over all of LA: 1,581 buildings, pillars on the 86 with open cases (156 cases) | The one-liner |
+| 0:10 | **Real CoStar data** | The dive into tonight's district; the HQ panel lists case #6 and #7 of CoStar's queue | "Every building and every case is real, from CoStar's kit: 156 open cases in LA where the records disagree." |
 | 0:20 | **Deep agent** | Enter. The agent's own plan; four squads light up; "HQ looked at the aerial" (the real image); "why HQ chose this check" | "The commander is a LangChain deep agent. It plans, sends four sub-agents in parallel, picks its own evidence and tells you why." |
 | 0:40 | **Real CoStar data** | F to 737 Broadway; E: the building's own 3D tour; W to walk | "CoStar says masonry, the city says concrete. Nobody's been inside. Now I am: this is the building's real scan." |
 | 0:55 | **Feedback enforcement** | Press 1, Concrete. "Your report moved the odds: 66% → 72%" | "My report counts as evidence, capped at 0.35: strong, never final. Code enforces that, not the model." |
 | 1:05 | **Feedback enforcement** | Step out; HQ proposes RUN; press H; hold the door; the walls hold, 76 vs 75 | "The agent proposes, and it waits for me. I held, and the walls held because of what I saw. Brick, and they'd have broken in." |
 | 1:25 | **Feedback enforcement** | Dawn: the agent drafts the correction citing my words; File opens the auditor case with my report in it | "And it reaches the real record: a draft correction citing my words. A human approves it." |
-| 1:45 | — | The auditor queue (328) | "Same agent, all night, every case. Deep agent, real CoStar data, real feedback enforcement." |
+| 1:45 | — | The auditor queue (328 cases, LA and Houston) | "Same agent, all night, every case. Deep agent, real CoStar data, real feedback enforcement." |
 
 **If asked "what's enforced?":**
 - code sets every number (odds, caps, rolls);
@@ -44,7 +44,7 @@ Your report from inside changes the real case. That's "Inside and Out". Case #7 
 
 **Words to avoid:**
 - Never call the corner views "live feeds". They are **game camera views** (renders of the scene). The real imagery is the **ground** (the Vexcel mosaic) and the photos **HQ looked at** (marked "HQ evidence · real image").
-- The breadth claim "568 buildings screened across Houston and LA" comes from the earlier verifier screen (266 consistent, 247 worth a look, 55 refused). **Confirm what it covers before saying it.** The safe numbers are 328 open cases; 226 LA buildings on retrofit lists; 61 unfinished; 12 of 69 concrete records agree.
+- The breadth claim "568 buildings screened across Houston and LA" comes from the earlier verifier screen (266 consistent, 247 worth a look, 55 refused). **Confirm what it covers before saying it.** The safe numbers are 328 open cases in the queue (156 in LA, 172 in Houston); 226 LA buildings on retrofit lists; 61 unfinished; 12 of 69 concrete records agree.
 
 **Acceptance:**
 - `?demo=1` on strict replay, with F at approach and escape.
@@ -95,7 +95,7 @@ Your report from inside changes the real case. That's "Inside and Out". Case #7 
 6. **Never** edit `app/` on the demo machine while judges are around; the server has no hot reload.
 
 ## New since 6 pm (show at the table, not in the 2-minute cut)
-- **All of LA:** the intro dive over 1,581 buildings and 328 open cases.
+- **All of LA:** the intro dive over 1,581 buildings and the 156 open LA cases (86 buildings).
 - **Walk into 16 real buildings:** any lit door, [E]. 750 Broadway is a good one near the fortress.
 - **Inside 737 Broadway:** walk its 10 real scan spots ([A]/[D] or click the floor plan).
 - **Walk-by aerials:** the corner view shows the nearest building's real Vexcel image when one is on file (106 buildings), labelled "Real aerial on file".

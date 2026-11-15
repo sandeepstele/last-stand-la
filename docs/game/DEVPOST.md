@@ -14,7 +14,7 @@ Drafted Sat Nov 14, ~4:00 pm. **Track: Entertainment.** Specials to consider: Co
 You're the night shift for an AI auditor of CoStar's building records. A LangChain deep agent works CoStar's real queue of cases where records disagree, sends you into real LA buildings (their own 3D tours) to look, and enforces your report as evidence: capped, but strong enough to decide whether your walls hold tonight, and cited in the correction it drafts at dawn.
 
 ## Inspiration
-Building records go stale quietly. CoStar's record of a downtown tower says masonry; the city's earthquake-retrofit list says concrete. Nobody has gone to look. AI can work a queue of 328 cases like this overnight, but its weak spot is human eyes on the building. So we made the human the player, and made the player's feedback count, within limits code enforces.
+Building records go stale quietly. CoStar's record of a downtown tower says masonry; the city's earthquake-retrofit list says concrete. Nobody has gone to look. AI can work a queue of 328 cases like this overnight (156 of them in LA), but its weak spot is human eyes on the building. So we made the human the player, and made the player's feedback count, within limits code enforces.
 
 ## What it does
 **1. A deep-agent game.** Your commander is a LangChain **deepagents** agent, and you can watch it work:
@@ -26,7 +26,7 @@ Building records go stale quietly. CoStar's record of a downtown tower says maso
 - it drafts corrections at dawn.
 
 **2. Real CoStar data.**
-- The intro flies over **1,581 real LA buildings** with **328 open cases** lit up.
+- The intro flies over **1,581 real LA buildings** with **156 open cases** (in 86 buildings) lit up.
 - Tonight's cases are real: 737 Broadway (CoStar masonry vs the city's concrete list) and suite 1100 at 122 7th St (a 3-person office on record, but the suite is listed for lease).
 - You walk on the Vexcel aerial and into the buildings' own **Matterport 3D tours**, stepping between real scan spots.
 - City retrofit orders, permits and the 1994 Northridge ShakeMap set the stakes.
@@ -71,7 +71,7 @@ Building records go stale quietly. CoStar's record of a downtown tower says maso
 
 ## Accomplishments
 - The judge's own report from inside a real building becomes **capped evidence in a real case** and changes the outcome.
-- The same agent runs as both the game's commander and a working records auditor (**328 open cases**).
+- The same agent runs as both the game's commander and a working records auditor (**328 open cases** in its queue, LA and Houston).
 
 ## What we learned
 **[TEAM: 2–3 honest sentences.]**
@@ -98,14 +98,14 @@ Record on the production build (`npm run build && npm start`) against strict rep
 
 | # | Time | Shot | Voice-over |
 |---|---|---|---|
-| 1 | 0:00–0:08 | The intro over all of LA (1,581 buildings, 328 case pillars), diving into tonight's district; title "LAST STAND LA" | "Building records go stale. Here are 328 that disagree, across LA. Nobody goes to look." |
-| 2 | 0:08–0:18 | Enter. The HQ panel: "Tonight's cases: #6 and #7 of 328"; the plan appears | "Our AI commander works CoStar's real queue of 328 cases where records disagree, and plans the night." |
+| 1 | 0:00–0:08 | The intro over all of LA (1,581 buildings, 86 case pillars, 156 open cases), diving into tonight's district; title "LAST STAND LA" | "Building records go stale. Here are 156 in LA where they disagree. Nobody goes to look." |
+| 2 | 0:08–0:18 | Enter. The HQ panel: "Tonight's cases: #6 and #7"; the plan appears | "Our AI commander works CoStar's real queue of 328 cases (LA and Houston) where records disagree, and plans the night." |
 | 3 | 0:18–0:32 | F to 737 Broadway's door. The radio; four squad chips light up; **"HQ looked at the aerial"** moment with the real image | "Four squads in parallel. It picks its own evidence and looks at the aerial itself." |
 | 4 | 0:32–0:45 | E: the real 3D tour. Press 1, Concrete. **"Your report moved the odds: 66% → 72%"** | "Then I go in and look. My report is evidence: capped, never final." |
 | 5 | 0:45–1:00 | Step out facing the horde; HQ proposes RUN; press H instead; hold the door: shove, flare, stun, nail boards | "The agent proposes. I decide." |
 | 6 | 1:00–1:10 | Walls hold (76 vs 75); the aftershock shakes the screen | "My concrete report is why the walls held. Code rolls every number." |
 | 7 | 1:10–1:25 | Dawn: rank, "Records checked tonight", **the AI drafting corrections citing my words** | "At dawn it drafts real corrections, citing what I saw." |
-| 8 | 1:25–1:45 | "File tonight's reports" opens the auditor: the case file with "the player" as a human report; the queue of 328 | "Same agent, as CoStar's auditor. The other 326 cases it works overnight." |
+| 8 | 1:25–1:45 | "File tonight's reports" opens the auditor: the case file with "the player" as a human report; the queue of 328 (LA and Houston) | "Same agent, as CoStar's auditor. The other 326 cases it works overnight." |
 | 9 | 1:45–2:00 | Back to the city at dawn; title card | "Settle tonight's cases. Make it to dawn." |
 
 **Capture tips:**

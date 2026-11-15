@@ -343,7 +343,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
 
     const feeds = createFeeds(ctx);
     feedsRef.current = feeds;
-    const systems = [safely("world", createWorld(ctx)), safely("player", createPlayer(ctx)), safely("horde", createHorde(ctx)), safely("mission", createMission(ctx)), safely("flare", createFlare(ctx)), safely("roof", (roofRef.current = createRoofObjects(ctx))), safely("city", createCityMap(ctx, (c: City) => setCity({ buildings: c.total_buildings ?? c.buildings.length, cases: c.total_cases ?? c.buildings.filter((b) => b.case).length }))), safely("audio", createAudio(ctx)), safely("feeds", feeds)];
+    const systems = [safely("world", createWorld(ctx)), safely("player", createPlayer(ctx)), safely("horde", createHorde(ctx)), safely("mission", createMission(ctx)), safely("flare", createFlare(ctx)), safely("roof", (roofRef.current = createRoofObjects(ctx))), safely("city", createCityMap(ctx, (c: City) => setCity({ buildings: c.buildings.length, cases: c.buildings.filter((b) => b.case).length }))), safely("audio", createAudio(ctx)), safely("feeds", feeds)];
     ctx.bus.emit("world:beacon", { pid: hero.pid });
     const offDown = ctx.bus.on("player:downed", () => (downed.current = true));
     const offMission = [
@@ -1392,7 +1392,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
       )}
       {step === "intro" && city && (
         <div style={{ position: "absolute", left: 24, bottom: 72, zIndex: 45, pointerEvents: "none", color: "#e2e8f0", font: "600 13px/1.4 ui-monospace, monospace", background: "rgba(5,7,13,.6)", padding: "8px 12px", borderLeft: "3px solid #f5a524" }}>
-          ALL OF CoStar&apos;S LA RECORDS · {city.buildings.toLocaleString()} buildings · {city.cases} open cases (pillars of light)
+          ALL OF CoStar&apos;S LA RECORDS · {city.buildings.toLocaleString()} buildings · {city.cases} with open cases (pillars of light)
         </div>
       )}
       {step === "intro" && <IntroOverlay heroLabel={heroLabel} ready={!!district} stub={game.stub} replay={replay} attribution={district.attribution ?? null} onStart={begin} />}
