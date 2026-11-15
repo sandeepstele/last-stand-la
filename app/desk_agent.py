@@ -57,8 +57,9 @@ async def _outside(*pids: str | None) -> dict | None:
 
 
 class ShiftStart(NightStart):
-    """A shift starts clean: the pinned cases lose earlier reports and critic files, and under replay the shift log
-    goes back to its seed (the same reasons as Last Stand's NightStart, keyed to "Start Bob's shift")."""
+    """A shift starts clean: the pinned cases lose earlier reports and critic files (the same reasons as Last Stand's
+    NightStart, keyed to "Start Bob's shift"). Under replay an empty shift log gets the seeded previous shift; a log
+    with Bob's real last shift is kept, so the agent opens with what he actually corrected."""
 
     @staticmethod
     def _is_start(state) -> bool:
@@ -80,7 +81,9 @@ class ShiftStart(NightStart):
                 await store.adelete(it.namespace, it.key)
         for it in await store.asearch(("laststand_cases",), limit=200):
             await store.adelete(it.namespace, it.key)
-        if replay.mode() is not None:
+        # The seeded previous shift only fills an EMPTY log (a fresh server; Play again's /demo/reset re-seeds it): a
+        # second shift without a reset reads Bob's real override from the shift before, which is the point of the log.
+        if replay.mode() is not None and not await store.aget(LOG_NS, "/latest.md"):
             from deepagents.backends.utils import create_file_data
 
             await store.aput(LOG_NS, "/latest.md", create_file_data(desk.LOG_SEED))
