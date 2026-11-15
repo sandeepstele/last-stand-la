@@ -23,7 +23,7 @@ export function CareerSummary({ log, nDays, final }: { log: CareerDay[]; nDays: 
         {final ? `Career summary: ${log.length} day${log.length === 1 ? "" : "s"}` : `Your career so far: day ${log.length} of ${nDays}`}
       </h2>
       <div>
-        <b>{safe.toLocaleString("en-US")}</b> of {stake.toLocaleString("en-US")} people kept safe{hurt ? ` · ${Math.round(hurt)} hurt` : ""} · tags right <b>{right} of {tags}</b> · records fixed <b>{fixed}</b>
+        <b>{safe.toLocaleString("en-US")}</b> of {stake.toLocaleString("en-US")} people kept safe{log.some((d) => d.graded_by === "screening") ? " (Day 1 by the simulated aftershock; later days expected)" : ""}{hurt ? ` · ${Math.round(hurt)} hurt` : ""} · tags right <b>{right} of {tags}</b>{log.some((d) => d.graded_by === "screening") ? " (later days: matching the code's suggestion)" : ""} · records fixed <b>{fixed}</b>
         {rescueOf ? <> · rescued <b>{rescued} of {rescueOf}</b></> : null} · <b>{points.toLocaleString("en-US")}</b> points
       </div>
       {graded.length > 0 && (
@@ -35,7 +35,7 @@ export function CareerSummary({ log, nDays, final }: { log: CareerDay[]; nDays: 
       <ol style={{ margin: "6px 0 0", paddingLeft: 18, color: "#cbd5e1", fontSize: 13 }}>
         {log.map((d) => (
           <li key={d.day}>
-            Day {d.day}, {d.hero}: agent {chip(d.agent_tag)} · Bob {chip(d.bob_tag)} · right {chip(d.right_tag)} · {d.people_safe} of {d.people_at_stake} safe
+            Day {d.day}, {d.hero}: agent {chip(d.agent_tag)} · Bob {chip(d.bob_tag)} · {d.graded_by === "screening" ? "no aftershock (graded by the screening)" : <>right {chip(d.right_tag)}</>} · {d.people_safe} of {d.people_at_stake} {d.graded_by === "screening" ? "expected safe" : "safe"}
           </li>
         ))}
       </ol>

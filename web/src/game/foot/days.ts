@@ -8,6 +8,8 @@ export type DayCfg = { day: number; hero_pid: string; hero_label?: string; offic
 export type CareerDay = {
   day: number; hero: string; people_safe: number; people_at_stake: number; people_hurt: number; tags_right: number; tags: number;
   records_fixed: number; rescued: number; rescue_of: number; agent_tag: string | null; bob_tag: string | null; right_tag: string | null; points: number;
+  /** Days 2+ have no aftershock: people_safe is the expected value, and tags_right counts tags matching the code's suggestion. */
+  graded_by?: "aftershock" | "screening";
 };
 export type Career = { day: number; log: CareerDay[] };
 

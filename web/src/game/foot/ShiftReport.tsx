@@ -83,7 +83,7 @@ function BuildingRow({ b, precall, i }: { b: ShiftBuilding; precall?: Tag; i: nu
       <div className={s.rowTop}>
         <b className={s.name}>{b.label ?? b.pid}</b>
         <span className={s.shockText}>
-          aftershock: <b>{b.damage ? `${b.damage} damage` : b.outcome ?? "–"}</b>
+          {b.damage == null && /no aftershock/i.test(String(b.outcome ?? "")) ? <>no aftershock today: <b>graded by the code&apos;s screening</b></> : <>aftershock: <b>{b.damage ? `${b.damage} damage` : b.outcome ?? "–"}</b></>}
           {b.roll != null && <em> · roll {b.roll.toFixed(3)}</em>}
         </span>
       </div>
@@ -97,6 +97,15 @@ function BuildingRow({ b, precall, i }: { b: ShiftBuilding; precall?: Tag; i: nu
             <TagChip tag={b.right_tag} />
           </>
         )}
+        {b.tag_right == null && (b as { suggested?: Tag }).suggested && (
+          <>
+            <span className={s.posted}>· the code suggested</span>
+            <TagChip tag={(b as { suggested?: Tag }).suggested} />
+            <span className={s.verdict} data-ok={(b as { suggested?: Tag }).suggested === b.tag}>
+              {(b as { suggested?: Tag }).suggested === b.tag ? "✓ matches the code's suggestion" : "≠ differs from the code's suggestion"}
+            </span>
+          </>
+        )}
         {b.tag_right != null && (
           <span className={s.verdict} data-ok={b.tag_right}>
             {b.tag_right ? "✓ right tag" : "✗ wrong tag"}
@@ -104,7 +113,7 @@ function BuildingRow({ b, precall, i }: { b: ShiftBuilding; precall?: Tag; i: nu
         )}
       </div>
       <div className={s.people}>
-        <span><b>{n(b.people_safe)}</b> safe</span>
+        <span><b>{n(b.people_safe)}</b> safe{b.damage == null && b.tag_right == null ? " (expected)" : ""}</span>
         {b.people_exposed != null && <span data-bad={b.people_exposed > 0}><b>{n(b.people_exposed)}</b> exposed</span>}
         <span data-bad={(b.people_hurt ?? 0) > 0}><b>{n(b.people_hurt)}</b> hurt</span>
         <span data-bad={(b.people_displaced ?? 0) > 0}><b>{n(b.people_displaced)}</b> displaced</span>
@@ -163,13 +172,13 @@ export function ShiftReportView({ report, precalls = {}, loading, score, notes =
     <section className={s.report} aria-label="Shift report">
       <header className={s.head}>
         <h2>Shift report</h2>
-        <span className={s.simNote}>Simulated quake and aftershock · game</span>
+        <span className={s.simNote}>{(report as { aftershock?: boolean }).aftershock === false ? "Simulated quake · no aftershock today · game" : "Simulated quake and aftershock · game"}</span>
       </header>
 
       <div className={s.headline}>
         <div className={s.big}>
           <strong>{n(report.people_safe)}</strong>
-          <span>of {n(report.people_at_stake)} people kept safe</span>
+          <span>of {n(report.people_at_stake)} people {(report as { aftershock?: boolean }).aftershock === false ? "expected safe (no aftershock today)" : "kept safe"}</span>
         </div>
         <dl className={s.stats}>
           <div data-bad={(report.people_hurt ?? 0) > 0}>

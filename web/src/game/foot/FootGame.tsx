@@ -1572,7 +1572,9 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
     recordDay({
       day: dayNo, hero: b?.label ?? hero?.label ?? "",
       people_safe: r.people_safe ?? 0, people_at_stake: r.people_at_stake ?? 0, people_hurt: (r as { people_hurt?: number }).people_hurt ?? 0,
-      tags_right: (r as { tags_right?: number }).tags_right ?? 0, tags: (r as { tags?: number }).tags ?? 0, records_fixed: r.records_fixed ?? 0,
+      tags_right: (r as { tags_right?: number | null }).tags_right ?? (r as { tags_matching_screening?: number }).tags_matching_screening ?? 0,
+      tags: (r as { tags?: number }).tags ?? r.buildings?.length ?? 0, records_fixed: r.records_fixed ?? 0,
+      graded_by: (r as { aftershock?: boolean }).aftershock === false ? "screening" : "aftershock",
       rescued: dayNo === 1 ? rescue?.saved ?? 0 : 0, rescue_of: dayNo === 1 ? rescue?.of ?? 0 : 0,
       agent_tag: game.tagResult?.suggested ?? null, bob_tag: game.tagResult?.tag ?? null, right_tag: b?.right_tag ?? null,
       points: deskScore?.points ?? 0,
