@@ -22,6 +22,7 @@ function target(method: string, path: string[]): string | null {
   if (method === "POST" && seg.length === 1 && seg[0] === "resolve") return "game/resolve";
   // Bob's desk: the per-building card (by data source), the screening sheet, and the triage map layer.
   if (method === "GET" && seg.length === 1 && seg[0] === "triage") return "desk/triage";
+  if (method === "GET" && seg.length === 1 && seg[0] === "days") return "desk/days"; // the multi-day list
   if (method === "GET" && seg.length === 2 && (seg[0] === "card" || seg[0] === "screen") && PID.test(seg[1])) return `desk/${seg[0]}/${encodeURIComponent(seg[1])}`;
   // The deep agent's log for one run (read-only; built from the thread's messages).
   if (method === "GET" && seg.length === 2 && seg[0] === "log" && /^[0-9a-f-]{8,64}$/i.test(seg[1])) return `game/log/${seg[1]}`;

@@ -86,7 +86,9 @@ export function AgentScoreboard({ messages, report }: { messages: readonly unkno
       <h2 style={{ margin: "0 0 6px", font: "600 16px/1.2 var(--font-ui, system-ui), sans-serif" }}>Agent vs Bob</h2>
       {rows.map((r) => {
         const override = r.bob !== r.agent;
-        const verdict = !r.right ? "waiting for the aftershock" : override
+        const noShock = (report as { aftershock?: boolean } | null | undefined)?.aftershock === false;
+        const verdict = noShock ? (override ? "No aftershock today: Bob's tag differs from the code's suggestion, graded by the screening" : "No aftershock today: Bob's tag matches the code's suggestion")
+          : !r.right ? "waiting for the aftershock" : override
           ? r.bob === r.right ? "Bob was right; the agent was wrong" : r.agent === r.right ? "the agent was right; Bob's override was wrong" : "both were wrong"
           : r.agent === r.right ? "Bob agreed with the agent, and it was right" : "Bob agreed with the agent, and both were wrong";
         return (
@@ -95,7 +97,7 @@ export function AgentScoreboard({ messages, report }: { messages: readonly unkno
               {r.label}: the agent proposed {chip(r.agent)} · Bob posted {chip(r.bob)}{override ? " (override)" : ""}{r.right ? <> · the aftershock says {chip(r.right)}</> : null}
             </div>
             <div style={{ color: "#a8a293" }}>
-              {verdict}.{r.right && (override || r.agent !== r.right) ? " The outcome goes into the agent's shift log, and the next shift opens with it (unless you reset: a reset starts from a seeded previous shift)." : ""}
+              {verdict}.{r.right && (override || r.agent !== r.right) ? " The outcome goes into the agent's shift log, and the next day opens with it (Day 1 always opens from a seeded previous shift)." : ""}
             </div>
           </div>
         );

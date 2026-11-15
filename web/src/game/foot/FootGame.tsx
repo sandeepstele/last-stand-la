@@ -44,6 +44,8 @@ import { createRoofObjects, type RoofSystem } from "./roofObjects";
 import { SuiteSweep, type SweepScore } from "./SuiteSweep";
 import { AgentLogPanel, rememberLogThread } from "./AgentLog";
 import { recordTagDecision } from "./feedback";
+import { FALLBACK_DAYS, recordDay, resetCareer, setCareerDay, startMessage, useCareer, useDays } from "./days";
+import { CareerSummary } from "./CareerSummary";
 import { DeskView, TAG_COLOR, type DeskCase } from "./DeskView";
 import { DESK, type Tag } from "../useGame";
 import { CHECKPOINT_WORDS, clearSave, threadAlive, useSave, writeSave, type Checkpoint, type SaveV1 } from "./save";
@@ -307,13 +309,27 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
     gRef.current = game;
   });
 
-  const hero = useMemo(() => (district ? pickHero(district.buildings) : null), [district]);
+  // Multi-day: Day 1 is the recorded stage (737 Broadway + suite 1100); later days take the day's building from
+  // GET /desk/days. ?demo=1 plays Day 1 only. The career (and the current day) lives in this browser.
+  const career = useCareer();
+  const multiDay = DESK && !presenter && !game.stub && !agentOff;
+  const days = useDays(multiDay);
+  const dayNo = multiDay ? Math.max(1, career.day) : 1;
+  const nDays = days?.length ?? FALLBACK_DAYS;
+  const dayCfg = dayNo > 1 ? days?.find((d) => d.day === dayNo) ?? null : null;
+  const hero = useMemo(() => {
+    if (!district) return null;
+    const want = dayCfg?.hero_pid;
+    return (want ? district.buildings.find((b) => b.pid === want && b.door) : null) ?? pickHero(district.buildings);
+  }, [district, dayCfg?.hero_pid]);
   const heroLabel = hero?.label ?? "";
   const safeRoom = useMemo(() => district?.buildings.find((b) => b.door && b.pid !== hero?.pid) ?? null, [district, hero]);
   // The Night Shift needs the live agent (the briefing comes from the real queue). Stub / agent-off play case #6 only.
   const feats = district?.features;
   const nightShift = !!safeRoom && !game.stub && !agentOff && (!feats || feats.includes("night_shift"));
-  const office = nightShift ? safeRoom : null;
+  const office = !nightShift ? null
+    : dayCfg ? (dayCfg.office_pid ? district?.buildings.find((b) => b.pid === dayCfg.office_pid && b.door) ?? null : null)
+      : dayNo > 1 && days ? null : safeRoom;
   const brief = useMemo(() => latestResult<{ total?: number; in_area?: number; cases?: NightCase[] }>(game.messages, "night_cases"), [game.messages]);
   const case7 = useMemo(() => (office ? brief?.cases?.find((c) => c.case === "ghost_tenant" && String(c.property_id) === office.pid && c.suite) ?? null : null), [brief, office]);
   const case6 = useMemo(() => (hero ? brief?.cases?.find((c) => c.case === "material_conflict" && String(c.property_id) === hero.pid) ?? null : null), [brief, hero]);
@@ -904,7 +920,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
       }
       if (s === "office" && office) {
         const od = doorOf(ctx, office)!;
-        if (!briefAsked.current && !g.isLoading) briefAsked.current = g.say(DESK ? "Start Bob's shift" : "Brief the night shift", true);
+        if (!briefAsked.current && !g.isLoading) briefAsked.current = g.say(DESK ? startMessage(dayNo) : "Brief the night shift", true);
         const c7 = case7Ref.current;
         // The briefing came back without a case here: straight to the fortress.
         if (g.runDone && briefAsked.current && !c7 && since > 2) {
@@ -1058,7 +1074,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
           nightAsked.current = true;
           fireDebris();
           ctx.bus.emit("fx:crack", { pid: hero.pid });
-          startAftershock();
+          if (dayNo === 1) startAftershock(); // the simulated aftershock clock + rescue: Day 1 only
           let at5: number | null = null; // contract v1.1: the people inside at the quake hour, from the building's card
           for (let i = g.messages.length - 1; i >= 0 && at5 === null; i--) {
             const m = g.messages[i] as Msg;
@@ -1205,7 +1221,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
       if (s === "dawn") {
         ctx.dawn = Math.min(1, ctx.dawn + dt / 3);
         if (debriefAsked.current && !debriefSent.current && g.runDone && g.say(DESK ? "End the shift" : "Debrief the night shift")) debriefSent.current = true;
-        if (k.has("Enter")) playAgain();
+        if (k.has("Enter")) advance();
       }
     };
   });
@@ -1428,7 +1444,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
     if (resume) return applyResume(ctx, resume);
     if (office) {
       // The Night Shift: the agent briefs the night from the real queue (fresh thread), then case #7 at the office.
-      briefAsked.current = gRef.current.say(DESK ? "Start Bob's shift" : "Brief the night shift", true);
+      briefAsked.current = gRef.current.say(DESK ? startMessage(dayNo) : "Brief the night shift", true);
       gRef.current.select(office.pid);
       if (!presenter) {
         ctx.input.unlock();
@@ -1438,6 +1454,14 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
       setStep("office");
       setBanner({ title: "Settle tonight's cases. Make it to dawn.", sub: `HQ is picking tonight's cases from the open-case queue. Start at ${office.label}.`, tone: "info" }, 5500);
       return;
+    }
+    // A later day with no suite case: the shift still opens with the day's briefing, then straight to the building.
+    if (DESK && !gRef.current.stub && !agentOff && !briefAsked.current) {
+      briefAsked.current = gRef.current.say(startMessage(dayNo), true);
+      if (!presenter) {
+        ctx.input.unlock();
+        setDeskOpen(true); // the shift starts at the desk: the inbox fills as the agent briefs
+      }
     }
     gRef.current.select(hero.pid); // the fortress card loads while you walk
     setStep("approach");
@@ -1514,6 +1538,50 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
     begin(sv);
   }
 
+  // ---- multi-day: Next day keeps the history (never the server reset); New game resets the server and the career.
+  const pendingStart = useRef<"next" | "new" | null>(null);
+  function advance() {
+    if (!multiDay) return playAgain();
+    if (dayNo < nDays) return nextDay();
+    newGame();
+  }
+  function nextDay() {
+    if (resetting.current || pendingStart.current) return;
+    pendingStart.current = "next";
+    setCareerDay(dayNo + 1); // the next render has the new day's building; the effect below starts it
+  }
+  function newGame() {
+    if (resetting.current || pendingStart.current) return;
+    resetCareer();
+    if (dayNo === 1) return playAgain();
+    pendingStart.current = "new";
+  }
+  useEffect(() => {
+    const p = pendingStart.current;
+    if (!p) return;
+    pendingStart.current = null;
+    const t = setTimeout(() => (p === "next" ? startOver() : playAgain()), 0);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- start once the day (and so the building) has changed
+  }, [dayNo, hero?.pid]);
+  // Each finished day goes into the career: numbers from the day's shift report, the placard decision, the rescue.
+  useEffect(() => {
+    const r = game.shiftReport;
+    if (!multiDay || step !== "dawn" || !r) return;
+    const b = r.buildings?.[0] as { right_tag?: string; label?: string } | undefined;
+    recordDay({
+      day: dayNo, hero: b?.label ?? hero?.label ?? "",
+      people_safe: r.people_safe ?? 0, people_at_stake: r.people_at_stake ?? 0, people_hurt: (r as { people_hurt?: number }).people_hurt ?? 0,
+      tags_right: (r as { tags_right?: number | null }).tags_right ?? (r as { tags_matching_screening?: number }).tags_matching_screening ?? 0,
+      tags: (r as { tags?: number }).tags ?? r.buildings?.length ?? 0, records_fixed: r.records_fixed ?? 0,
+      graded_by: (r as { aftershock?: boolean }).aftershock === false ? "screening" : "aftershock",
+      rescued: dayNo === 1 ? rescue?.saved ?? 0 : 0, rescue_of: dayNo === 1 ? rescue?.of ?? 0 : 0,
+      agent_tag: game.tagResult?.suggested ?? null, bob_tag: game.tagResult?.tag ?? null, right_tag: b?.right_tag ?? null,
+      points: deskScore?.points ?? 0,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per day's report
+  }, [game.shiftReport, step, dayNo]);
+
   const resetting = useRef(false);
   function playAgain() {
     if (resetting.current) return;
@@ -1575,6 +1643,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
     routeTo.current = null;
     setTip({ chosen: null, sentAt: null });
     ctx.dawn = 0;
+    ctx.day = 1; // every shift starts in daylight
     ctx.bus.emit("horde:clear", {});
     ctx.bus.emit("world:route", { pts: null });
     ctx.bus.emit("world:barricade", { pid: null });
@@ -1665,6 +1734,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
     ...(solar.length ? [{ id: "solar", kind: "side" as const, text: "Survey roofs for solar", done: Object.keys(solarStamps).length >= solar.length, progress: `${Object.keys(solarStamps).length}/${solar.length}` }] : []),
 
   ];
+  if (multiDay && objectives.length) objectives[0] = { ...objectives[0], text: `Day ${dayNo} of ${nDays} · ${objectives[0].text}` };
 
   type Screen = { pid?: string; label?: string; score?: number; fema_type?: string; p_damage?: number; suggest?: string; borderline?: boolean; why?: string;
     people?: { day?: number; night?: number; at_stake?: number; low?: number; high?: number; at_5pm?: number } };
@@ -1877,7 +1947,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
           messages={game.messages}
           threadId={game.stub || agentOff ? null : game.threadId}
           cases={(brief?.cases ?? []).map((c) => ({ ...c, property_id: String(c.property_id), suite: c.suite ? String(c.suite) : null })) as DeskCase[]}
-          clock={{ office: "9:00 am", suite: "10:40 am", visit: "noon", approach: "1:30 pm", inside: "3:45 pm", night: "5:02 pm" }[step as string] ?? "9:00 am"}
+          clock={`${multiDay ? `Day ${dayNo} of ${nDays} · ` : ""}${{ office: "9:00 am", suite: "10:40 am", visit: "noon", approach: "1:30 pm", inside: "3:45 pm", night: "5:02 pm" }[step as string] ?? "9:00 am"}`}
           tags={game.tagResult?.tag ? { [game.tagResult.pid]: game.tagResult.tag } : {}}
           precalls={precalls}
           onPrecall={(pid, t) => setPrecalls((m) => (m[pid] ? m : { ...m, [pid]: t }))}
@@ -1901,6 +1971,13 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
         </div>
       )}
       {step === "intro" && <IntroOverlay heroLabel={heroLabel} ready={!!district} stub={game.stub} replay={replay} attribution={district.attribution ?? null} onStart={() => startOrContinue()} />}
+      {step === "intro" && multiDay && !save && (dayNo > 1 || career.log.length > 0) && (
+        // A career in progress in this browser (e.g. the previous player's): say which day this is, and offer a fresh start.
+        <div style={{ position: "absolute", left: "50%", bottom: 28, transform: "translateX(-50%)", zIndex: 46, display: "flex", gap: 10, alignItems: "center", background: "rgba(5,7,13,.88)", border: "1px solid #334155", padding: "8px 12px", color: "#e2e8f0", font: "14px system-ui, sans-serif" }}>
+          <span>Career in progress: Day {dayNo} of {nDays} ({career.log.length} day{career.log.length === 1 ? "" : "s"} done). Enter starts Day {dayNo}.</span>
+          <button type="button" onClick={() => resetCareer()} style={{ padding: "6px 12px", border: "none", background: "#f5a524", color: "#111", fontWeight: 700, cursor: "pointer" }}>New game (Day 1)</button>
+        </div>
+      )}
       {step === "intro" && !save && saveNote && (
         <div style={{ position: "absolute", left: "50%", bottom: 28, transform: "translateX(-50%)", zIndex: 46, background: "rgba(5,7,13,.88)", border: "1px solid #f5a524", padding: "8px 12px", color: "#fde68a", font: "14px system-ui, sans-serif" }}>{saveNote}</div>
       )}
@@ -1918,7 +1995,10 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
           lines={outcomeLines}
           messages={game.messages}
           loading={game.isLoading}
-          onPlayAgain={playAgain}
+          onPlayAgain={advance}
+          againLabel={multiDay ? (dayNo < nDays ? `Next day (${dayNo + 1} of ${nDays})` : "New game") : undefined}
+          onNewGame={multiDay && dayNo < nDays ? newGame : undefined}
+          career={multiDay ? <CareerSummary log={career.log} nDays={nDays} final={dayNo >= nDays && career.log.some((d) => d.day === dayNo)} /> : null}
           score={deskScore ?? score}
           report={game.shiftReport}
           precalls={precalls}

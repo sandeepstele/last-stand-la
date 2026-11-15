@@ -24,6 +24,10 @@ export type DawnProps = {
   messages: readonly unknown[];
   loading: boolean;
   onPlayAgain(): void;
+  /** Multi-day: the main button's label ("Next day (2 of 3)" / "New game"), a secondary "New game", and the career block. */
+  againLabel?: string;
+  onNewGame?: () => void;
+  career?: React.ReactNode;
   // ---- missions (v2)
   score: { saved: number; total: number; found: number; health: number; secs: number; points: number; rank: string; rescued?: number };
   /** Final objective: "File the report" = the draft correction goes to a human researcher for review (local; nothing is sent). */
@@ -50,7 +54,7 @@ export function DawnView(props: DawnProps) {
 }
 
 /** The desk shift's dawn: the shift report on the left; tonight's cases, HQ's drafts and "File the reports" on the right. */
-function DeskDawn({ title, lines, messages, loading, onPlayAgain, score, reportFiled, onFileReport, report, precalls, agentError }: DawnProps) {
+function DeskDawn({ title, lines, messages, loading, onPlayAgain, score, reportFiled, onFileReport, report, precalls, agentError, againLabel, onNewGame, career }: DawnProps) {
   const hasCase = messages.some((m) => kind(m as Msg) === "tool" && (m as Msg).name === "open_case");
   const drafts = useMemo(() => draftsModel(messages, loading).drafts, [messages, loading]);
   const queue = useMemo(() => latestResult<{ total?: number }>(messages, "night_cases")?.total ?? null, [messages]);
@@ -70,6 +74,7 @@ function DeskDawn({ title, lines, messages, loading, onPlayAgain, score, reportF
           <ShiftReportView report={report} precalls={precalls} loading={loading} score={report ? score : null} notes={rescue} />
           <div className={d.colR}>
             <div className={d.scrollR}>
+              {career}
               <AgentScoreboard messages={messages} report={report} />
               {drafts.length > 0 && (
                 <section className={d.cases}>
@@ -121,8 +126,13 @@ function DeskDawn({ title, lines, messages, loading, onPlayAgain, score, reportF
                 <button type="button" className={styles.fileBtn} disabled={reportFiled} onClick={onFileReport}>
                   {reportFiled ? "Filed for review" : "File the reports"}
                 </button>
+                {onNewGame && (
+                  <button type="button" className={styles.again} onClick={onNewGame} style={{ opacity: 0.75 }}>
+                    New game
+                  </button>
+                )}
                 <button type="button" className={styles.again} onClick={onPlayAgain}>
-                  Play again <Keycap k="Enter" />
+                  {againLabel ?? "Play again"} <Keycap k="Enter" />
                 </button>
               </div>
             </section>

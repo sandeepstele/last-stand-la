@@ -83,7 +83,7 @@ function BuildingRow({ b, precall, i }: { b: ShiftBuilding; precall?: Tag; i: nu
       <div className={s.rowTop}>
         <b className={s.name}>{b.label ?? b.pid}</b>
         <span className={s.shockText}>
-          aftershock: <b>{b.damage ? `${b.damage} damage` : b.outcome ?? "–"}</b>
+          {b.damage == null && /no aftershock/i.test(String(b.outcome ?? "")) ? <>no aftershock today: <b>graded by the code&apos;s screening</b></> : <>aftershock: <b>{b.damage ? `${b.damage} damage` : b.outcome ?? "–"}</b></>}
           {b.roll != null && <em> · roll {b.roll.toFixed(3)}</em>}
         </span>
       </div>
@@ -97,6 +97,15 @@ function BuildingRow({ b, precall, i }: { b: ShiftBuilding; precall?: Tag; i: nu
             <TagChip tag={b.right_tag} />
           </>
         )}
+        {b.tag_right == null && (b as { suggested?: Tag }).suggested && (
+          <>
+            <span className={s.posted}>· the code suggested</span>
+            <TagChip tag={(b as { suggested?: Tag }).suggested} />
+            <span className={s.verdict} data-ok={(b as { suggested?: Tag }).suggested === b.tag}>
+              {(b as { suggested?: Tag }).suggested === b.tag ? "✓ matches the code's suggestion" : "≠ differs from the code's suggestion"}
+            </span>
+          </>
+        )}
         {b.tag_right != null && (
           <span className={s.verdict} data-ok={b.tag_right}>
             {b.tag_right ? "✓ right tag" : "✗ wrong tag"}
@@ -104,7 +113,7 @@ function BuildingRow({ b, precall, i }: { b: ShiftBuilding; precall?: Tag; i: nu
         )}
       </div>
       <div className={s.people}>
-        <span><b>{n(b.people_safe)}</b> safe</span>
+        <span><b>{n(b.people_safe)}</b> safe{b.damage == null && b.tag_right == null ? " (expected)" : ""}</span>
         {b.people_exposed != null && <span data-bad={b.people_exposed > 0}><b>{n(b.people_exposed)}</b> exposed</span>}
         <span data-bad={(b.people_hurt ?? 0) > 0}><b>{n(b.people_hurt)}</b> hurt</span>
         <span data-bad={(b.people_displaced ?? 0) > 0}><b>{n(b.people_displaced)}</b> displaced</span>
@@ -159,17 +168,20 @@ export function ShiftReportView({ report, precalls = {}, loading, score, notes =
   const calledIt = graded.filter(([pid, t]) => rows.find((b) => b.pid === pid)?.tag === t).length;
   const loose = Object.entries(precalls).filter(([pid]) => !inReport.has(pid));
   const records = report.records ?? [];
+  // Days 2+ have no aftershock: tags are compared with the code's suggestion, not graded right or wrong.
+  const noShock = (report as { aftershock?: boolean }).aftershock === false;
+  const tagsGood = report.tags_right ?? (report as { tags_matching_screening?: number }).tags_matching_screening ?? 0;
   return (
     <section className={s.report} aria-label="Shift report">
       <header className={s.head}>
         <h2>Shift report</h2>
-        <span className={s.simNote}>Simulated quake and aftershock · game</span>
+        <span className={s.simNote}>{(report as { aftershock?: boolean }).aftershock === false ? "Simulated quake · no aftershock today · game" : "Simulated quake and aftershock · game"}</span>
       </header>
 
       <div className={s.headline}>
         <div className={s.big}>
           <strong>{n(report.people_safe)}</strong>
-          <span>of {n(report.people_at_stake)} people kept safe</span>
+          <span>of {n(report.people_at_stake)} people {(report as { aftershock?: boolean }).aftershock === false ? "expected safe (no aftershock today)" : "kept safe"}</span>
         </div>
         <dl className={s.stats}>
           <div data-bad={(report.people_hurt ?? 0) > 0}>
@@ -181,9 +193,9 @@ export function ShiftReportView({ report, precalls = {}, loading, score, notes =
             <dd>{n(report.people_displaced)}</dd>
           </div>
           <div>
-            <dt>tags right</dt>
+            <dt>{noShock ? "tags matching the code" : "tags right"}</dt>
             <dd>
-              {n(report.tags_right)} of {n(report.tags ?? rows.length)}
+              {n(tagsGood)} of {n(report.tags ?? rows.length)}
             </dd>
           </div>
           <div title="Correction drafts a second agent reviewed and agreed with">
@@ -243,7 +255,7 @@ export function ShiftReportView({ report, precalls = {}, loading, score, notes =
             <span className={s.from}>
               from {n(report.people_safe)} people kept safe, {n(report.records_fixed)} record{report.records_fixed === 1 ? "" : "s"} fixed
               {graded.length > 0 ? `, ${calledIt} called from outside` : ""}
-              {score.rescued ? `, ${score.rescued} brought out before the aftershock (+${score.rescued * 100}, simulated)` : ""} · tags right {n(report.tags_right)} of {n(report.tags ?? rows.length)}
+              {score.rescued ? `, ${score.rescued} brought out before the aftershock (+${score.rescued * 100}, simulated)` : ""} · {noShock ? "tags matching the code" : "tags right"} {n(tagsGood)} of {n(report.tags ?? rows.length)}
             </span>
           </div>
         )}
