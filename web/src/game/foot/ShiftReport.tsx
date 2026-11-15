@@ -13,8 +13,8 @@ const BAND_TAG: Record<DamageState, Tag> = { none: "green", slight: "green", mod
 const TAG_WORDS: Record<Tag, string> = { green: "safe to occupy", yellow: "limited entry", red: "unsafe" };
 export const FALLBACK_DISCLAIMER = "Game outcome, not an engineering assessment.";
 
-/** People counts: whole numbers as they are, the HAZUS "hurt" estimate keeps its one decimal. */
-const n = (v: number | undefined) => (v == null ? "–" : Number.isInteger(v) ? v.toLocaleString("en-US") : v.toFixed(1));
+/** People counts are whole people: estimates (HAZUS "hurt" rates) are rounded for display. */
+const n = (v: number | undefined) => (v == null ? "–" : Math.round(v).toLocaleString("en-US"));
 const pct = (v: number) => `${Math.round(v * 100)}%`;
 
 export function TagChip({ tag, big }: { tag: Tag | null | undefined; big?: boolean }) {

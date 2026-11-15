@@ -194,7 +194,26 @@ export function DeskView({ messages, threadId, cases, tags = {}, precalls = {}, 
       alive = false;
     };
   }, [casePids]);
-  const deskCards = useMemo(() => ({ ...fetched, ...Object.fromEntries(live) }) as Record<string, DeskCard>, [fetched, live]);
+  // A tag colour appears only once the agent screens the building after the quake (screen_building); before that the
+  // card shows the score alone, so no placard colour is implied ahead of the simulated quake.
+  const screened = useMemo(() => {
+    const out = new Set<string>();
+    for (const raw of messages) {
+      const m = raw as Msg;
+      if (kind(m) === "tool" && m.name === "screen_building") {
+        const r = parse<{ pid?: string }>(m);
+        if (r?.pid) out.add(String(r.pid));
+      }
+    }
+    return out;
+  }, [messages]);
+  const deskCards = useMemo(() => {
+    const all = { ...fetched, ...Object.fromEntries(live) } as Record<string, DeskCard>;
+    for (const [pid, c] of Object.entries(all)) {
+      if (!screened.has(pid) && c.screening?.suggest) all[pid] = { ...c, screening: { ...c.screening, suggest: undefined } };
+    }
+    return all;
+  }, [fetched, live, screened]);
   const [pulling, setPulling] = useState<string | null>(null);
   const pick = (pid: string) => {
     setSelected(pid);
@@ -342,7 +361,7 @@ export function DeskView({ messages, threadId, cases, tags = {}, precalls = {}, 
           <span><i style={{ color: TAG_COLOR.yellow, fontStyle: "normal" }}>●</i> yellow</span>
           <span><i style={{ color: TAG_COLOR.red, fontStyle: "normal" }}>●</i> red</span>
           <span><i style={{ color: "#94a3b8", fontStyle: "normal" }}>●</i> open case</span>
-          <span style={{ flexBasis: "100%", color: FAINT }}>Tags are simulated: game outcome, not an engineering assessment.</span>
+          <span style={{ flexBasis: "100%", color: FAINT }}>Colours are a simulated quake screening · game outcome, not an engineering assessment.</span>
         </div>
       </section>
 
