@@ -82,7 +82,7 @@ export function momentsOf(messages: readonly unknown[], heroPid: string | null):
     const k = kind(m);
     if (k === "human") {
       const t = text(m.content).trim();
-      if (/^Debrief the night shift/i.test(t)) { debriefAt = i; drafted = false; }
+      if (/^(Debrief the night shift|End the shift)/i.test(t)) { debriefAt = i; drafted = false; }
       else if (/^Tip:/i.test(t)) tips.push({ suite: tipSuite(t), at: i });
       return;
     }
