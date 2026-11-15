@@ -50,15 +50,14 @@ import { HqMoments } from "./hqMoments";
 import { mulberry32 } from "../prng";
 import { IntroOverlay } from "./IntroOverlay";
 import { InsideView, type InsideMode } from "./InsideView";
-import { FootHud, type Banner, type Hint, type Objective } from "./FootHud";
+import { FootHud, RadioSubs, type Banner, type Hint, type Objective } from "./FootHud";
 import { DawnView } from "./DawnView";
-import { RadioLog } from "../Hud";
-import { Badges } from "./ui";
+import { Badges, footStyles } from "./ui";
 
 type Step = "intro" | "office" | "suite" | "approach" | "inside" | "visit" | "night" | "hold" | "escape" | "safe" | "result" | "dawn";
 
 const TIP_CHOICES = ["Concrete", "Brick", "Can't tell"];
-const SUITE_CHOICES = ["Empty: no one works here", "People are working here", "Can't tell"];
+const SUITE_CHOICES = ["Empty", "People working", "Can't tell"];
 // Exact strings: the replay covers these three (sent as "Tip: <text>").
 const suiteTips = (suite: string) => [
   `I'm inside suite ${suite}. It's empty: no one is working here.`,
@@ -347,7 +346,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
     ctx.bus.emit("world:beacon", { pid: hero.pid });
     const offDown = ctx.bus.on("player:downed", () => (downed.current = true));
     const offMission = [
-      ctx.bus.on("mission:pickup", (e) => setBanner({ title: e.kind === "boards" ? `+${e.n} boards` : "+1 medkit", sub: e.kind === "medkit" ? "[Q] to use it." : "For the barricade.", tone: "good" }, 2200)),
+      ctx.bus.on("mission:pickup", (e) => setBanner({ title: e.kind === "boards" ? `+${e.n} boards` : "+1 medkit", sub: e.kind === "medkit" ? "Press Q to use it." : "For the barricade.", tone: "good" }, 2200)),
       ctx.bus.on("mission:survivor", (e) =>
         setBanner(
           e.state === "following" ? { title: `${e.name} is with you`, sub: "Keep them close. Zombies go for them too.", tone: "good" }
@@ -357,7 +356,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
         ),
       ),
       ctx.bus.on("mission:barricade-broken", () => ctx.bus.emit("world:barricade", { pid: null })),
-      ctx.bus.on("mission:barricade-broken", () => setBanner({ title: "The barricade is down!", sub: "Shove them back. [E] with boards to rebuild.", tone: "bad" }, 3000)),
+      ctx.bus.on("mission:barricade-broken", () => setBanner({ title: "The barricade is down", sub: "Shove them back. E with boards rebuilds it.", tone: "bad" }, 3000)),
       ctx.bus.on("mission:medkit", () => setBanner({ title: "Patched up", tone: "good" }, 1500)),
     ];
 
@@ -443,7 +442,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
     // The horde swarms the fortress you left (chasers still come for you); not the door you're running to.
     if (hero?.door) ctx.bus.emit("horde:target", { x: hero.door.x, z: hero.door.z });
     setStep("escape");
-    setBanner(breach ? { title: "They're through!", sub: to ? `Run to ${labelOf(toPid)}.` : "Get clear and survive.", tone: "bad" } : { title: `Run to ${labelOf(toPid)}`, sub: "Adrenaline: hold Shift and sprint the whole way. Space to shove.", tone: "warn" });
+    setBanner(breach ? { title: "They're through", sub: to ? `Run to ${labelOf(toPid)}.` : "Get clear and survive.", tone: "bad" } : { title: `Run to ${labelOf(toPid)}`, sub: "Hold Shift to sprint. Space to shove.", tone: "warn" });
   };
 
   const startDefend = (ctx: FootCtx, door: Pt) => {
@@ -469,7 +468,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
     ctx.bus.emit("horde:target", { x: door[0] + f[0] * 3, z: door[1] + f[1] * 3 });
     ctx.input.lock();
     setStep("hold");
-    setBanner({ title: "Hold the door", sub: "[Space] shove · hold [E] to nail boards · keep them off until the roll comes in", tone: "warn" }, 4500);
+    setBanner({ title: "Hold the door", sub: "Space to shove. Hold E to nail boards.", tone: "warn" }, 4500);
   };
 
   useEffect(() => {
@@ -539,7 +538,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
         const mmi = b?.mmi ?? 7;
         ctx.bus.emit("fx:shake", { amp: Math.max(0.12, Math.min(0.6, (mmi - 5.5) * 0.17)), secs: 4 });
         ctx.bus.emit("mission:debris", { zones, secs: 7 });
-        setBanner({ title: "Aftershock!", sub: "Get clear of the red zones: buildings with unfinished city retrofit orders. Game outcome, not an engineering assessment.", tone: "bad" }, 5000);
+        setBanner({ title: "Aftershock", sub: "Stay clear of the red zones: unfinished city retrofit orders (a game outcome).", tone: "bad" }, 5000);
       };
 
       if (downed.current) {
@@ -550,7 +549,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
         [p.x, p.z] = s === "escape" || s === "hold" ? [p.x, p.z] : ctx.collide(at[0] + 2, at[1] + 2, 0.5);
         p.health = 60;
         ctx.bus.emit("horde:repel", { x: p.x, z: p.z, r: 18 });
-        setBanner({ title: "You went down.", sub: "Your squad dragged you clear.", tone: "bad" });
+        setBanner({ title: "You went down", sub: "Your squad dragged you clear.", tone: "bad" });
       }
 
       if (s === "intro") {
@@ -695,13 +694,13 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
               return { id: `office-${i}`, x, z, name };
             });
             ctx.bus.emit("mission:survivors", { survivors: spots });
-            setBanner({ title: "The office on record looks like it's still here", sub: `The listing may be stale. Bring them to ${hero.label}.`, tone: "good" }, 4500);
+            setBanner({ title: "The office looks like it's still here", sub: `The listing may be out of date. Bring them to ${hero.label}.`, tone: "good" }, 4500);
           } else {
             setBanner({
               title: "Nobody to bring",
               sub: t.chosen === 0
-                ? `CoStar records ${n} ${n === 1 ? "person" : "people"} in suite ${c7?.suite}; your report and the records disagree. HQ will flag it for a human to check.`
-                : `The evidence doesn't settle it yet. HQ will flag suite ${c7?.suite} for a human to check.`,
+                ? `The records list ${n} ${n === 1 ? "person" : "people"} in suite ${c7?.suite}; your report disagrees. HQ will flag it for a person to check.`
+                : `The evidence doesn't settle it yet. HQ will flag suite ${c7?.suite} for a person to check.`,
               tone: "info",
             }, 5000);
           }
@@ -928,7 +927,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
           const ds = best ? gRef.current.dossiers[best.pid] : undefined;
           if (best && !ds) gRef.current.loadDossier(best.pid);
           const img = ds && ds !== "loading" && ds !== "error" ? ds.images.drone?.[0] : undefined;
-          const next = best && img ? { src: evidenceUrl(img), caption: `Real aerial on file (Vexcel) · ${best.label}` } : null;
+          const next = best && img ? { src: evidenceUrl(img), caption: `Nearby aerial: ${best.label}` } : null;
           nearPhotoOn.current = !!next;
           setNearPhoto(next);
           if (best && !img) nearPid.current = null; // retry once its dossier arrives
@@ -978,7 +977,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
     const idx = game.messages.findIndex((m) => kind(m as Msg) === "tool" && (m as Msg).name === "commit_plan");
     if (idx < 0) return game.messages;
     // Keep the answer's slot (so HQ stops "waiting for your call"), hide what it says until the reveal.
-    const placeholder = { ...(game.messages[idx] as Msg), type: "tool", content: "Orders received. The night is rolling." };
+    const placeholder = { ...(game.messages[idx] as Msg), type: "tool", content: "Orders received." };
     return [...game.messages.slice(0, idx), placeholder];
   }, [game.messages, revealed]);
 
@@ -1044,7 +1043,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
       const slot = pid === hero.pid ? "drone" : "cctv";
       const photo = slot === "drone"
         ? { src: evidenceUrl(r.images[0]), caption: `HQ looked from above: ${r.callout || r.finding || "aerial"}` }
-        : { src: evidenceUrl(r.images[0]), caption: `HQ looked inside${case7?.suite ? ` suite ${case7.suite}` : ""} (its 3D tour): ${r.callout || r.finding || "tour"}` };
+        : { src: evidenceUrl(r.images[0]), caption: `HQ looked inside${case7?.suite ? ` suite ${case7.suite}` : ""}: ${r.callout || r.finding || "its 3D scan"}` };
       (slot === "drone" ? setDronePhoto : setCctvPhoto)(photo);
       feedsRef.current?.setOverride(slot, true);
       // Not cleared when messages change (the old cleanup did that, so the photo never went away).
@@ -1089,7 +1088,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
       gRef.current.select(office.pid);
       ctx.bus.emit("world:beacon", { pid: office.pid });
       setStep("office");
-      setBanner({ title: "Settle tonight's cases and make it to dawn", sub: `HQ is briefing the night shift from CoStar's open-case queue. Start at ${office.label}.`, tone: "info" }, 5500);
+      setBanner({ title: "Settle tonight's cases. Make it to dawn.", sub: `HQ is picking tonight's cases from the open-case queue. Start at ${office.label}.`, tone: "info" }, 5500);
       return;
     }
     gRef.current.select(hero.pid); // the fortress card loads while you walk
@@ -1183,9 +1182,9 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
   const hints: Hint[] = [];
   // Movement and the full controls live in the pause menu; the HUD only shows what matters right now (menu hint last).
   if (step === "approach" && hud.nearDoor) hints.push({ key: "E", label: `go inside ${heroLabel}` });
-  if ((step === "office" || step === "approach") && nearStale && !staleOpen) hints.push({ key: "C", label: "is it the same building?" });
-  if ((step === "office" || step === "approach") && nearSolar && !solarOpen) hints.push({ key: "C", label: `survey the roof for solar` });
-  if ((step === "office" || step === "approach") && nearVisit) hints.push({ key: "E", label: `look inside ${nearVisit}` });
+  if ((step === "office" || step === "approach") && nearStale && !staleOpen) hints.push({ key: "C", label: "Optional: same building?" });
+  if ((step === "office" || step === "approach") && nearSolar && !solarOpen) hints.push({ key: "C", label: "Optional: survey the roof for solar" });
+  if ((step === "office" || step === "approach") && nearVisit) hints.push({ key: "E", label: `Optional: look inside ${nearVisit}` });
   if (step === "office" && hud.nearDoor && office) hints.push({ key: "E", label: `go up to suite ${case7?.suite ?? ""} at ${office.label}` });
   if (step === "night" && !game.decision) hints.push({ key: "H", label: "hold" }, { key: "R", label: runLabel ? `run to ${runLabel}` : "run", disabled: !runLabel });
   if (step === "hold") hints.push({ key: "E", label: mhud.boards > 0 ? `nail boards (${mhud.boards})` : "no boards left", disabled: mhud.boards === 0 });
@@ -1195,16 +1194,16 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
   if (step !== "intro" && step !== "dawn") hints.push({ key: "P", label: "menu" });
 
   const objective =
-    step === "office" ? (case7 ? `Case #${case7.n}: is the office on record in suite ${case7.suite} still there? Go and look.` : "HQ is briefing the night shift…")
-    : step === "suite" ? "Look around. Is anyone still working here?"
-    : step === "approach" ? (game.phase === "scout" ? `Get to ${heroLabel}. Your squads are reading its records.` : `Reach ${heroLabel}.`)
+    step === "office" ? (case7 ? `Case #${case7.n}: look inside suite ${case7.suite} at ${office?.label ?? "the office"}` : "HQ is picking tonight's cases…")
+    : step === "suite" ? "Is anyone still working here?"
+    : step === "approach" ? `Reach ${heroLabel}`
     : step === "inside" ? "Look at the walls. Tell HQ what you see."
-    : step === "night" ? (game.decision ? "Orders sent." : game.proposal ? "HQ made a call. Yours is final." : "HQ is weighing HOLD or RUN…")
-    : step === "hold" ? (game.decideError ?? "Hold the door until the roll comes in.")
-    : step === "escape" ? (runLabel ? `Run to ${runLabel}.` : "Survive until dawn.")
+    : step === "night" ? (game.decision ? "Orders sent" : game.proposal ? "Make the call: hold or run" : "HQ is weighing hold or run…")
+    : step === "hold" ? (game.decideError ?? "Hold the door")
+    : step === "escape" ? (runLabel ? `Run to ${runLabel}` : "Survive until dawn")
     : step === "safe" ? (game.decideError ?? "Doors shut. Wait for it.")
-    : step === "result" ? "The roll is in."
-    : step === "dawn" ? "Dawn." : "";
+    : step === "result" ? "The night is decided"
+    : step === "dawn" ? "Dawn" : "";
 
   const saved = mhud.survivors.filter((v) => v.state === "safe").length;
   const withYou = mhud.survivors.filter((v) => v.state === "following").length;
@@ -1216,30 +1215,30 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
   const objectives: Objective[] = [
     ...(office
       ? [presenter
-          ? { id: "case7", kind: "main" as const, text: `${caseTag(case7)}HQ works it from the records (lease, listing, the suite's own tour)`, done: case7Weighed }
-          : { id: "case7", kind: "main" as const, text: `${caseTag(case7)}is the office on record at ${office.label}${case7?.suite ? `, suite ${case7.suite},` : ""} still there?`, done: suiteTip.sentAt !== null }]
+          ? { id: "case7", kind: "main" as const, text: `${caseTag(case7)}HQ works it from the records`, done: case7Weighed }
+          : { id: "case7", kind: "main" as const, text: `${caseTag(case7)}${case7?.suite ? `look inside suite ${case7.suite} at ${office.label}` : `check the office at ${office.label}`}`, done: suiteTip.sentAt !== null }]
       : []),
     { id: "reach", kind: "main", text: `${caseTag(case6)}reach ${heroLabel}`, done: prog.reached },
-    { id: "walls", kind: "main", text: "Check its walls inside: concrete or not?", done: prog.checked },
-    { id: "night", kind: "main", text: "Survive the night: HOLD or RUN", done: prog.survived },
-    { id: "report", kind: "main", text: "File the report at dawn", done: prog.filed },
+    { id: "walls", kind: "main", text: "Look at its walls from inside", done: prog.checked },
+    { id: "night", kind: "main", text: "Survive the night: hold or run", done: prog.survived },
+    { id: "report", kind: "main", text: "File the reports at dawn", done: prog.filed },
     ...(mhud.survivors.length
-      ? [{ id: "survivors", kind: "side" as const, text: "Bring the office on record to safety", done: saved === mhud.survivors.length, progress: `${saved + withYou}/${mhud.survivors.length}` }]
+      ? [{ id: "survivors", kind: "side" as const, text: "Bring the office's people to safety", done: saved === mhud.survivors.length, progress: `${saved + withYou}/${mhud.survivors.length}` }]
       : []),
-    ...(sweep.stamped ? [{ id: "sweep", kind: "side" as const, text: "Sweep the suites on record (records only)", done: false, progress: `${sweep.right} right of ${sweep.stamped}` }] : []),
+    ...(sweep.stamped ? [{ id: "sweep", kind: "side" as const, text: "Sweep the suites on record", done: false, progress: `${sweep.right} right of ${sweep.stamped}` }] : []),
     ...(stale.some((c) => c.x > -500 && c.x < 140 && c.z > -300 && c.z < 200) ? [{ id: "stale", kind: "side" as const, text: "Same building? Check the city's list", done: stale.some((c) => staleStamps[c.pid]), progress: `${Object.keys(staleStamps).length} checked` }] : []),
-    ...(stale.length ? [{ id: "stale-more", kind: "side" as const, text: `${stale.length} stale-entry cases across LA (see the auditor)`, done: false }] : []),
-    ...(solar.length ? [{ id: "solar", kind: "side" as const, text: "Survey roofs for solar (a screen, not a design)", done: Object.keys(solarStamps).length >= solar.length, progress: `${Object.keys(solarStamps).length}/${solar.length}` }] : []),
-    { id: "crates", kind: "side", text: "Scavenge boards for the barricade", done: mhud.crates > 0 && mhud.found >= mhud.crates, progress: `${mhud.found}/${mhud.crates}` },
+    ...(stale.length ? [{ id: "stale-more", kind: "side" as const, text: `${stale.length} more "same building?" cases across LA, in the auditor`, done: false }] : []),
+    ...(solar.length ? [{ id: "solar", kind: "side" as const, text: "Survey roofs for solar", done: Object.keys(solarStamps).length >= solar.length, progress: `${Object.keys(solarStamps).length}/${solar.length}` }] : []),
+    { id: "crates", kind: "side", text: "Find boards for the barricade", done: mhud.crates > 0 && mhud.found >= mhud.crates, progress: `${mhud.found}/${mhud.crates}` },
   ];
 
   const decision =
     step === "night"
       ? {
-          prompt: game.proposal ? `HQ proposes: ${game.proposal.action === "run" ? `RUN to ${labelOf(game.proposal.to_pid ?? fallbackPid)}` : `HOLD ${heroLabel}`}.` : game.isLoading ? "HQ is weighing HOLD or RUN…" : "HQ didn't call it. Your call.",
+          prompt: game.proposal ? `HQ proposes: ${game.proposal.action === "run" ? `run to ${labelOf(game.proposal.to_pid ?? fallbackPid)}` : `hold ${heroLabel}`}.` : game.isLoading ? "HQ is weighing hold or run…" : "HQ didn't call it. Your call.",
           proposed: game.proposal?.action ?? null,
           runLabel,
-          sent: game.decision ? `Orders sent: ${game.decision.action === "run" ? `RUN to ${labelOf(game.decision.to_pid)}` : game.decision.action === "hold" ? "HOLD" : "no orders, holding"}` : null,
+          sent: game.decision ? `Orders sent: ${game.decision.action === "run" ? `run to ${labelOf(game.decision.to_pid)}` : game.decision.action === "hold" ? "hold" : "none, holding"}` : null,
           error: game.decideError,
         }
       : null;
@@ -1256,22 +1255,22 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
   const officeDossier = office ? game.dossiers[office.pid] : undefined;
   const officeFaces = officeDossier && officeDossier !== "loading" && officeDossier !== "error" ? officeDossier.images.inside ?? officeDossier.images.pano ?? [] : [];
   const suiteStatus =
-    suiteTip.chosen === null ? (game.isLoading ? "HQ is checking the lease and the listing. Look around while it works." : "Your report is testimony: strong, capped, never final.")
-    : suiteTip.sentAt === null ? "HQ is still on the radio. Your report goes when the line is clear."
-    : game.isLoading ? "Sent. HQ is weighing it." : "HQ logged it.";
+    suiteTip.chosen === null ? (game.isLoading ? "HQ is checking the lease and the listing. Look around." : "HQ weighs your report with the records.")
+    : suiteTip.sentAt === null ? "Your report goes when the radio is clear."
+    : game.isLoading ? "Sent. HQ is weighing it." : "HQ logged your report.";
   const exitAllowed = step === "inside" && (agentOff || (game.phase !== "dusk" && !(game.phase === "scout" && !game.scoutDone) && !(!!hero?.conflict && tip.chosen === null) && !(tip.chosen !== null && (tip.sentAt === null || game.isLoading))));
   const tipStatus =
-    tip.chosen === null ? "Your report is testimony: strong, capped, never final."
-    : tip.sentAt === null ? "HQ is still on the radio. Your report goes when the line is clear."
-    : game.isLoading ? "Sent. HQ is weighing it." : "HQ logged it.";
+    tip.chosen === null ? "HQ weighs your report with the records."
+    : tip.sentAt === null ? "Your report goes when the radio is clear."
+    : game.isLoading ? "Sent. HQ is weighing it." : "HQ logged your report.";
 
   const verifiedN = (tip.sentAt !== null ? 1 : 0) + (suiteTip.sentAt !== null ? 1 : 0);
   const outcomeLines = [
-    ...(presenter && case7 && case7Weighed ? [`Case #${case7.n} was worked by HQ from the records while you ran: the lease, the listing and the suite's own tour.`] : []),
-    ...(Object.keys(staleStamps).length ? [`Same building?: ${stale.filter((c) => staleStamps[c.pid] === c.answer).length} of ${Object.keys(staleStamps).length} stamps match the records.`] : []),
-    ...(Object.keys(solarStamps).length ? [`Solar survey: ${solar.filter((r) => solarStamps[r.pid] === r.answer).length} of ${Object.keys(solarStamps).length} roofs stamped as the screen says.`] : []),
+    ...(presenter && case7 && case7Weighed ? [`Case #${case7.n}: HQ worked it from the records while you ran.`] : []),
+    ...(Object.keys(staleStamps).length ? [`"Same building?": ${stale.filter((c) => staleStamps[c.pid] === c.answer).length} of ${Object.keys(staleStamps).length} stamps match the records.`] : []),
+    ...(Object.keys(solarStamps).length ? [`Solar roofs: ${solar.filter((r) => solarStamps[r.pid] === r.answer).length} of ${Object.keys(solarStamps).length} stamped as the screen says.`] : []),
     ...(sweep.stamped ? [`Suite sweep: ${sweep.right} of ${sweep.stamped} stamps match what the records support.`] : []),
-    ...(verifiedN ? [`Records checked tonight: ${verifiedN} open case${verifiedN === 1 ? "" : "s"} from CoStar's queue${queueTotal ? ` of ${queueTotal}` : ""}. Your reports are evidence in them now.`] : []),
+    ...(verifiedN ? [`${verifiedN} case${verifiedN === 1 ? "" : "s"} checked tonight${queueTotal ? `, of ${queueTotal} open` : ""}. Your report${verifiedN === 1 ? " is" : "s are"} evidence in ${verifiedN === 1 ? "it" : "them"} now.`] : []),
     ...(step === "dawn" && score.downed > 0 ? [`You went down ${score.downed}× (−${score.downed * 100} points). Your squad dragged you clear each time.`] : []),
     ...(game.outcome ? (game.outcome.why ?? "").split("; ").map((x) => x.replace(/\.\s*Game outcome.*$/, "")) : []),
   ];
@@ -1326,9 +1325,9 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
           faces={officeFaces}
           title={`${office.label} · suite ${case7?.suite ?? ""}`}
           mode="look"
-          question={{ prompt: case7?.question ?? "CoStar records a tenant in this suite, and the suite is listed for lease right now. Is the tenant still there?", choices: SUITE_CHOICES, chosen: suiteTip.chosen, status: suiteStatus }}
+          question={{ prompt: case7?.question ?? "The records list a tenant here, and the suite is listed for lease. Is the tenant still there?", choices: SUITE_CHOICES, chosen: suiteTip.chosen, status: suiteStatus }}
           note={officeFaces.length ? "Real interior: this suite's own 3D tour." : null}
-          exitHint={suiteTip.sentAt !== null && game.runDone ? "[E] step outside" : suiteTip.chosen === null ? "Answer first: is anyone working here?" : "Wait for HQ…"}
+          exitHint={suiteTip.sentAt !== null && game.runDone ? "[E] step outside" : suiteTip.chosen === null ? "Answer first, then step outside" : "Wait for HQ…"}
           onChoose={(i) => suiteTip.chosen === null && setSuiteTip({ chosen: i, sentAt: null })}
         />
       )}
@@ -1340,7 +1339,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
           mode={insideMode}
           question={step === "inside" && hero.conflict ? { prompt: "What are the walls made of?", choices: TIP_CHOICES, chosen: tip.chosen, status: tipStatus } : null}
           note={insideFaces.length ? "Real interior: this building's own 3D tour." : null}
-          exitHint={exitAllowed ? "[E] step outside" : step === "inside" ? (hero.conflict && tip.chosen === null ? "Answer first: what do the walls look like?" : "Wait for HQ…") : null}
+          exitHint={exitAllowed ? "[E] step outside" : step === "inside" ? (hero.conflict && tip.chosen === null ? "Answer first, then step outside" : "Wait for HQ…") : null}
           onChoose={(i) => tip.chosen === null && setTip({ chosen: i, sentAt: null })}
         />
       )}
@@ -1350,10 +1349,13 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
         <HopMap hops={hops} at={Math.min(hop, hops.length - 1)} heading={hopHeading} onPick={setHop} />
       ))}
       {showInside && (
-        // The agent keeps talking while you're inside: the radio stays on screen (top-right is kept free by InsideView).
-        <div style={{ position: "absolute", top: 16, right: 16, width: 360, maxHeight: 260, overflow: "hidden", zIndex: 30, pointerEvents: "none" }}>
-          <RadioLog lines={radio.slice(-4)} busy={game.isLoading} replay={replay} />
-        </div>
+        // The agent keeps working while you're inside: HQ's strip stays on screen (top-centre), the radio as subtitles.
+        <>
+          <div className={footStyles.hqInside}>
+            <HqPanel messages={shownMessages} busy={game.isLoading} heroPid={hero?.pid ?? null} compact />
+          </div>
+          <RadioSubs lines={radio} layer />
+        </>
       )}
       {/* The AI's big moments (plan, case opened, the aerial it looked at, your report moving the odds, drafting).
           Mounted once for the whole night (a remount would treat earlier moments as history); hidden, not unmounted. */}
@@ -1361,7 +1363,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
         <HqMoments messages={shownMessages} busy={game.isLoading} heroPid={hero?.pid ?? null} />
       </div>
       {(showInside || step === "dawn") && (
-        <div style={{ position: "absolute", top: 16, left: "50%", transform: "translateX(-50%)", zIndex: 40, pointerEvents: "none" }}>
+        <div style={{ position: "absolute", right: 18, top: 14, zIndex: 40, pointerEvents: "none" }}>
           <Badges stub={game.stub} replay={replay} />
         </div>
       )}
@@ -1369,7 +1371,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
         <button type="button" aria-label="Pause" onClick={() => {
           ctxRef.current?.input.unlock();
           setPaused(true);
-        }} style={{ position: "absolute", top: 14, left: "calc(50% + 250px)", zIndex: 41, width: 34, height: 34, border: "1px solid rgba(226,232,240,.35)", background: "rgba(5,7,13,.6)", color: "#e2e8f0", font: "700 14px/1 system-ui", cursor: "pointer" }}>
+        }} className={footStyles.pauseBtn} style={{ left: "calc(50% + 250px)" }}>
           ❚❚
         </button>
       )}
@@ -1391,8 +1393,8 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
         }} />
       )}
       {step === "intro" && city && (
-        <div style={{ position: "absolute", left: 24, bottom: 72, zIndex: 45, pointerEvents: "none", color: "#e2e8f0", font: "600 13px/1.4 ui-monospace, monospace", background: "rgba(5,7,13,.6)", padding: "8px 12px", borderLeft: "3px solid #f5a524" }}>
-          ALL OF CoStar&apos;S LA RECORDS · {city.buildings.toLocaleString()} buildings · {city.cases} with open cases (pillars of light)
+        <div className={footStyles.cityLine}>
+          Pillars of light: <b>{city.cases.toLocaleString("en-US")} buildings with open cases</b>, of {city.buildings.toLocaleString("en-US")} in CoStar&apos;s LA records
         </div>
       )}
       {step === "intro" && <IntroOverlay heroLabel={heroLabel} ready={!!district} stub={game.stub} replay={replay} attribution={district.attribution ?? null} onStart={begin} />}
@@ -1424,17 +1426,19 @@ function HopMap({ hops, at, heading, onPick }: { hops: { id: string; x: number; 
   const px = (x: number) => 14 + ((x - x0) / Math.max(1, x1 - x0)) * (W - 28);
   const py = (y: number) => H - 14 - ((y - y0) / Math.max(1, y1 - y0)) * (H - 28); // plan +y is up
   return (
-    <div style={{ position: "absolute", left: 16, top: "38%", zIndex: 36, background: "rgba(5,7,13,.72)", border: "1px solid rgba(245,165,36,.5)", padding: 8, color: "#e2e8f0", font: "600 11px/1.3 ui-monospace, monospace" }}>
-      <div style={{ marginBottom: 4, color: "#f5a524" }}>WALK THE REAL SCAN · [W]/[S] walk · drag to look · click a spot</div>
+    <div className={`${footStyles.root} ${footStyles.plan}`}>
+      <div className={footStyles.planHead}>
+        <b>Floor plan</b> · real 3D scan · W/S to walk, click a spot
+      </div>
       <svg width={W} height={H} style={{ display: "block" }}>
-        <rect x={4} y={4} width={W - 8} height={H - 8} fill="none" stroke="rgba(226,232,240,.25)" />
+        <rect x={4} y={4} width={W - 8} height={H - 8} fill="none" stroke="rgba(244,241,234,.2)" />
         {hops[at] && (() => {
           // Heading arrow (plan +y points up the map, so flip y for screen coordinates).
           const cx = px(hops[at].x), cy = py(hops[at].y), r = (heading * Math.PI) / 180;
-          return <line x1={cx} y1={cy} x2={cx + Math.sin(r) * 18} y2={cy - Math.cos(r) * 18} stroke="#f5a524" strokeWidth={3} />;
+          return <line x1={cx} y1={cy} x2={cx + Math.sin(r) * 18} y2={cy - Math.cos(r) * 18} stroke="#f2a33a" strokeWidth={3} />;
         })()}
         {hops.map((h, i) => (
-          <circle key={h.id} cx={px(h.x)} cy={py(h.y)} r={i === at ? 7 : 5} fill={i === at ? "#f5a524" : "rgba(226,232,240,.55)"}
+          <circle key={h.id} cx={px(h.x)} cy={py(h.y)} r={i === at ? 7 : 5} fill={i === at ? "#f2a33a" : "rgba(244,241,234,.55)"}
             style={{ cursor: "pointer" }} onClick={() => onPick(i)} />
         ))}
       </svg>
