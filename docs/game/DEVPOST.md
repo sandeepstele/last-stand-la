@@ -25,7 +25,7 @@ We wanted a game where that judgment is the whole game. The paperwork is real: o
 ## What it does
 You are **Bob**, a building officer in downtown Los Angeles, for a short career: **four days**, one shift a day, each on a different real building in the district. Day 1, at 737 Broadway, runs the full arc below, ending in a simulated aftershock. Days 2 to 4 run the same desk, walk-in and placard on other buildings, without the aftershock (see "Day after day").
 
-**Morning: the agent remembers.** The analyst opens the shift from its own shift log. The first shift after a reset opens from a seeded previous shift (601 Broadway); after that, each shift opens with what Bob actually corrected last time.
+**Morning: the agent remembers.** The analyst opens the shift from its own shift log. Day 1 opens from a seeded previous shift (601 Broadway); each later day opens with what Bob corrected the day before.
 
 **Day: the desk.** Bob's inbox holds real open cases from the CoStar queue, where two sources disagree about the same building. His analyst is a LangChain deep agent. It plans the shift, sends **four squads in parallel** (records, aerial, interior, city), and builds a **card per building** with one line per source:
 - the CoStar record;
@@ -59,14 +59,14 @@ Each row also shows the tag's **expected** outcome over the building's odds, so 
 
 **Day after day, then a career summary.** At dawn Bob chooses **Next day (k of 4)** (Enter), which keeps the history, or **New game**, which resets it. The HUD and the desk header show "Day k of 4". Each next day brings a different district building whose records disagree about its material, plus an office suite to check, and the analyst opens it with Bob's last real correction.
 
-On Days 2 to 4 there is **no aftershock**, no aftershock clock and no rescue. Dawn grades Bob's placard in code: the **expected** people exposed and displaced under his tag on the building's own HAZUS odds, and whether it matches the code's suggestion. For example, posting red on Day 2 when the code suggests yellow exposes about 0 people and displaces about 26.
+On Days 2 to 4 there is **no aftershock**, no aftershock clock and no rescue. Dawn grades Bob's placard in code: the **expected** people exposed and displaced under his tag on the building's own HAZUS odds, and whether it matches the code's suggestion. For example, posting red at 621 Spring St (Day 4) when the code suggests yellow exposes about 0 people and displaces about 26.
 
 | Day | Building (and office suite) | What the records disagree on | People at stake | Graded by |
 |---|---|---|---|---|
 | 1 | 737 Broadway (suite 1100, 122 7th St) | Masonry on the CoStar record; concrete on the city's retrofit list | 251 | The simulated aftershock (complete damage) |
-| 2 | 621 Spring St (suite 404, 724 Spring St) | Steel on the record; concrete on the city's list | 106 | Expected outcome on its own odds |
-| 3 | 730 Los Angeles St (suite 1400, 122 7th St: a 12-person office on record) | Masonry vs concrete; 15 Matterport scans | 201 | Expected outcome on its own odds |
-| 4 | 620 Main St (an office suite at 724 Spring St) | Masonry vs concrete | 40 | Expected outcome on its own odds |
+| 2 | 730 Los Angeles St (suite 404, 724 Spring St) | Masonry on the record; concrete on the city's list; 15 Matterport scans | 201 | Expected outcome on its own odds |
+| 3 | 620 Main St (suite 1400, 122 7th St: a 12-person office on record) | Masonry vs concrete | 40 | Expected outcome on its own odds |
+| 4 | 621 Spring St (an office suite at 724 Spring St) | Steel on the record; concrete on the city's list | 106 | Expected outcome on its own odds |
 
 On records alone the code suggests red for all four; Bob's walk-in reports move the odds. During play a "Your career so far: day k of 4" block grows at each dawn. After Day 4 it becomes the **career summary**:
 - tags right: Day 1 against the aftershock, Days 2 to 4 against the screening;
@@ -80,7 +80,7 @@ On records alone the code suggests red for all four; Bob's walk-in reports move 
 1. **Evidence:** Bob's site report is weighed as evidence, capped at 0.35.
 2. **Decision:** Bob approves or overrides each placard (a human-in-the-loop interrupt), and dawn grades both of them: the simulated aftershock on Day 1, the code's screening on Days 2 to 4.
 3. **Review:** a second model (the critic) reviews every correction draft, and a person approves any record change.
-4. **Memory:** the override and its outcome go into the shift log, and the next shift opens with it. The log carries across days until a new game, so by Day 4 the agent has a record of how often Bob overruled it and how each call was graded. This is in-context learning from human corrections. The first shift after a reset opens from a seeded previous shift (601 Broadway); after that, each shift opens with what Bob actually corrected last time.
+4. **Memory:** the override and its outcome go into the shift log, and the next shift opens with it. The log carries across days until a new game, so by Day 4 the agent has a record of how often Bob overruled it and how each call was graded. This is in-context learning from human corrections. Day 1 opens from a seeded previous shift (601 Broadway); each later day opens with what Bob corrected the day before.
 
 Every placard decision, and every 👍/👎 Bob gives a finding, a source or a draft, is also saved as **preference data in the format used for RLHF/DPO** (chosen/rejected pairs plus ratings), downloadable as JSONL. **No model weights were trained tonight;** the data is collected, not used.
 
