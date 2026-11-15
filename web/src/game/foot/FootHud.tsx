@@ -1,13 +1,16 @@
 "use client";
-// OWNER: builder D. Keep the props type (the director fills it every frame it changes).
+// Keep the props type (the director fills it every frame it changes).
 // Presentation only: every number shown here comes from props (the director, the agent's tool results).
+// Layout: top-left the current objective and how far; top-centre the compass; right HQ (the agent, always on);
+// bottom-centre the radio as subtitles and the one thing to press; bottom-left health and supplies.
 
 import { useState, type ReactNode } from "react";
 import type { DossierState } from "../useGame";
 import { SECTOR_NAME, type RadioLine } from "../radio";
-import type { ScoreKey, Sector } from "../types";
+import type { Sector } from "../types";
 import { FEED_RECTS, SECTOR_DEG, type SurvivorState } from "./engine";
-import { Badges, Icon, Keycap, footStyles as styles } from "./ui";
+import { cap, plain, subtitle } from "./copy";
+import { Badges, Keycap, footStyles as styles } from "./ui";
 
 export type Hint = { key: string; label: string; disabled?: boolean };
 export type Banner = { title: string; sub?: string; tone?: "info" | "warn" | "good" | "bad" };
@@ -19,7 +22,7 @@ export type DecisionView = {
   sent: string | null; // "Orders sent: RUN" once decided
   error: string | null;
 };
-/** One line of the mission list. main = the story (★), side = optional (◇). */
+/** One line of the mission list. main = the story, side = optional. */
 export type Objective = { id: string; text: string; kind: "main" | "side"; done: boolean; progress?: string };
 export type HudProps = {
   objective: string;
@@ -38,97 +41,46 @@ export type HudProps = {
   feeds: { drone: FeedView; cctv: FeedView };
   badges: { stub: boolean; replay: string | null };
   disclaimer: string;
-  attribution: string | null; // "© OpenStreetMap contributors" when OSM outlines are on screen: show it in the footer
+  attribution: string | null; // "© OpenStreetMap contributors" when OSM outlines are on screen: show it in a corner
   // ---- missions (v2)
-  objectives: Objective[]; // replaces the single objective line as the main top-left element (keep `objective` as the current hint under it)
+  objectives: Objective[]; // the current main objective (the director passes at most one); the full list is in the pause menu
   timer: { label: string; secs: number; urgent: boolean } | null; // "Nightfall" countdown; urgent = under 30 s or night has fallen
   supplies: { boards: number; medkits: number; flares?: number }; // carried; [Q] uses a medkit; [G] throws a flare
   survivors: { name: string; state: SurvivorState }[];
-  barricade: { hp: number; max: number } | null; // shown big, bottom-centre, during HOLD
-  hq: ReactNode; // the HQ panel (the agent at work), rendered by the director; placed in the right column under the radio
+  barricade: { hp: number; max: number } | null; // shown bottom-centre during HOLD
+  hq: ReactNode; // the HQ panel (the agent at work), rendered by the director; the right column
   /** Where the nearest chaser is, relative to the view: degrees, 0 = ahead, 90 = right, ±180 = behind. null = nobody close. */
   threatDir?: number | null;
 };
 
-// ------------------------------------------------------------------ top-left: missions, clock, survivors, fortress card
 const clock = (secs: number) => {
   const s = Math.max(0, Math.ceil(secs));
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 };
+const noStop = (s: string) => s.replace(/\s*[.…]+$/, "");
 
-/** "Case #7 of 328: is the office ...?" -> a small amber tag + the question. */
-const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-function ObjText({ text }: { text: string }) {
+// ------------------------------------------------------------------ top-left: the objective, one line, and how far
+function ObjectiveLine({ text, target, timer, survivors }: { text: string; target: HudProps["compass"]["target"]; timer: HudProps["timer"]; survivors: HudProps["survivors"] }) {
+  // "Case #6 of 328: reach 737 Broadway" -> a small "Case #6 of 328" over "Reach 737 Broadway".
   const m = text.match(/^(Case #\d+(?: of [\d,]+)?)\s*:\s*(.*)$/);
-  if (!m) return <span className={styles.objText}>{cap(text)}</span>;
+  const main = noStop(cap(plain(m ? m[2] : text)));
+  const withYou = survivors.filter((v) => v.state === "following").map((v) => v.name);
+  const safe = survivors.filter((v) => v.state === "safe").length;
+  const lost = survivors.filter((v) => v.state === "lost").length;
+  const people = [withYou.length ? `${withYou.join(", ")} with you` : "", safe ? `${safe} safe` : "", lost ? `${lost} lost` : ""].filter(Boolean).join(" · ");
   return (
-    <span className={styles.objText}>
-      <span className={styles.caseTag}>{m[1]}</span>
-      {cap(m[2])}
-    </span>
-  );
-}
-
-function Missions({ objectives, now, timer, survivors, badges }: { objectives: Objective[]; now: string; timer: HudProps["timer"]; survivors: HudProps["survivors"]; badges: HudProps["badges"] }) {
-  return (
-    <section className={`${styles.panel} ${styles.missions}`}>
-      <div className={styles.missionHead}>
-        <span className={styles.tag}>Missions</span>
-        <Badges stub={badges.stub} replay={badges.replay} />
-      </div>
-      <p className={styles.goal}>
-        Settle tonight&apos;s cases
-        <span>Make it to dawn</span>
-      </p>
-      {timer && (
-        <div className={styles.timer} data-urgent={timer.urgent}>
-          <span>{timer.label}</span>
-          {timer.secs > 0 && <b>{clock(timer.secs)}</b>}
+    <section className={styles.objective} key={main}>
+      {m && <span className={styles.objCase}>{m[1]}</span>}
+      <span className={styles.objMain}>{main}</span>
+      {(target || timer) && (
+        <div className={styles.objMeta}>
+          {target && <b>{Math.round(target.dist)} m</b>}
+          {timer && (timer.secs > 0 ? <span data-urgent={timer.urgent}>{timer.label} in {clock(timer.secs)}</span> : <span data-urgent>{timer.label}</span>)}
         </div>
       )}
-      <ul className={styles.objList}>
-        {objectives.map((o) => (
-          <li key={o.id} data-kind={o.kind} data-done={o.done}>
-            <span className={styles.objMark}>{o.done ? <ObjIcon name="check" /> : <ObjIcon name={o.kind === "main" ? "star" : "diamond"} />}</span>
-            <ObjText text={o.text} />
-            {o.progress && <b className={styles.objProg}>{o.progress}</b>}
-          </li>
-        ))}
-      </ul>
-      {survivors.length > 0 && (
-        <div className={styles.survivors}>
-          {survivors.map((v, i) => (
-            <span key={`${v.name}-${i}`} className={styles.survivor} data-state={v.state}>
-              {v.state === "safe" && <ObjIcon name="check" size={11} />}
-              {v.name}
-            </span>
-          ))}
-        </div>
-      )}
-      {now && (
-        <p className={styles.now} key={now}>
-          <Icon name="target" size={15} />
-          {now}
-        </p>
-      )}
+      {people && <div className={styles.objPeople}>{people}</div>}
     </section>
   );
-}
-
-function ObjIcon({ name, size = 14 }: { name: "star" | "diamond" | "check" | "plank" | "cross" | "flare"; size?: number }) {
-  const p = { width: size, height: size, viewBox: "0 0 24 24", "aria-hidden": true } as const;
-  if (name === "star") return <svg {...p}><path fill="currentColor" d="M12 2.5l2.9 6.1 6.6.8-4.9 4.6 1.3 6.6L12 17.3l-5.9 3.3 1.3-6.6-4.9-4.6 6.6-.8z" /></svg>;
-  if (name === "diamond") return <svg {...p}><path fill="none" stroke="currentColor" strokeWidth="2.4" d="M12 3l9 9-9 9-9-9z" /></svg>;
-  if (name === "check") return <svg {...p}><path fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" d="M4 12.5l5 5L20 6.5" /></svg>;
-  if (name === "flare")
-    return (
-      <svg {...p}>
-        <rect x="9" y="9" width="6" height="13" rx="1.5" fill="#e5484d" stroke="#ff9b9e" strokeWidth="1" />
-        <path fill="#ffd27a" d="M12 1.5c2.2 2.4 2.9 4.2 2 6H10c-.9-1.8-.2-3.6 2-6z" />
-      </svg>
-    );
-  if (name === "plank") return <svg {...p}><rect x="2" y="8" width="20" height="8" rx="1.5" fill="#8a5a32" stroke="#c9915a" strokeWidth="1.2" /><circle cx="6" cy="12" r="1.2" fill="#222" /><circle cx="18" cy="12" r="1.2" fill="#222" /></svg>;
-  return <svg {...p}><rect x="2.5" y="2.5" width="19" height="19" rx="4" fill="#f4f4f5" /><path fill="#e5484d" d="M10 6h4v4h4v4h-4v4h-4v-4H6v-4h4z" /></svg>;
 }
 
 // ------------------------------------------------------------------ bottom-centre: the barricade during HOLD
@@ -141,78 +93,22 @@ function BarricadeBar({ b, nail }: { b: { hp: number; max: number }; nail: Hint 
     if (b.hp < prev) setHits((h) => h + 1);
   }
   const f = b.max > 0 ? Math.max(0, Math.min(1, b.hp / b.max)) : 0;
-  const low = f < 0.3;
   return (
-    <div className={styles.barBox} data-low={low} key={hits} data-hit={hits > 0}>
+    <div className={styles.barBox} data-low={f < 0.3} key={hits} data-hit={hits > 0}>
       <div className={styles.barricadeHead}>
-        <strong>Barricade</strong>
-        {nail && (
-          <span className={styles.hint} data-disabled={!!nail.disabled}>
-            <Keycap k={nail.key} size="sm" />
-            {nail.label}
-          </span>
-        )}
+        <span>Barricade</span>
         <b>{Math.round(b.hp)} / {Math.round(b.max)}</b>
       </div>
       <span className={styles.barricadeTrack}>
         <span style={{ width: `${f * 100}%` }} />
       </span>
+      {nail && (
+        <span className={`${styles.hint} ${styles.barNail}`} data-disabled={!!nail.disabled}>
+          <Keycap k={nail.key} tone={nail.disabled ? undefined : "amber"} />
+          {cap(nail.label)}
+        </span>
+      )}
     </div>
-  );
-}
-
-// ------------------------------------------------------------------ the fortress card
-const BARS: { key: ScoreKey; name: string }[] = [
-  { key: "walls", name: "Walls" },
-  { key: "quake", name: "Quake" },
-  { key: "roof", name: "Roof" },
-];
-
-function FortressMini({ dossier, heroLabel, wallsNote }: { dossier: DossierState | null; heroLabel: string; wallsNote: string | null }) {
-  if (!dossier || dossier === "error") return null;
-  if (dossier === "loading") {
-    return (
-      <section className={`${styles.panel} ${styles.fortress}`}>
-        <span className={styles.tag}>Tonight&apos;s fortress</span>
-        <h2>{heroLabel}</h2>
-        <p className={styles.quiet}>Pulling the records…</p>
-      </section>
-    );
-  }
-  const d = dossier;
-  return (
-    <section className={`${styles.panel} ${styles.fortress}`}>
-      <div className={styles.fortressHead}>
-        <span className={styles.tag}>Tonight&apos;s fortress</span>
-      </div>
-      <h2>{d.label || heroLabel}</h2>
-      {d.case && !wallsNote && <p className={styles.disagree}>The records disagree about its walls.</p>}
-      <ul className={styles.bars}>
-        {BARS.map(({ key, name }) => {
-          const s = d.scores?.[key];
-          if (!s) return null;
-          const v = Math.max(0, Math.min(100, Math.round(s.value)));
-          return (
-            <li key={key}>
-              <div className={styles.barTop}>
-                <strong>{name.toUpperCase()}</strong>
-                <span className={styles.track}>
-                  <span className={styles.fill} data-label={s.label} style={{ width: `${v}%` }} />
-                </span>
-                <b>{v}</b>
-                <span className={styles.label} data-label={s.label}>{s.label}</span>
-              </div>
-              {key === "walls" && wallsNote && (
-                <p className={styles.wallsNote} key={wallsNote}>
-                  <b>HQ</b>
-                  {wallsNote}
-                </p>
-              )}
-            </li>
-          );
-        })}
-      </ul>
-    </section>
   );
 }
 
@@ -231,16 +127,16 @@ function Compass({ compass, threat }: { compass: HudProps["compass"]; threat: nu
     const name = CARDINAL[d];
     ticks.push(
       <span key={d}>
-        <span className={styles.tick} style={{ left: `${pct(delta)}%`, height: name ? 10 : 6 }} />
+        <span className={styles.tick} style={{ left: `${pct(delta)}%`, height: name ? 7 : 4 }} />
         {name && (
-          <span className={styles.tickLabel} style={{ left: `${pct(delta)}%` }} data-major={d % 90 === 0} data-n={d === 0}>
+          <span className={styles.tickLabel} style={{ left: `${pct(delta)}%` }} data-major={d % 90 === 0}>
             {name}
           </span>
         )}
       </span>,
     );
   }
-  // The horde: a red band on the strip when it's in view, else a marker under the ticks on the side to turn to.
+  // The horde: a red band on the strip when it's in view, else words on the side to turn to.
   let waveBand = null;
   let waveEdge = null;
   if (waveSector) {
@@ -252,20 +148,19 @@ function Compass({ compass, threat }: { compass: HudProps["compass"]; threat: nu
     } else {
       waveEdge = (
         <span className={styles.hordeEdge} style={delta < 0 ? { left: 0 } : { right: 0 }}>
-          {delta < 0 ? "« HORDE" : "HORDE »"}
+          {delta < 0 ? "‹ horde" : "horde ›"}
         </span>
       );
     }
   }
   let mark = null;
-  let turn: string | null = null;
   if (target) {
     const delta = wrap180(target.bearingDeg - yawDeg);
     const edge = Math.abs(delta) > FOV / 2 - 4;
     const at = edge ? (delta < 0 ? 3 : 97) : pct(delta);
     mark = <span className={styles.targetMark} data-edge={edge} style={{ left: `${at}%` }} />;
-    if (Math.abs(delta) > 35) turn = delta < 0 ? "«" : "»";
   }
+  const near = threat >= 3 ? "close" : threat === 2 ? "near" : null;
   return (
     <div className={styles.compassWrap}>
       <div className={styles.compassBox}>
@@ -276,51 +171,35 @@ function Compass({ compass, threat }: { compass: HudProps["compass"]; threat: nu
         </div>
         {waveEdge}
       </div>
-      {target && (
-        <div className={styles.targetInfo}>
-          {turn === "«" && <span className={styles.turn}>«</span>}
-          <Icon name="target" size={15} />
-          <span>{target.label}</span>
-          <b>{Math.round(target.dist)} m</b>
-          {turn === "»" && <span className={styles.turn}>»</span>}
-        </div>
-      )}
-      {(threat > 0 || waveSector) && (
-        <div className={styles.threat} data-level={threat}>
-          <span className={styles.tag}>Threat</span>
-          {[1, 2, 3].map((i) => (
-            <span key={i} className={styles.pip} data-on={i <= threat} />
-          ))}
-          {waveSector && <span className={styles.waveInfo}>&nbsp;Horde from the {SECTOR_NAME[waveSector]}</span>}
+      {waveSector && (
+        <div className={styles.hordeLine}>
+          Horde from the {SECTOR_NAME[waveSector]}
+          {near && <span> · {near}</span>}
         </div>
       )}
     </div>
   );
 }
 
-// ------------------------------------------------------------------ top-right: the radio
-function Radio({ lines, busy }: { lines: RadioLine[]; busy: boolean }) {
-  const shown = lines.slice(-5);
-  return (
-    <section className={`${styles.panel} ${styles.radio}`} data-busy={busy}>
-      <div className={styles.radioHead}>
-        <span className={styles.tag}>HQ radio · AI commander</span>
-        {busy ? <span className={styles.busy}>THINKING</span> : <span className={styles.idle}>STANDING BY</span>}
-      </div>
-      {shown.length ? (
-        <ol className={styles.lines}>
-          {shown.map((l) => (
-            <li key={l.id} data-tone={l.tone}>
-              <span className={styles.who}>{l.who}</span>
-              {l.text}
-            </li>
-          ))}
-        </ol>
-      ) : (
-        <p className={styles.quiet}>Quiet on the radio.</p>
-      )}
-    </section>
-  );
+// ------------------------------------------------------------------ bottom-centre: the radio, as subtitles
+/** The newest radio line worth reading, as a game subtitle: speaker in amber, at most two lines, fades after 7 s. */
+export function RadioSubs({ lines, layer = false }: { lines: RadioLine[]; layer?: boolean }) {
+  let line: { who: string; text: string; id: string } | null = null;
+  for (let i = lines.length - 1; i >= 0 && !line; i--) {
+    const s = subtitle(lines[i]);
+    if (s) line = { ...s, id: lines[i].id };
+  }
+  const body = line ? (
+    <div className={styles.subs} aria-live="polite">
+      <p className={styles.sub} key={line.id} data-who={line.who}>
+        <b>{line.who}</b>
+        {line.text}
+      </p>
+    </div>
+  ) : null;
+  if (!layer) return body;
+  // Over the inside view: its own layer (fonts, colours), nothing at all when the radio is quiet.
+  return body ? <div className={`${styles.root} ${styles.subsLayer}`}>{body}</div> : null;
 }
 
 // ------------------------------------------------------------------ centre: the banner, animating in and out
@@ -344,14 +223,14 @@ function BannerView({ banner }: { banner: Banner | null }) {
         if (leaving) setShown(null);
       }}
     >
-      <h1>{shown.title}</h1>
-      {shown.sub && <p>{shown.sub}</p>}
+      <h1>{plain(shown.title)}</h1>
+      {shown.sub && <p>{plain(shown.sub)}</p>}
     </div>
   );
 }
 
 // ------------------------------------------------------------------ bottom-centre: HOLD / RUN orders
-function Decision({ d, busy, extra }: { d: DecisionView; busy: boolean; extra: Hint[] }) {
+function Decision({ d, busy }: { d: DecisionView; busy: boolean }) {
   const sentAction = d.sent ? (/\bRUN\b/.test(d.sent) ? "run" : "hold") : null;
   const order = (which: "hold" | "run", key: string, text: string, disabled = false) => (
     <div
@@ -361,16 +240,15 @@ function Decision({ d, busy, extra }: { d: DecisionView; busy: boolean; extra: H
       data-sent={sentAction === which}
       data-faded={!!sentAction && sentAction !== which}
     >
-      {d.proposed === which && <span className={styles.hqCall}>HQ&apos;S CALL</span>}
-      <Keycap k={key} size="lg" tone={d.proposed === which ? "amber" : undefined} />
+      <Keycap k={key} size="lg" tone={d.proposed === which && !sentAction ? "amber" : undefined} />
       <span className={styles.orderText}>{text}</span>
+      {d.proposed === which && <span className={styles.hqCall}>HQ&apos;s call</span>}
     </div>
   );
-  // A slim strip at the bottom: the horde stays visible while you decide.
+  // HQ proposes, you decide: a slim strip at the bottom so the horde stays in view.
   return (
-    <section className={`${styles.panel} ${styles.decision}`}>
+    <section className={styles.decision}>
       <div className={styles.decTop}>
-        <span className={styles.tag}>{d.sent ? "Orders" : "Orders · HQ proposes, you decide"}</span>
         <h3>
           {d.sent ?? d.prompt}
           {busy && !d.proposed && !d.sent && (
@@ -381,16 +259,7 @@ function Decision({ d, busy, extra }: { d: DecisionView; busy: boolean; extra: H
             </span>
           )}
         </h3>
-        {extra.length > 0 && (
-          <span className={styles.decHints}>
-            {extra.map((h) => (
-              <span key={`${h.key}-${h.label}`} className={styles.hint} data-disabled={!!h.disabled}>
-                <Keycap k={h.key} size="sm" />
-                {h.label}
-              </span>
-            ))}
-          </span>
-        )}
+        {!d.sent && d.proposed && <span className={styles.decSub}>Your call is final.</span>}
       </div>
       <div className={styles.choices}>
         {order("hold", "H", "Hold")}
@@ -401,27 +270,28 @@ function Decision({ d, busy, extra }: { d: DecisionView; busy: boolean; extra: H
   );
 }
 
-// ------------------------------------------------------------------ bottom-right: live feeds (drawn in WebGL at FEED_RECTS)
-// Honesty: the live views are GAME camera renders, not real feeds. Only a `photo` (an image HQ actually read) is real.
+// ------------------------------------------------------------------ bottom-right: the camera views (drawn in WebGL at FEED_RECTS)
+// Honesty: the live views are GAME camera renders, not real feeds. Only a `photo` (a real image on file) is real.
 function FeedFrame({ slot, feed }: { slot: "drone" | "cctv"; feed: FeedView }) {
   const r = FEED_RECTS[slot];
-  const prefix = slot === "drone" ? "DRONE" : "CCTV";
-  const cap = feed.caption.trim();
-  const caption = cap.toUpperCase().startsWith(prefix) ? cap.slice(prefix.length).replace(/^[\s·:-]+/, "") : cap;
-  const real = !!feed.photo;
+  const photo = feed.photo;
+  // "HQ looked from above: <what it saw>" / "Nearby aerial: 755 Spring St": the part before the colon labels the frame.
+  const split = photo?.caption.match(/^([^:]{3,40}):\s*(.+)$/);
+  const label = photo ? plain(split ? split[1] : "Real image") : slot === "drone" ? "Drone view" : "Street camera";
+  const caption = photo ? plain(split ? split[2] : photo.caption) : null;
+  // The live view's own caption ("DRONE 70 m above you · N up", "CCTV 737 Broadway · SW corner"), shortened.
+  const live = feed.caption.trim().replace(/^(DRONE|CCTV)\b[\s·:-]*/i, "").replace(/\babove you\b/, "up").replace(/\bN up\b/, "north up");
   return (
-    <div className={styles.feed} data-photo={real} data-slot={slot} style={{ right: r.right, bottom: r.bottom, width: r.w, height: r.h }}>
+    <div className={styles.feed} data-photo={!!photo} data-slot={slot} style={{ right: r.right, bottom: r.bottom, width: r.w, height: r.h }}>
       <div className={styles.feedHead}>
-        <span className={styles.feedLabel} data-real={real}>
-          {real ? "HQ EVIDENCE · real image" : slot === "drone" ? "DRONE VIEW" : "CAMERA VIEW"}
-        </span>
-        {!real && <span className={styles.feedCaption}>{caption}</span>}
+        <span className={styles.feedLabel}>{label}</span>
+        <span className={styles.feedCaption}>{photo ? "real image" : live}</span>
       </div>
-      {feed.photo && (
+      {photo && (
         <>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img key={feed.photo.src} src={feed.photo.src} alt={feed.photo.caption} />
-          <div className={styles.photoCap}>{feed.photo.caption}</div>
+          <img key={photo.src} src={photo.src} alt={photo.caption} />
+          {caption && <div className={styles.photoCap}>{caption}</div>}
         </>
       )}
     </div>
@@ -456,19 +326,8 @@ function ThreatGlow({ dir }: { dir: number | null }) {
   return (
     <div
       className={styles.threatGlow}
-      style={{ background: `radial-gradient(ellipse 30% 42% at ${x}% ${y}%, rgba(229, 72, 77, 0.8) 0%, rgba(229, 72, 77, 0.35) 40%, rgba(229, 72, 77, 0) 72%)` }}
+      style={{ background: `radial-gradient(ellipse 30% 42% at ${x}% ${y}%, rgba(229, 83, 75, 0.75) 0%, rgba(229, 83, 75, 0.32) 40%, rgba(229, 83, 75, 0) 72%)` }}
     />
-  );
-}
-
-/** Night, HOLD and escape: one objective line instead of the mission list and the fortress card. */
-function NowLine({ text, badges }: { text: string; badges: HudProps["badges"] }) {
-  return (
-    <section className={`${styles.panel} ${styles.nowLine}`} key={text}>
-      <Icon name="target" size={18} />
-      <p>{text}</p>
-      <Badges stub={badges.stub} replay={badges.replay} />
-    </section>
   );
 }
 
@@ -476,88 +335,76 @@ function NowLine({ text, badges }: { text: string; badges: HudProps["badges"] })
 export function FootHud(p: HudProps) {
   const low = p.health < 30;
   const hints = p.decision ? p.hints.filter((h) => !["H", "R", "N"].includes(h.key)) : p.hints;
-  // During HOLD the [E] hint (nail boards) sits by the barricade bar; otherwise the door prompt is the one thing
-  // to do right now: show it big, in the middle of the screen.
+  // During HOLD the [E] hint (nail boards) sits under the barricade bar; otherwise the door prompt is the one thing to do now.
   const nail = p.barricade ? hints.find((h) => h.key === "E") ?? null : null;
   const interact = p.barricade ? null : hints.find((h) => h.key === "E" && !h.disabled) ?? null;
-  // Night, HOLD and escape: less UI, more horde.
+  // Night, HOLD and escape: the director's line is the objective (it says what to do this second).
   const compact = !!p.decision || !!p.barricade || !!p.compass.waveSector || /^Run to /.test(p.objective);
   const rest = hints.filter((h) => h !== interact && h !== nail);
+  const main = compact ? p.objective : p.objectives[0]?.text ?? p.objective;
+  // "Optional: look inside 750 Broadway" -> the word "Optional" stays quiet next to the action.
+  const im = interact?.label.match(/^(Optional|Nearby):\s*(.*)$/i);
+  const s = p.supplies;
+  const supplies = [
+    `Boards ${s.boards}`,
+    s.medkits > 0 ? `Medkits ${s.medkits}` : "",
+    s.flares !== undefined ? `Flares ${s.flares}` : "",
+  ].filter(Boolean);
   return (
-    <div className={`${styles.root} ${styles.hud}`} data-compact={compact} data-deciding={!!p.decision}>
+    <div className={`${styles.root} ${styles.hud}`} data-compact={compact} data-deciding={!!p.decision} data-holding={!!p.barricade}>
       <Hurt health={p.health} />
       <ThreatGlow dir={p.threatDir ?? null} />
-      <div className={styles.leftCol}>
-        {compact ? (
-          <NowLine text={p.objective} badges={p.badges} />
-        ) : (
-          <>
-            <Missions objectives={p.objectives} now={p.objective} timer={p.timer} survivors={p.survivors} badges={p.badges} />
-            <FortressMini dossier={p.dossier} heroLabel={p.heroLabel} wallsNote={p.wallsNote} />
-          </>
-        )}
-      </div>
+      {main && <ObjectiveLine text={main} target={p.compass.target} timer={p.timer} survivors={p.survivors} />}
 
       <Compass compass={p.compass} threat={p.threat} />
-      <div className={styles.rightCol}>
-        <Radio lines={p.radio} busy={p.busy} />
-        {p.hq && <div className={styles.hqSlot}>{p.hq}</div>}
-      </div>
+      {p.hq && (
+        <div className={styles.rightCol}>
+          <div className={styles.hqSlot}>{p.hq}</div>
+        </div>
+      )}
       <BannerView banner={p.banner} />
 
-      {/* One action slot, bottom centre between the vitals and the feeds; the lower-third band above it stays free. */}
+      <RadioSubs lines={p.radio} />
+      {/* One action slot, bottom centre between the vitals and the camera views. */}
       <div className={styles.actionSlot}>
         {p.decision ? (
-          <Decision d={p.decision} busy={p.busy} extra={rest.filter((h) => h.key !== "WASD" && h.key !== "Shift")} />
+          <Decision d={p.decision} busy={p.busy} />
         ) : p.barricade ? (
           <BarricadeBar b={p.barricade} nail={nail} />
         ) : interact ? (
           <div className={styles.interact} key={interact.label}>
             <Keycap k={interact.key} size="lg" tone="amber" />
-            <span>{interact.label}</span>
+            {im ? (
+              <span>
+                <em>{cap(im[1])}: </em>
+                {im[2]}
+              </span>
+            ) : (
+              <span>{cap(interact.label)}</span>
+            )}
           </div>
         ) : null}
       </div>
 
-      <section className={`${styles.panel} ${styles.vitals}`}>
-        <div className={styles.vitalRow}>
-          <span className={styles.tag}>Health</span>
-          <span className={styles.hp} data-low={low}>
-            <span style={{ width: `${Math.max(0, Math.min(100, p.health))}%` }} />
-          </span>
-          <b style={low ? { color: "var(--red)" } : undefined}>{Math.round(Math.max(0, p.health))}</b>
-        </div>
-        <div className={styles.vitalRow}>
-          <span className={styles.tag}>Stamina</span>
-          <span className={styles.st} data-low={p.stamina < 0.25}>
-            <span style={{ width: `${Math.max(0, Math.min(1, p.stamina)) * 100}%` }} />
-          </span>
-          <span />
-        </div>
-        <div className={styles.supplies}>
-          <span data-empty={p.supplies.boards === 0} title="Boards">
-            <ObjIcon name="plank" size={18} />
-            <b>{p.supplies.boards}</b> boards
-          </span>
-          <span data-empty={p.supplies.medkits === 0} title="Medkits">
-            <ObjIcon name="cross" size={16} />
-            <b>{p.supplies.medkits}</b> medkits
-          </span>
-          {p.supplies.flares !== undefined && (
-            <span data-empty={p.supplies.flares === 0} title="Flares">
-              <ObjIcon name="flare" size={16} />
-              <b>{p.supplies.flares}</b> flares
-            </span>
-          )}
-        </div>
+      <section className={styles.vitals} aria-label="Health and supplies">
+        <span className={styles.hp} data-low={low} title={`Health ${Math.round(Math.max(0, p.health))}`}>
+          <span style={{ width: `${Math.max(0, Math.min(100, p.health))}%` }} />
+        </span>
+        <span className={styles.st} data-low={p.stamina < 0.25} data-full={p.stamina > 0.985}>
+          <span style={{ width: `${Math.max(0, Math.min(1, p.stamina)) * 100}%` }} />
+        </span>
+        <div className={styles.supplies}>{supplies.join(" · ")}</div>
       </section>
+      <div className={styles.corner}>
+        <Badges stub={p.badges.stub} replay={p.badges.replay} />
+      </div>
 
-      {rest.length > 0 && !p.decision && !interact && (
+      {rest.length > 0 && !p.decision && (
         <div className={styles.hints}>
           {rest.map((h) => (
-            <span key={`${h.key}-${h.label}`} className={styles.hint} data-disabled={!!h.disabled} data-key={h.key}>
-              <Keycap k={h.key} />
-              {h.label}
+            <span key={`${h.key}-${h.label}`} className={styles.hint} data-disabled={!!h.disabled}>
+              <Keycap k={h.key} size="sm" />
+              {cap(h.label)}
             </span>
           ))}
         </div>
@@ -566,10 +413,7 @@ export function FootHud(p: HudProps) {
       <FeedFrame slot="cctv" feed={p.feeds.cctv} />
       <FeedFrame slot="drone" feed={p.feeds.drone} />
 
-      <footer className={styles.footer}>
-        <span>{p.disclaimer}</span>
-        {p.attribution && <span>{p.attribution}</span>}
-      </footer>
+      {p.attribution && <span className={styles.attrib}>{p.attribution}</span>}
     </div>
   );
 }
