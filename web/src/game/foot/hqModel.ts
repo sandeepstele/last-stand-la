@@ -193,7 +193,7 @@ type NightCases = { total?: number; cases?: NightCase[] };
 
 const VISION = new Set(["look_from_above", "compare_captures", "suite_tour"]);
 const PRIORITY = ["commit_plan", "draft_correction", "task", "check_evidence", "weigh_case", "record_note", "open_case", "night_cases",
-  "find_fallback", "horde_status", "fortress_dossier", "write_todos"];
+  "find_fallback", "horde_status", "fortress_dossier", "log_night", "read_file", "write_todos"];
 const STATUS_BY_CALL: Record<string, string> = {
   draft_correction: "drafting tonight's corrections",
   night_cases: "reading tonight's case queue",
@@ -207,6 +207,8 @@ const STATUS_BY_CALL: Record<string, string> = {
   horde_status: "reading the horde",
   find_fallback: "looking for a fallback",
   commit_plan: "deciding: hold or run",
+  read_file: "reading last night's log",
+  log_night: "logging the night",
 };
 
 function effectsOf(list: Effect[] | undefined, words: (k: string) => string): EffectView[] {
@@ -538,6 +540,8 @@ export function hqModel(messages: readonly unknown[], heroPid: string | null, bu
 export type DraftView = {
   id: string; key: string; at: number; n: number | null; type: string; where: string;
   verdict: VerdictView | null; text: string; evidence: string[]; yourReport: string | null;
+  /** The dawn critic (a second agent pass): reviewed or not, whether the draft follows from the evidence, and why. */
+  critic: { reviewed: boolean; follows: boolean | null; why: string | null } | null;
 };
 export type DraftsView = {
   requested: boolean; // "Debrief the night shift" is on the thread
@@ -550,6 +554,7 @@ type Draft = {
   n?: number; case?: string; property_id?: unknown; suite?: unknown; label?: string; hypothesis?: string;
   label_verdict?: string; confidence?: number; text?: string; evidence?: { check?: string; finding?: string }[];
   your_report?: string | null; status?: string;
+  critic?: { status?: string; follows?: boolean; weakest_link?: string; why?: string } | null;
 };
 
 /** The debrief, from the stream: draft_correction calls and results since the newest "Debrief the night shift". */
@@ -584,6 +589,9 @@ export function draftsModel(messages: readonly unknown[], busy: boolean): Drafts
       text: clean.full(d.text.replace(/^\s*DRAFT\b[:\s]*/i, "")), // the card carries its own DRAFT badge
       evidence: names.slice(0, 3).map(checkName),
       yourReport: d.your_report ? clean.full(d.your_report, 220) : null,
+      critic: d.critic
+        ? { reviewed: d.critic.status === "reviewed", follows: typeof d.critic.follows === "boolean" ? d.critic.follows : null, why: d.critic.why ? clean.full(d.critic.why, 160) : null }
+        : null,
     });
   });
   const drafts = [...byKey.values()].sort((a, b) => a.at - b.at);

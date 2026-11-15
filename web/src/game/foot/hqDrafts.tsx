@@ -63,6 +63,11 @@ export function DraftList({ view, variant }: { view: DraftsView; variant: "dawn"
                 <span>{d.yourReport ? "Your report + HQ" : "HQ, from the records"}</span>
               </div>
               {d.verdict && <p className={styles.draftVerdict}>{verdictOf(d.verdict)}</p>}
+              {d.critic && (
+                <p className={styles.draftVerdict} style={{ opacity: 0.85 }}>
+                  {!d.critic.reviewed ? "No second review on this one." : d.critic.follows === false ? `A second agent flagged it: ${d.critic.why ?? "the evidence doesn't settle it."}` : `A second agent checked it${d.critic.why ? `: ${d.critic.why}` : "."}`}
+                </p>
+              )}
               <p className={styles.draftText} title={plain(d.text)}>{askOf(d)}</p>
               {d.evidence.length > 0 && (
                 <ul className={styles.draftEvidence} aria-label="Evidence">
