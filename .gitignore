@@ -30,3 +30,7 @@ xcuserdata/
 *.xcuserstate
 DerivedData/
 build/
+
+# local agent worktrees and settings; macOS folder files
+.claude/
+.DS_Store
