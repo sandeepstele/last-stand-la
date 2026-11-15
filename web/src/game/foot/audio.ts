@@ -253,8 +253,8 @@ export function createAudio(ctx: FootCtx): System {
       toast = document.createElement("div");
       Object.assign(toast.style, {
         position: "absolute", top: "12px", left: "50%", transform: "translateX(-50%)", padding: "3px 9px",
-        borderRadius: "4px", background: "rgba(5,7,13,.72)", color: "#e2e8f0", font: "600 11px/1.5 ui-monospace, Menlo, monospace",
-        letterSpacing: ".08em", pointerEvents: "none", zIndex: "40", opacity: "0", transition: "opacity .3s",
+        borderRadius: "3px", background: "rgba(12,12,13,.6)", color: "rgba(244,241,234,.85)", font: "500 13px/1.5 var(--font-ui), \"IBM Plex Sans Condensed\", sans-serif",
+        pointerEvents: "none", zIndex: "40", opacity: "0", transition: "opacity .3s",
       } satisfies Partial<CSSStyleDeclaration>);
       toast.setAttribute("aria-live", "polite");
       host.appendChild(toast);
@@ -306,7 +306,7 @@ export function createAudio(ctx: FootCtx): System {
       const ac = new AC({ latencyHint: "interactive" });
       A = buildGraph(ac);
       ac.resume().catch(() => {});
-      showToast("SOUND ON · V to mute");
+      showToast("Sound on · V to mute");
     } catch (e) {
       console.warn("[foot] audio unavailable", e);
       A = null;
@@ -317,7 +317,7 @@ export function createAudio(ctx: FootCtx): System {
     muted = m;
     if (A) A.master.gain.setTargetAtTime(m ? 0 : MASTER, A.ac.currentTime, 0.04);
     if (m) radio.cancel();
-    showToast(m ? "MUTED (V)" : "SOUND ON (V)");
+    showToast(m ? "Sound off · V to turn on" : "Sound on · V to mute");
   }
 
   const typing = (t: EventTarget | null) => {
