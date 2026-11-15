@@ -54,6 +54,17 @@ def test_make_model_caps_each_attempt(gemini_env):
     assert patient.timeout is None and patient.retry_options.attempts == 6  # library default, 408/429/5xx only
 
 
+def test_vertex_api_key_wins_over_local_project_and_adc(gemini_env):
+    from app.agent import make_model
+
+    model = make_model("gemini-3.8-flash")
+    client = model.client._api_client
+    assert client.api_key == "dummy"
+    assert client.project is None and client.location is None
+    # The environment is restored after the SDK client is initialized.
+    assert os.environ["GOOGLE_CLOUD_PROJECT"] == "test-project"
+
+
 def test_live_calls_get_one_short_attempt_per_model_and_the_worker_waits(gemini_env):
     from app.agent import models
 

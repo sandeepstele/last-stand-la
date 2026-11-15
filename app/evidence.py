@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 from functools import lru_cache
+from statistics import median
 from typing import Any, Callable
 
 from app import costar, retrofit_lists
@@ -451,6 +452,61 @@ CHECKS: dict[str, Callable[..., dict[str, Any]]] = {
 }
 
 
+NOT_APPLICABLE = {"no images", "no data", "nothing to compare", "nothing to look at"}  # a check's inputs were missing
+
+
+@lru_cache(maxsize=1)
+def check_stats() -> dict[str, dict[str, dict[str, Any]]]:
+    """Measure check movement over the local queue using cached inputs only.
+
+    A check's move is the largest absolute evidence delta it returned for a hypothesis.
+    Vision, Vexcel and Matterport helpers refuse cache misses while this runs, so warming
+    the stats can never trigger external requests.
+    """
+    from app import cases as case_queue, layers, vision
+
+    totals: dict[str, dict[str, dict[str, Any]]] = {}
+    with layers.cached_only(), vision.cached_only():
+        for row in case_queue.ordered():
+            case, pid, suite = row["case"], str(row["property_id"]), row.get("suite")
+            for check in CASES[case]["checks"]:
+                group = totals.setdefault(case, {}).setdefault(check, {"cases": 0, "moved_cases": 0,
+                                                                       "moves": [], "errors": 0})
+                try:
+                    result = run_check(pid, check, case, suite)
+                except Exception:
+                    group["errors"] += 1
+                    continue
+                if result.get("why") in NOT_APPLICABLE:
+                    # its inputs (images, a tour, a second capture) aren't there for this case: not evidence that the
+                    # check rarely moves the odds. Rates count only cases where the check could actually run.
+                    group["unavailable"] = group.get("unavailable", 0) + 1
+                    continue
+                group["cases"] += 1
+                move = max((abs(float(effect.get("delta", 0))) for effect in result.get("effects", [])), default=0.0)
+                if move > 0:
+                    group["moved_cases"] += 1
+                    group["moves"].append(move)
+
+    out: dict[str, dict[str, dict[str, Any]]] = {}
+    for case, checks in totals.items():
+        out[case] = {}
+        for check, group in checks.items():
+            n = group["cases"]
+            rate = group["moved_cases"] / n if n else 0.0
+            typical = median(group["moves"]) if group["moves"] else 0.0
+            out[case][check] = {
+                "cases": n,
+                "moved_cases": group["moved_cases"],
+                "move_rate": round(rate, 4),
+                "typical_move": round(typical, 2),
+                "expected_move": round(rate * typical, 3),
+                "errors": group["errors"],
+                "unavailable": group.get("unavailable", 0),
+            }
+    return out
+
+
 # ------------------------------------------------------------------ cases
 
 
@@ -553,7 +609,7 @@ def weigh_case(pid: str, case: str, checks: list[str], suite: str | None = None,
         if label in ("likely", "leaning") and lead in ("gone_dark", "moved_within", "listing_stale"):
             fix = {"gone_dark": "re-verify occupancy; the tenant record may be out of date",
                    "moved_within": "check whether the tenant moved to another suite in the building",
-                   "listing_stale": "the listing may have been leased; confirm and take it off market"}[lead]
+                   "listing_stale": "check whether the suite was leased and, if so, take the listing off market"}[lead]
             ticket = (f"DRAFT for a CoStar researcher: suite {f['suite']} at {rec.get('address')} is recorded as occupied by "
                       f"{t.get('tenant', 'a tenant')} since {t.get('tenant_since')}, and it has been listed for lease since {f['listed_since']}. "
                       f"Evidence: {'; '.join(x['finding'] for x in trail[:3])}. Please {fix}.")

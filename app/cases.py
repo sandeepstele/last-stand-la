@@ -19,6 +19,16 @@ def queue() -> dict:
 
 
 def build_queue() -> dict:
+    cases = ordered()
+    counts: dict[str, int] = {}
+    for c in cases:
+        counts[c["case"]] = counts.get(c["case"], 0) + 1
+    return {"counts": counts, "total": len(cases), "top": cases[:25], "order": "cases with imagery gathered first, then by stakes",
+            "source": "LA retrofit lists + CoStar kit, matched locally (fixtures/public)"}
+
+
+def ordered() -> list[dict]:
+    """Every open case in queue order (imagery gathered first, then stakes). The game's night_cases reads it too."""
     from app import retrofit_lists
 
     rows = retrofit_lists.portfolio()
@@ -45,10 +55,6 @@ def build_queue() -> dict:
         else:
             c["imagery"] = any(vision.CACHE.glob(f"{c['property_id']}_o*.jpg"))  # aerial: ortho / oblique
     cases.sort(key=lambda c: (not c["imagery"], -c["stakes"]))
-    counts: dict[str, int] = {}
-    for c in cases:
-        counts[c["case"]] = counts.get(c["case"], 0) + 1
-    return {"counts": counts, "total": len(cases), "top": cases[:25], "order": "cases with imagery gathered first, then by stakes",
-            "source": "LA retrofit lists + CoStar kit, matched locally (fixtures/public)"}
+    return cases
 
 

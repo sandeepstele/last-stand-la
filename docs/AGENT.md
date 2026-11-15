@@ -169,7 +169,7 @@ LangSmith tracing uses LangChain's standard environment variables (`LANGSMITH_TR
 
 ## Last Stand LA (in progress)
 
-> **In progress on the `game` branch. Nothing below exists in this branch yet.** The source of truth is `PLAN.md` in the team's private planning repo, section "Contract v1.1" (frozen). A copy of the interface is in [../contracts/README.md](../contracts/README.md#game-contract-v11-in-progress).
+> **The code is on the `game` branch** (`app/game_agent.py`, `app/fortress.py`); it merges into `main` after the end-to-end gate. The [README](../README.md) has the full walkthrough. The source of truth is `PLAN.md` in the team's private planning repo, section "Contract v1.1" (frozen). A copy of the interface is in [../contracts/README.md](../contracts/README.md#game-contract-v11-in-progress).
 
 Planned agent side:
 - **A third graph, `laststand`,** on the same engine, with code in `app/fortress.py`.

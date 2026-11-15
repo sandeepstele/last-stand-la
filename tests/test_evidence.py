@@ -25,6 +25,7 @@ def test_open_case_lists_hypotheses_and_checks(conflict):
     out = ev.open_case("X1")
     (case,) = out["cases"]
     assert case["case"] == "material_conflict"
+    assert "check_hints" not in case  # hints belong to the game wrapper, not the auditor
     assert abs(sum(h["prior"] for h in case["hypotheses"]) - 1) < 1e-9
     assert {c["check"] for c in case["checks"]} == set(ev.CASES["material_conflict"]["checks"])
 
@@ -48,6 +49,30 @@ def test_weak_evidence_stays_unresolved_without_a_draft(monkeypatch, conflict):
     w = ev.weigh_case("X1", "material_conflict", ["permit_text"])
     assert w["verdict"]["label"] == "unresolved" and w["correction_draft"] is None
     assert w["next_check"] in ev.CASES["material_conflict"]["checks"]
+
+
+def test_check_stats_uses_every_queue_case_and_only_cached_contexts(monkeypatch):
+    from app import cases, layers, vision
+
+    ev.check_stats.cache_clear()
+    rows = [{"case": "material_conflict", "property_id": "X1"},
+            {"case": "ghost_tenant", "property_id": "X2", "suite": "101"}]
+    monkeypatch.setattr(cases, "ordered", lambda: rows)
+    calls = []
+
+    def run(pid, check, case, suite=None, notes=None):
+        calls.append((pid, check, case, suite))
+        assert layers._CACHED_ONLY.get() and vision._CACHE_ONLY.get()
+        effects = [{"hypothesis": "city_list_current", "delta": 0.3}] if check == "compliance_filings" else []
+        return {"effects": effects}
+
+    monkeypatch.setattr(ev, "run_check", run)
+    stats = ev.check_stats()
+    assert len(calls) == len(ev.CASES["material_conflict"]["checks"]) + len(ev.CASES["ghost_tenant"]["checks"])
+    assert stats["material_conflict"]["compliance_filings"] == {
+        "cases": 1, "moved_cases": 1, "move_rate": 1.0, "typical_move": 0.3, "expected_move": 0.3, "errors": 0,
+        "unavailable": 0}
+    ev.check_stats.cache_clear()
 
 
 def test_unknown_checks_and_cases_are_refused(conflict):
@@ -151,3 +176,18 @@ def test_ghost_queue_has_one_case_per_suite(monkeypatch):
     assert len(keys) == len(set(keys)) == 2  # 600 once (3 tenancies), 700 once, the sublet suite excluded
     six = next(r for r in q if r["suite"] == "600")
     assert six["label"] == "suite 600: 3 tenants on record (26 employees)" and six["id"] == "ghost_tenant:1#600"
+
+
+def test_check_stats_count_only_cases_where_the_check_could_run(monkeypatch):
+    import app.evidence as ev
+
+    ev.check_stats.cache_clear()
+    from app import cases as case_queue
+
+    monkeypatch.setattr(case_queue, "ordered", lambda: [{"case": "material_conflict", "property_id": f"TEST-{i}"} for i in range(4)])
+    monkeypatch.setattr(ev, "run_check", lambda pid, check, case, suite=None, notes=None: (
+        {"finding": "images unavailable", "effects": [], "why": "no images"} if pid != "TEST-0" and check == "look_from_above"
+        else {"finding": "x", "effects": [{"hypothesis": "city_list_current", "delta": 0.2}], "why": "y"}))
+    s = ev.check_stats()["material_conflict"]["look_from_above"]
+    assert s["cases"] == 1 and s["unavailable"] == 3 and s["move_rate"] == 1.0  # missing photos aren't "didn't move"
+    ev.check_stats.cache_clear()

@@ -17,6 +17,8 @@ import hashlib
 import json
 import math
 import os
+from contextlib import contextmanager
+from contextvars import ContextVar
 from pathlib import Path
 from typing import Any
 
@@ -26,6 +28,17 @@ from app import vexcel
 
 CACHE = Path(__file__).resolve().parent.parent / "fixtures" / "vision"
 VISION_MODEL = os.environ.get("RADAR_VISION_MODEL", "gemini-3.8-flash")
+_CACHE_ONLY: ContextVar[bool] = ContextVar("vision_cache_only", default=False)
+
+
+@contextmanager
+def cached_only():
+    """Allow image, tour and answer reads from disk while refusing every live call."""
+    token = _CACHE_ONLY.set(True)
+    try:
+        yield
+    finally:
+        _CACHE_ONLY.reset(token)
 
 
 class VisionUnavailable(RuntimeError):
@@ -45,6 +58,8 @@ def _area(aer: dict[str, Any]) -> str:
 
 
 def _post_image(path: str, body: dict[str, Any]) -> bytes:
+    if _CACHE_ONLY.get():
+        raise VisionUnavailable("cache-only evaluation: image is not cached")
     with vexcel._client() as c:
         r = vexcel._send(c, "POST", path, json=body, timeout=180)
     if r.status_code != 200 or not r.headers.get("content-type", "").startswith("image"):
@@ -70,6 +85,8 @@ def oblique(pid: str, aer: dict[str, Any]) -> Path | None:
     hits = sorted(CACHE.glob(f"{pid}_oblique_*.jpg"))
     if hits:
         return hits[0]
+    if _CACHE_ONLY.get():
+        raise VisionUnavailable("cache-only evaluation: oblique image is not cached")
     wkt = _area(aer)
     with vexcel._client() as c:
         r = vexcel._send(c, "GET", "oriented/collections", timeout=120, params={
@@ -142,7 +159,7 @@ def ask(pid: str, key: str, images: list[Path], question: str, choices: list[str
     cached = CACHE / f"{pid}_{key}_{h}.json"
     if cached.exists():
         return json.loads(cached.read_text())
-    if os.environ.get("RADAR_REPLAY_STRICT") == "1":
+    if _CACHE_ONLY.get() or os.environ.get("RADAR_REPLAY_STRICT") == "1":
         # Strict replay promises no live model calls; vision reads are not chat-model replays, so refuse here too.
         raise VisionUnavailable("strict replay: this vision question has no cached answer (not calling the model)")
     labels = ", ".join(choices + ["cant_tell"])
@@ -190,9 +207,13 @@ def ask(pid: str, key: str, images: list[Path], question: str, choices: list[str
 def suite_panos(pid: str, suite: str, model_id: str, panos: int = 2) -> list[Path]:
     """Side faces of the first panoramas of a suite's Matterport tour (team token, read-only query).
     Cube faces come back as [up, four sides, down]; only the sides show the room."""
-    hits = sorted(CACHE.glob(f"{pid}_s{suite}_p*_f*.jpg"))
+    # side faces only: the game also caches the up/down faces (f0, f5) for its 360 view, and they must not change
+    # which images (and so which cached answer) the suite tour read uses
+    hits = sorted(p for p in CACHE.glob(f"{pid}_s{suite}_p*_f*.jpg") if p.stem[-3:] not in ("_f0", "_f5"))
     if hits:
         return hits
+    if _CACHE_ONLY.get():
+        raise VisionUnavailable("cache-only evaluation: suite panoramas are not cached")
     from app import matterport
 
     q = '{ model(id: "%s") { panoLocations { id skybox(resolution: "2k") { status children } } } }' % model_id
@@ -221,6 +242,8 @@ def car_counts(pid: str, aer: dict[str, Any]) -> dict[str, Any]:
     hist = sorted(aer.get("footprint_history") or [], key=lambda h: h.get("date") or "")
     if len(hist) < 2:
         raise VisionUnavailable("only one capture on record")
+    if _CACHE_ONLY.get():
+        raise VisionUnavailable("cache-only evaluation: car counts are not cached")
     wkt = _area(aer)
 
     def count(collection: str | None) -> int:

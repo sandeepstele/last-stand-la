@@ -14,6 +14,8 @@ Verified against deepagents 0.7.37 / langchain 1.5.0 (see docs/ENGINEERING.md):
 from __future__ import annotations
 
 import os
+import threading
+from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any
 
@@ -22,6 +24,22 @@ from deepagents.backends import CompositeBackend, StateBackend, StoreBackend
 from langchain.agents.middleware import AgentMiddleware, ModelFallbackMiddleware, TodoListMiddleware, ToolErrorMiddleware
 from langchain_core.messages import ToolMessage
 from pydantic import BaseModel
+
+
+_VERTEX_KEY_INIT_LOCK = threading.RLock()
+
+
+@contextmanager
+def _vertex_api_key_only():
+    """Initialize Google GenAI in Vertex express mode, without ADC/project env."""
+    env_names = ("GOOGLE_CLOUD_PROJECT", "GOOGLE_CLOUD_LOCATION")
+    previous = {name: os.environ.pop(name, None) for name in env_names}
+    try:
+        yield
+    finally:
+        for name, value in previous.items():
+            if value is not None:
+                os.environ[name] = value
 
 from app import prompts
 from app.scene import SCENE_TOOLS
@@ -42,7 +60,7 @@ from app.tools import (
 
 
 def make_model(name: str, thinking: str = "low", timeout: float | None = None, attempts: int | None = None):
-    """'gemini-*' -> Gemini on Vertex AI with an API key (Gemini 4 needs the global endpoint);
+    """'gemini-*' -> Gemini on Vertex AI Express Mode with an API key (global endpoint);
     anything else ('anthropic:claude-opus-5-5', ...) is passed to LangChain as a model string.
     `timeout` caps each attempt in seconds; `attempts` counts the first call (google-genai semantics,
     so 1 means no retry). None keeps the library defaults: no time limit, 6 attempts on 408/429/5xx.
@@ -54,15 +72,19 @@ def make_model(name: str, thinking: str = "low", timeout: float | None = None, a
     from langchain_google_genai import ChatGoogleGenerativeAI
 
     limits = {"timeout": timeout, "max_retries": attempts}
-    return ChatGoogleGenerativeAI(
-        model=name,
-        vertexai=True,
-        google_api_key=os.environ["GOOGLE_API_KEY"],
-        project=os.environ.get("GOOGLE_CLOUD_PROJECT"),
-        location=os.environ.get("GOOGLE_CLOUD_LOCATION", "global"),
-        thinking_level=thinking,
-        **{k: v for k, v in limits.items() if v},
-    )
+    # langchain-google-genai passes project/location to google-genai even when the API
+    # key is set in the environment. google-genai gives those explicit values precedence
+    # over the Vertex Express API key, then silently switches to local ADC. Initialize
+    # while those two values are absent so the client is permanently key-authenticated;
+    # for Express Mode, the key selects the project and the SDK uses the global endpoint.
+    with _VERTEX_KEY_INIT_LOCK, _vertex_api_key_only():
+        return ChatGoogleGenerativeAI(
+            model=name,
+            vertexai=True,
+            google_api_key=os.environ["GOOGLE_API_KEY"],
+            thinking_level=thinking,
+            **{k: v for k, v in limits.items() if v},
+        )
 
 
 def _default(kind: str) -> str:
@@ -260,7 +282,10 @@ def _middleware(live: bool, m: Models | None = None) -> list:
     # The live todo prompt and tool description replace the stock "mark each step complete as soon as it
     # finishes", which cost one or two model turns per question that only updated the list.
     todos = TodoListMiddleware(system_prompt=prompts.TODO_PROMPT, tool_description=prompts.TODO_TOOL_DESCRIPTION)
-    return [todos, _errors(), ModelFallbackMiddleware(*m.orch_fallbacks)]
+    from app.guards import RetryBlank  # a blank live reply is retried once, then replaced by an honest line
+
+    blank = RetryBlank("I couldn't put this answer into words just now; the case file shows what the checks found. Ask again to retry.")
+    return [todos, _errors(), blank, ModelFallbackMiddleware(*m.orch_fallbacks)]
 
 
 def build(mode: str, store=None, checkpointer=None, m: Models | None = None):

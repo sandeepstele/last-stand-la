@@ -31,7 +31,7 @@ from app import costar, evidence, quake, retrofit_lists
 
 CENTER_PID = "254167"
 RADIUS_M = 900
-SEED = 1990  # the demo night: holding the gamble loses wave 1, running to the fallback survives it (rolls stay in code)
+SEED = 2026  # the demo night: HOLD at 737 Broadway rolls 75, so a "concrete" report (walls 76) holds and "brick" (71) or "can't tell" (74) let them in; RUN to 755 Spring St rolls 12 and holds. Rolls stay in code.
 HEROES = ("6375735", "254167", "52227")
 NO_EXTRUDE = {"256390"}  # Vexcel's outline is 17 m tall for a 13-story record: likely another structure
 DISCLAIMER = "Game outcome, not an engineering assessment"
@@ -56,6 +56,8 @@ SECTORS = ("N", "NE", "E", "SE", "S", "SW", "W", "NW")
 # aerial mosaic under the playable area (fetched once into fixtures/vision, gitignored; the bounds are the box it was
 # extracted for, in district metres).
 ENTERABLE = ("6375735", "254167")
+# Agent message types this server handles AND has recorded for strict replay; the frontend sends only these.
+FEATURES = ("night_shift", "debrief")
 GROUND = {"image": "laststand_ground.jpg", "x0": -420, "z0": -220, "x1": 60, "z1": 60}
 
 
@@ -284,11 +286,12 @@ def district() -> dict[str, Any]:
                               "z": sum(p[1] for p in k["ring"]) / len(k["ring"]), "w": 2 * math.sqrt(_area(k["ring"]) / math.pi),
                               "d": 2 * math.sqrt(_area(k["ring"]) / math.pi)} for i, k in enumerate(backdrop)]
     for b in buildings:
-        b["door"] = _door(b, obstacles) if b["pid"] in ENTERABLE else None
+        # enterable: tonight's two buildings, plus any building whose interior scan was fetched for the feeds
+        b["door"] = _door(b, obstacles) if b["pid"] in ENTERABLE or _feeds(b["pid"])["inside"] else None
     waves = [{"n": w["n"], "sector": w["sector"], "arrive_s": w["arrive_s"], "size": max(50, round(units * w["share"] / 10) * 10)}
              for w in WAVES]
     return {"center": {"lat": round(lat0, 6), "lon": round(lon0, 6)}, "radius_m": RADIUS_M, "seed": SEED,
-            "buildings": buildings, "waves": waves, "ground": _ground(), "blocks": backdrop,
+            "buildings": buildings, "waves": waves, "ground": _ground(), "blocks": backdrop, "features": list(FEATURES),
             "attribution": OSM_ATTRIBUTION if blocks else None}
 
 
@@ -400,6 +403,35 @@ def _images(pid: str) -> dict[str, Any]:
     return {"drone": drone, "cctv": cctv, "pano": pano, "inside": inside or (pano if pid in ENTERABLE else [])}
 
 
+def with_feeds(d: dict[str, Any]) -> dict[str, Any]:
+    """The HTTP dossier only: adds the display-only feed_* images. Never used by the agent's fortress_dossier tool,
+    whose output is part of the replay keys (a newly cached feed photo must not change a recorded night)."""
+    if "pid" not in d or "images" not in d:
+        return d
+    pid, images = d["pid"], dict(d["images"])
+    f = _feeds(pid)
+    images["drone"] = images["drone"] + [n for n in f["drone"] if n not in images["drone"]]
+    if not images.get("inside") and f["inside"]:
+        images["inside"] = [{"face": n.rsplit("_", 1)[-1].split(".")[0], "name": n} for n in f["inside"]]
+    images_roof = roof(pid)
+    model = next((h.get("model") for h in images.get("inside_hops") or [] if h.get("model")), None)
+    if not model:  # the walk's own model (a suite tour) wins; else the building's twin
+        try:
+            model = (costar.get(pid).get("matterport_model_ids") or [None])[0]
+        except Exception:  # not a kit building (synthetic tests)
+            model = None
+    if model and (FIXTURES / "matterport" / "mesh" / f"{model}_50k.obj").exists():
+        images["inside_mesh"] = {"url": f"game/mesh/{pid}", "model": model, "format": "obj", "units": "m", "up": "z",
+                                 "frame": "same as inside_hops x/y (scan spots stand at z=0)", "textured": False}
+    hops = VISION / f"feed_{pid}_hops.json"  # scan spots to walk between (scripts/fetch_hops.py), floor-plan metres
+    if hops.exists():
+        try:
+            images["inside_hops"] = json.loads(hops.read_text())
+        except ValueError:
+            pass
+    return d | {"images": images} | ({"roof": images_roof} if images_roof else {})
+
+
 @lru_cache(maxsize=128)
 def _dossier(pid: str) -> str:
     rec = costar.get(pid)
@@ -498,3 +530,237 @@ def resolve(pid: str, wave: int, seed: int = SEED, action: str = "hold", to_pid:
            f"aftershock: quake {q['value']} + 40 vs roll {quake_roll}: " + ("the building rode it out" if quake_ok else "the building cracked")]
     return {"held": held, "walls": w["value"], "quake": q["value"], "walls_roll": walls_roll, "quake_roll": quake_roll,
             "why": "; ".join(why) + f". {DISCLAIMER}.", "pid_final": final}
+
+
+# ------------------------------------------------------------------ the night shift (real cases in the play area)
+
+PLAY_PAD_M = 80
+# Tonight's recorded cases. Pinned so newly cached imagery elsewhere can never add a case to the briefing (and break
+# the recorded nights); if either case leaves the queue, night_cases falls back to "imagery gathered, in queue order".
+NIGHT_PIN = {("6375735", None), ("254167", "1100")}
+
+
+def night_cases(limit: int = 3) -> dict[str, Any]:
+    """The open auditor cases whose building lies in the play area (the ground mosaic +- 80 m), in queue order. Tonight's
+    shift works the ones whose imagery is already gathered (at most `limit`). Hedged questions; never a company name."""
+    from app import cases
+
+    g = GROUND
+    ordered = cases.ordered()
+    pinned = [(n, c) for n, c in enumerate(ordered, 1) if (str(c["property_id"]), c.get("suite")) in NIGHT_PIN]
+    inside = []
+    for n, c in enumerate(ordered, 1):
+        b = building(c["property_id"])
+        if b and g["x0"] - PLAY_PAD_M <= b["x"] <= g["x1"] + PLAY_PAD_M and g["z0"] - PLAY_PAD_M <= b["z"] <= g["z1"] + PLAY_PAD_M:
+            inside.append((n, c, b))
+    tonight = []
+    picked = [x for x in inside if (str(x[1]["property_id"]), x[1].get("suite")) in NIGHT_PIN] if NIGHT_PIN and \
+        len(pinned) == len(NIGHT_PIN) else [x for x in inside if x[1].get("imagery")][:limit]
+    for n, c, b in picked:
+        suite = c.get("suite")
+        case = next((k for k in evidence.open_case(c["property_id"], suite).get("cases") or [] if k["case"] == c["case"]), None)
+        if c["case"] == "ghost_tenant":
+            label = f"suite {suite}, {b['label']}"
+            stakes = f"{(c.get('label') or '').split(': ', 1)[-1] or 'a tenant'} on record; the suite is listed for lease"
+        elif c["case"] == "material_conflict":
+            label = b["label"]
+            stakes = f"an unfinished city concrete retrofit order; CoStar records {(c.get('material') or 'another material').lower()}"
+        else:
+            label = b["label"]
+            stakes = "the city's list may name a building that was replaced"
+        tonight.append({"n": n, "case": c["case"], "property_id": c["property_id"], "suite": suite, "label": label,
+                        "question": case["question"] if case else None, "stakes": stakes})
+    return {"total": len(ordered), "in_area": len(inside), "cases": tonight}
+
+
+def draft(pid: str, suite: str | None, checks: list[str], notes: list[dict]) -> dict[str, Any]:
+    """The dawn debrief for one case worked tonight: its verdict and a hedged correction draft, built in code from
+    weigh_case and the evidence trail (citing any report the player made). Nothing is sent; filing it is a person's
+    call in the auditor."""
+    from app import cases
+
+    pid, case = str(pid).strip(), ("ghost_tenant" if suite else "material_conflict")
+    checks = list(dict.fromkeys(checks + (["human_report"] if notes and "human_report" not in checks else [])))
+    w = evidence.weigh_case(pid, case, checks, suite, notes)
+    v = w["verdict"]
+    n = next((i for i, c in enumerate(cases.ordered(), 1)
+              if c["case"] == case and str(c["property_id"]) == pid and (c.get("suite") or None) == (suite or None)), None)
+    b = building(pid)
+    where = b["label"] if b else pid
+    report = next((x.get("note") for x in reversed(notes) if x.get("source") == "the player"), None)
+    text = w.get("correction_draft") or (f"No correction drafted yet. {v['text']}." + (f" Next check: {w['next_check']}." if w.get("next_check") else ""))
+    return {"n": n, "case": case, "property_id": pid, "suite": suite, "label": f"suite {suite}, {where}" if suite else where,
+            "hypothesis": v["hypothesis"], "label_verdict": v["label"], "confidence": v["confidence"], "text": text,
+            "evidence": [{"check": t["check"], "finding": t["finding"]} for t in w["trail"]], "your_report": report}
+
+
+# ------------------------------------------------------------------ the whole city (map view)
+
+
+def _feeds(pid: str) -> dict[str, list[str]]:
+    """Display-only images fetched for the game's feeds (fixtures/vision/feed_*). The agent and the case queue never
+    read these names, so caching more of them can't change the evidence, the queue order or the replay."""
+    drone = sorted(p.name for p in VISION.glob(f"feed_{pid}_o*.jpg"))
+    inside = sorted(p.name for p in VISION.glob(f"feed_{pid}_twin_p0_f*.jpg"))
+    return {"drone": drone, "inside": inside}
+
+
+@lru_cache(maxsize=1)
+def city() -> dict[str, Any]:
+    """Every LA kit building at its real position (metres from the district center, same frame as /game/district),
+    with height, CoStar material, the city's retrofit status and its open case (if any) in queue order. No addresses."""
+    from app import cases
+
+    c = costar.get(CENTER_PID)
+    lat0, lon0 = c["latitude"], c["longitude"]
+    first: dict[str, tuple[int, str]] = {}
+    for n, row in enumerate(cases.ordered(), 1):
+        first.setdefault(str(row["property_id"]), (n, row["case"]))
+    out = []
+    for pid, rec in costar._index().items():
+        if (rec.get("city") or "").strip().lower() != "los angeles" or not rec.get("latitude") or rec.get("synthetic"):
+            continue
+        x, z = _xz(rec["latitude"], rec["longitude"], lat0, lon0)
+        aer = _aerial(pid)
+        stories = rec.get("stories") or None
+        h = aer.get("height_m") if aer and aer.get("height_m") and stories and 2.4 <= aer["height_m"] / stories <= 6.5 else (stories or 2) * FLOOR_M
+        city_rec = _city(rec)
+        n_case = first.get(pid)
+        feeds = _feeds(pid)
+        out.append({"pid": pid, "x": x, "z": z, "height_m": round(h, 1), "stories": stories, "material": _material(rec),
+                    "list": city_rec["list"], "unfinished": city_rec["unfinished"],
+                    "case": n_case[1] if n_case else None, "queue_n": n_case[0] if n_case else None,
+                    "has_aerial": bool(feeds["drone"] or list(VISION.glob(f"{pid}_o*.jpg"))),
+                    "has_tour": bool(feeds["inside"] or list(VISION.glob(f"{pid}_s*_p0_f*.jpg")) or list(VISION.glob(f"{pid}_twin_p0_f*.jpg")))})
+    return {"center": {"lat": round(lat0, 6), "lon": round(lon0, 6)}, "count": len(out), "total_buildings": len(out),
+            "total_cases": len(cases.ordered()), "buildings": out}
+
+
+# ------------------------------------------------------------------ side missions (HTTP only; never agent tool outputs)
+
+SWEEP_CHECKS = ["listing_timeline", "lease_terms", "tenancy_trail"]  # records-only clues: no vision, no model
+_GROUPS = {"still_there": "there", "listing_stale": "there", "gone_dark": "gone", "moved_within": "gone", "subleasing": "sublet"}
+
+
+@lru_cache(maxsize=32)
+def _suites(pid: str) -> str:
+    from app import cases
+
+    out = []
+    for n, c in enumerate(cases.ordered(), 1):
+        if c["case"] != "ghost_tenant" or str(c["property_id"]) != pid:
+            continue
+        clues = [{"check": k, "finding": (r := evidence.run_check(pid, k, "ghost_tenant", c["suite"], []))["finding"],
+                  "why": r.get("why")} for k in SWEEP_CHECKS]
+        w = evidence.weigh_case(pid, "ghost_tenant", SWEEP_CHECKS, c["suite"], [])
+        v = w["verdict"]
+        # the answer key comes from code: a lean (likely/leaning) is "there" / "gone" / "sublet"; unresolved is
+        # "cant_tell": the records alone don't settle it, and saying so is the right call
+        group = _GROUPS.get(v["hypothesis"], "cant_tell") if v["label"] in ("likely", "leaning") else "cant_tell"
+        out.append({"n": n, "suite": c["suite"], "who": (c.get("label") or "").split(": ", 1)[-1], "tonight": (pid, c["suite"]) in NIGHT_PIN,
+                    "clues": clues, "answer": {"group": group, "label": v["label"], "hypothesis": v["hypothesis"],
+                                               "confidence": v["confidence"], "text": v["text"]}})
+    b = building(pid)
+    return json.dumps({"pid": pid, "label": b["label"] if b else pid, "suites": out,
+                       "stamps": ["there", "gone", "sublet", "cant_tell"], "source": "CoStar records, code-weighed (no model)"})
+
+
+def suites(pid: str) -> dict[str, Any]:
+    """Ghost-suite sweep: every open ghost-tenant case in this building, with records-only clues and a code answer key."""
+    return json.loads(_suites(str(pid).strip()))
+
+
+def roof(pid: str) -> dict[str, Any] | None:
+    """Roof facts for the skylight mission: Vexcel counts only (no positions), so placement on screen is illustrative."""
+    aer = _aerial(pid)
+    if not aer:
+        return None
+    return {"shape": aer.get("roof_shape"), "material": aer.get("roof_material"), "objects": aer.get("roof_objects") or {},
+            "capture": (aer.get("capture_date") or "")[:7], "note": "counts from Vexcel; positions on screen are illustrative"}
+
+
+_SOLAR_STAMP = {"ready": "go_solar", "inspect": "inspect_first", "unknown": "inspect_first", "reroof_first": "reroof_first"}
+
+
+@lru_cache(maxsize=1)
+def _solar() -> str:
+    from app import layers
+
+    g, out = GROUND, []
+    if True:  # only buildings whose Vexcel aerial is cached (checked below), so nothing is fetched while someone plays
+        for b in district()["buildings"]:
+            if not (g["x0"] - PLAY_PAD_M <= b["x"] <= g["x1"] + PLAY_PAD_M and g["z0"] - PLAY_PAD_M <= b["z"] <= g["z1"] + PLAY_PAD_M):
+                continue
+            if not (FIXTURES / "vexcel" / f"{b['pid']}.json").exists():
+                continue
+            try:
+                sc = layers.screen_solar(layers.load_building(b["pid"]))
+            except Exception:
+                continue
+            if sc.status != "screened":
+                continue
+            out.append({"pid": b["pid"], "label": b["label"], "x": b["x"], "z": b["z"], "kw": round(sc.system_kw),
+                        "panels": sc.panels, "mwh_per_year": round(sc.annual_kwh / 1000), "usable_roof_sqft": round(sc.usable_roof_sqft),
+                        "load_offset_pct": sc.load_offset_pct, "co2_t_per_year": round(sc.co2_t_per_year),
+                        "readiness": sc.readiness, "readiness_reasons": sc.readiness_reasons, "deal_fit": sc.deal_fit,
+                        "headline": sc.headline, "answer": _SOLAR_STAMP.get(sc.readiness, "inspect_first")})
+    out.sort(key=lambda r: -r["kw"])
+    return json.dumps({"roofs": out, "stamps": ["go_solar", "inspect_first", "reroof_first"],
+                       "source": "Vexcel roof + CoStar record + PVWatts yield, computed in code (app/solar.py); a screen, "
+                                 "not an engineering design"})
+
+
+def solar() -> dict[str, Any]:
+    """Solar-roof side mission: the play area's screened roofs, biggest first, each with a code answer stamp."""
+    return json.loads(_solar())
+
+
+STALE_CHECKS = ["replacement_permits", "compliance_filings", "era_and_height"]  # records only: no vision, no model
+_STALE_STAMP = {"year_is_renovation": "same_building", "replaced": "replaced"}
+
+
+@lru_cache(maxsize=1)
+def _stale(radius_m: float = 900.0) -> str:
+    """'Same building?' side mission: the stale_entry cases near tonight's hero, in queue order, with the facts the
+    evidence engine weighs (city list vs CoStar record, permits, filings, the aerial on file) and a code answer stamp."""
+    from app import cases
+
+    hero = building("6375735")  # tonight's hero: the mission covers its neighbourhood
+    g = GROUND
+    city_rows = {b["pid"]: b for b in city()["buildings"]}
+    out = []
+    for n, c in enumerate(cases.ordered(), 1):
+        pid = str(c["property_id"])
+        b = city_rows.get(pid)
+        if c["case"] != "stale_entry" or not b or math.hypot(b["x"] - hero["x"], b["z"] - hero["z"]) > radius_m:
+            continue
+        rec, aer = costar.get(pid), _aerial(pid)
+        w = evidence.weigh_case(pid, "stale_entry", STALE_CHECKS, None, [])
+        v = w["verdict"]
+        listed = (retrofit_lists.assess(rec).get("lists") or [{}])[0]
+        stamp = _STALE_STAMP.get(v["hypothesis"], "cant_tell") if v["label"] in ("likely", "leaning") else "cant_tell"
+        out.append({
+            "n": n, "pid": pid, "label": _label(rec), "x": b["x"], "z": b["z"],
+            "distance_m": round(math.hypot(b["x"] - hero["x"], b["z"] - hero["z"])),
+            "city_list": {"list": LIST.get(listed.get("list"), listed.get("list")), "order_date": listed.get("order_date")},
+            "costar": {"year_built": rec.get("year_built"), "stories": rec.get("stories"), "material": _material(rec)},
+            "aerial": {"height_m": aer.get("height_m"), "footprint_sqft": aer.get("footprint_sqft"), "roof_shape": aer.get("roof_shape"),
+                       "capture": (aer.get("capture_date") or "")[:7]} if aer else None,
+            "clues": [{"check": t["check"], "finding": t["finding"].split(" (")[0], "why": t.get("why")} for t in w["trail"]][:3],
+            "images": _feeds(pid)["drone"],
+            "question": "The city's list names a building here, and CoStar records one built after the list's cutoff. "
+                        "Is it the same building?",
+            "in_bounds": g["x0"] - PLAY_PAD_M <= b["x"] <= g["x1"] + PLAY_PAD_M and g["z0"] - PLAY_PAD_M <= b["z"] <= g["z1"] + PLAY_PAD_M,
+            "city_says": f"on the {LIST.get(listed.get('list'), listed.get('list'))} retrofit list since {listed.get('order_date')}",
+            "costar_says": f"built {rec.get('year_built')}, {rec.get('stories')} stories, {_material(rec)}",
+            "image": (_feeds(pid)["drone"] or [None])[0],
+            "headline": v["text"],
+            "answer": stamp,
+            "verdict": {"label": v["label"], "hypothesis": v["hypothesis"], "confidence": v["confidence"], "text": v["text"]}})
+    return json.dumps({"cases": out, "stamps": ["same_building", "replaced", "cant_tell"],
+                       "source": "LA retrofit lists + permits, CoStar record, Vexcel on file; weighed in code (no model)"})
+
+
+def stale() -> dict[str, Any]:
+    return json.loads(_stale())
+
