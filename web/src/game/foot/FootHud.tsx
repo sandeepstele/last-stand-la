@@ -71,7 +71,8 @@ function ObjectiveLine({ text, target, timer, survivors }: { text: string; targe
   const withYou = survivors.filter((v) => v.state === "following").map((v) => v.name);
   const safe = survivors.filter((v) => v.state === "safe").length;
   const lost = survivors.filter((v) => v.state === "lost").length;
-  const people = [withYou.length ? `${withYou.join(", ")} with you` : "", safe ? `${safe} safe` : "", lost ? `${lost} lost` : ""].filter(Boolean).join(" · ");
+  const trapped = survivors.filter((v) => v.state === "trapped").length;
+  const people = [trapped ? `${trapped} trapped (simulated)` : "", withYou.length ? `${withYou.join(", ")} with you` : "", safe ? `${safe} safe` : "", lost ? `${lost} lost` : ""].filter(Boolean).join(" · ");
   return (
     <section className={styles.objective} key={main}>
       {m && <span className={styles.objCase}>{m[1]}</span>}

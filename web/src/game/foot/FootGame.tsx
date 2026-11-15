@@ -147,6 +147,122 @@ function planMission(ctx: FootCtx, heroPid: string, door: Pt, spawn: Pt): { supp
   return { supplies, survivors };
 }
 
+// ------------------------------------------------------------------ the simulated aftershock clock (desk night; game outcome)
+const AFTERSHOCK_S = 60; // quake -> simulated aftershock (45 s on ?demo=1)
+const AFTERSHOCK_DEMO_S = 45;
+const AFTERSHOCK_CAP_S = 75; // dawn never waits on the clock longer than this after the quake
+const CAUGHT_R = 12; // Bob this close to the cracked building at zero takes a hit
+const CAUGHT_DMG = 35;
+const RESCUE_POINTS = 100; // per person brought out
+const TRAPPED = [{ k: 5, name: "Maya" }, { k: -8, name: "Luis" }]; // fictional; metres along the façade from the door
+type Shock = { at: number; due: number; hitAt: number | null; saved: number; caught: boolean; assembly: Pt; routed: boolean; shelterAt: number };
+
+/** Red debris zones: unfinished city retrofit orders inside the play area (a game outcome). */
+function unfinishedZones(ctx: FootCtx): { x: number; z: number; r: number }[] {
+  return ctx.district.buildings
+    .filter((b) => b.unfinished)
+    .map((b) => ctx.colliderOf.get(b.pid))
+    .filter((c): c is NonNullable<typeof c> => !!c && c.maxX > ctx.bounds.x0 && c.minX < ctx.bounds.x1 && c.maxZ > ctx.bounds.z0 && c.minZ < ctx.bounds.z1)
+    .map((c) => ({ x: (c.minX + c.maxX) / 2, z: (c.minZ + c.maxZ) / 2, r: Math.max(c.maxX - c.minX, c.maxZ - c.minZ) / 2 + 6 }));
+}
+
+/** A free spot on the street at least ~30 m from the cracked building, clear of the debris zones. */
+function assemblyPointFor(ctx: FootCtx, hero: Building, door: Pt): Pt {
+  const f = dirOf(hero.door?.facing ?? 180);
+  const perp: Pt = [-f[1], f[0]];
+  const hc = ctx.colliderOf.get(hero.pid);
+  const zones = unfinishedZones(ctx);
+  const b = ctx.bounds;
+  const ok = (x: number, z: number) => {
+    const [cx, cz] = ctx.collide(x, z, 0.8);
+    if (Math.hypot(cx - x, cz - z) > 0.05 || x < b.x0 + 8 || x > b.x1 - 8 || z < b.z0 + 8 || z > b.z1 - 8) return false;
+    if ((hc ? closestOnPoly(x, z, hc.pts).d : Math.hypot(x - door[0], z - door[1])) < 30) return false;
+    if (!zones.every((zn) => Math.hypot(x - zn.x, z - zn.z) > zn.r + 4)) return false;
+    // A straight walk from the door (no building in the way): reachable well inside the clock.
+    const sx = door[0] + f[0] * 3, sz = door[1] + f[1] * 3;
+    const n = Math.ceil(Math.hypot(x - sx, z - sz));
+    for (let i = 1; i <= n; i++) {
+      const px = sx + ((x - sx) * i) / n, pz = sz + ((z - sz) * i) / n;
+      const [qx, qz] = ctx.collide(px, pz, 0.6);
+      if (Math.hypot(qx - px, qz - pz) > 0.05) return false;
+    }
+    return true;
+  };
+  for (const along of [6, 10, 14, 18, 3])
+    for (const k of [36, -36, 44, -44, 30, -30, 52, -52]) {
+      const x = door[0] + f[0] * along + perp[0] * k, z = door[1] + f[1] * along + perp[1] * k;
+      if (ok(x, z)) return [x, z];
+    }
+  for (const r of [34, 42, 52, 64])
+    for (let a = 0; a < 360; a += 10) {
+      const d = dirOf(a);
+      const x = door[0] + d[0] * r, z = door[1] + d[1] * r;
+      if (ok(x, z)) return [x, z];
+    }
+  const [x, z] = ctx.collide(door[0] + f[0] * 34, door[1] + f[1] * 34, 0.8);
+  return [x, z];
+}
+
+/** The assembly point: a green ring, a light beam and a label (unlit materials: no shader recompiles). */
+function makeAssemblyMarker(at: Pt): { group: THREE.Group; tick(t: number, cam: THREE.Vector3): void; dispose(): void } {
+  const group = new THREE.Group();
+  group.position.set(at[0], 0, at[1]);
+  const green = 0x22c55e;
+  const ringMat = new THREE.MeshBasicMaterial({ color: green, transparent: true, opacity: 0.85, side: THREE.DoubleSide, depthWrite: false, fog: false });
+  const ring = new THREE.Mesh(new THREE.RingGeometry(3.4, 4, 48), ringMat);
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.y = 0.06;
+  const fillMat = new THREE.MeshBasicMaterial({ color: green, transparent: true, opacity: 0.18, side: THREE.DoubleSide, depthWrite: false, fog: false });
+  const fill = new THREE.Mesh(new THREE.CircleGeometry(3.4, 48), fillMat);
+  fill.rotation.x = -Math.PI / 2;
+  fill.position.y = 0.05;
+  const beamMat = new THREE.MeshBasicMaterial({ color: green, transparent: true, opacity: 0.22, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false });
+  const beam = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.4, 40, 20, 1, true), beamMat);
+  beam.position.y = 20;
+  const cv = document.createElement("canvas");
+  cv.width = 512;
+  cv.height = 160;
+  const c2 = cv.getContext("2d");
+  if (c2) {
+    c2.fillStyle = "rgba(21,128,61,0.92)";
+    c2.fillRect(0, 0, 512, 160);
+    c2.strokeStyle = "rgba(255,255,255,0.9)";
+    c2.lineWidth = 6;
+    c2.strokeRect(3, 3, 506, 154);
+    c2.fillStyle = "#fff";
+    c2.textAlign = "center";
+    c2.font = "900 64px system-ui, sans-serif";
+    c2.fillText("ASSEMBLY POINT", 256, 78);
+    c2.font = "600 36px system-ui, sans-serif";
+    c2.fillText("simulated · safe distance", 256, 132);
+  }
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const labelMat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, depthTest: false, fog: false });
+  const label = new THREE.Sprite(labelMat);
+  label.scale.set(6.4, 2, 1);
+  label.position.y = 4.2;
+  label.renderOrder = 3;
+  group.add(ring, fill, beam, label);
+  return {
+    group,
+    tick(t, cam) {
+      beamMat.opacity = 0.18 + Math.sin(t * 2.4) * 0.06;
+      labelMat.opacity = Math.max(0, Math.min(1, (Math.hypot(cam.x - at[0], cam.z - at[1]) - 7) / 6)); // not in Bob's face
+      ringMat.opacity = 0.7 + Math.sin(t * 4) * 0.2;
+    },
+    dispose() {
+      group.removeFromParent();
+      for (const m of [ring, fill, beam]) {
+        m.geometry.dispose();
+        (m.material as THREE.Material).dispose();
+      }
+      tex.dispose();
+      labelMat.dispose();
+    },
+  };
+}
+
 function safely(name: string, s: System): System {
   let warned = false;
   const guard = (f: () => void) => {
@@ -325,9 +441,16 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
   const nightFallen = useRef(false);
   const startedAt = useRef(0);
   const debrisFired = useRef(false);
+  // The simulated aftershock clock + the two people trapped in the cracked building (desk night; a game outcome).
+  const shock = useRef<Shock | null>(null);
+  const dawnReadyAt = useRef<number | null>(null); // tag posted AND (aftershock hit OR both out): dawn 5 s later
+  const assemblyMarker = useRef<ReturnType<typeof makeAssemblyMarker> | null>(null);
+  const devQuake = useRef(false); // dev only (window.__foot.quake()): run the clock + rescue with ?agent=off
+  const devDawn = useRef(false); // dev only (window.__foot.dawn())
+  const [rescue, setRescue] = useState<{ saved: number; of: number; caught: boolean; hit: boolean } | null>(null);
   const defendEnded = useRef(false);
   const [prog, setProg] = useState({ reached: false, checked: false, survived: false, filed: false });
-  const [mhud, setMhud] = useState({ flares: 0, boards: 0, medkits: 0, found: 0, crates: 0, survivors: [] as { name: string; state: SurvivorState }[], barricade: null as null | { hp: number; max: number }, timer: null as null | { label: string; secs: number; urgent: boolean } });
+  const [mhud, setMhud] = useState({ flares: 0, boards: 0, medkits: 0, found: 0, crates: 0, survivors: [] as { id: string; name: string; state: SurvivorState }[], barricade: null as null | { hp: number; max: number }, timer: null as null | { label: string; secs: number; urgent: boolean } });
   const cratesTotal = useRef(0);
   const [score, setScore] = useState({ saved: 0, total: 0, found: 0, health: 100, secs: 0, points: 0, rank: "C", downed: 0 });
   const save = useSave();
@@ -369,7 +492,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
       collide: makeCollide(colliders, bounds),
     };
     ctxRef.current = ctx;
-    if (process.env.NODE_ENV !== "production") (window as unknown as { __foot?: unknown }).__foot = { ctx, step: () => stepRef.current, game: () => gRef.current, since: () => ctx.time - stepAt.current, flags: () => ({ scoutAsked: scoutAsked.current, briefAsked: briefAsked.current, nightAsked: nightAsked.current }) };
+    if (process.env.NODE_ENV !== "production") (window as unknown as { __foot?: unknown }).__foot = { ctx, step: () => stepRef.current, game: () => gRef.current, since: () => ctx.time - stepAt.current, flags: () => ({ scoutAsked: scoutAsked.current, briefAsked: briefAsked.current, nightAsked: nightAsked.current }), quake: () => (devQuake.current = true), dawn: () => (devDawn.current = true), shock: () => shock.current };
     const first = office?.door && !presenter ? office : hero;
     const door: Pt = first.door ? [first.door.x, first.door.z] : reachPoint(ctx, first.pid, [first.x, first.z + 40]) ?? [first.x, first.z];
     const sp = spawnFor(ctx, door, first.door?.facing ?? 180);
@@ -384,8 +507,8 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
       ctx.bus.on("mission:pickup", (e) => setBanner({ title: e.kind === "boards" ? `+${e.n} boards` : "+1 medkit", sub: e.kind === "medkit" ? "Press Q to use it." : "For the barricade.", tone: "good" }, 2200)),
       ctx.bus.on("mission:survivor", (e) =>
         setBanner(
-          e.state === "following" ? { title: `${e.name} is with you`, sub: "Keep them close. Zombies go for them too.", tone: "good" }
-          : e.state === "safe" ? { title: `${e.name} is safe`, tone: "good" }
+          e.state === "following" ? { title: `${e.name} is with you`, sub: e.id.startsWith("trap-") ? "Lead them to the green assembly point before the aftershock (simulated)." : DESK ? "Keep them close." : "Keep them close. Zombies go for them too.", tone: "good" }
+          : e.state === "safe" ? { title: `${e.name} is safe`, sub: e.id.startsWith("trap-") ? "At the assembly point (simulated)." : undefined, tone: "good" }
           : e.state === "lost" ? { title: `${e.name} ran for it`, sub: "Lost in the dark.", tone: "bad" } : null,
           2600,
         ),
@@ -434,6 +557,8 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
       ro.disconnect();
       offDown();
       offMission.forEach((f) => f());
+      assemblyMarker.current?.dispose();
+      assemblyMarker.current = null;
       for (const s of systems) s.dispose();
       input.dispose();
       renderer.dispose();
@@ -456,6 +581,18 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
       return d ? { at: d, label: hero.label } : null;
     }
     if (s === "escape" && routeTo.current) return { at: routeTo.current, label: labelOf(fallbackPid) };
+    const sh = shock.current;
+    if (s === "night" && sh && sh.hitAt === null) {
+      const mine = ctx.mission.survivors.filter((v) => v.id.startsWith("trap-"));
+      if (mine.some((v) => v.state === "following")) return { at: sh.assembly, label: "Assembly point" };
+      const p = ctx.player;
+      let best: Pt | null = null;
+      for (const v of mine) {
+        const n = v.state === "trapped" ? ctx.npcs.find((q) => q.id === v.id) : undefined;
+        if (n && (!best || Math.hypot(n.x - p.x, n.z - p.z) < Math.hypot(best[0] - p.x, best[1] - p.z))) best = [n.x, n.z];
+      }
+      if (best) return { at: best, label: `Trapped at ${hero?.label ?? "the building"}` };
+    }
     return null;
   };
 
@@ -567,11 +704,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
       const fireDebris = () => {
         if (debrisFired.current) return;
         debrisFired.current = true;
-        const zones = ctx.district.buildings
-          .filter((b) => b.unfinished)
-          .map((b) => ctx.colliderOf.get(b.pid))
-          .filter((c): c is NonNullable<typeof c> => !!c && c.maxX > ctx.bounds.x0 && c.minX < ctx.bounds.x1 && c.maxZ > ctx.bounds.z0 && c.minZ < ctx.bounds.z1)
-          .map((c) => ({ x: (c.minX + c.maxX) / 2, z: (c.minZ + c.maxZ) / 2, r: Math.max(c.maxX - c.minX, c.maxZ - c.minZ) / 2 + 6 }))
+        const zones = unfinishedZones(ctx)
           .filter((zn) => !(stepRef.current === "hold" && dist([zn.x, zn.z], heroDoor) < zn.r + 8)); // not on the door you're holding
         const b = g.outcome ? ctx.byPid.get(g.outcome.pid_final) : hero;
         const mmi = b?.mmi ?? 7;
@@ -579,6 +712,105 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
         ctx.bus.emit("mission:debris", { zones, secs: 7 });
         setBanner({ title: "Aftershock", sub: "Stay clear of the red zones: unfinished city retrofit orders (a game outcome).", tone: "bad" }, 5000);
       };
+
+      // The simulated aftershock (desk night): at the quake a clock starts and two people are trapped at the cracked
+      // building's door. Bob can lead them to an assembly point before it hits. A game outcome, never sent to the agent.
+      const startAftershock = () => {
+        if (shock.current) return;
+        const f = dirOf(hero.door?.facing ?? 180);
+        const perp: Pt = [-f[1], f[0]];
+        const spots = TRAPPED.map(({ k, name }, i) => {
+          const [x, z] = ctx.collide(heroDoor[0] + perp[0] * k + f[0] * 1.2, heroDoor[1] + perp[1] * k + f[1] * 1.2, 0.5);
+          return { id: `trap-${i}`, x, z, name };
+        });
+        // No horde:pack, no wave: the desk night has no zombies.
+        ctx.bus.emit("mission:survivors", { survivors: spots, state: "trapped" });
+        const at = assemblyPointFor(ctx, hero, heroDoor);
+        assemblyMarker.current?.dispose();
+        assemblyMarker.current = makeAssemblyMarker(at);
+        ctx.scene.add(assemblyMarker.current.group);
+        shock.current = { at: ctx.time, due: ctx.time + (presenter ? AFTERSHOCK_DEMO_S : AFTERSHOCK_S), hitAt: null, saved: 0, caught: false, assembly: at, routed: false, shelterAt: -99 };
+      };
+      const trappedOut = () => ctx.mission.survivors.filter((v) => v.id.startsWith("trap-") && v.state === "safe").length;
+      const aftershockTick = () => {
+        const sh = shock.current;
+        if (!sh) return;
+        assemblyMarker.current?.tick(ctx.time, ctx.camera.position);
+        const following = ctx.mission.survivors.filter((v) => v.id.startsWith("trap-") && v.state === "following").length;
+        // While anyone follows: the route to the assembly point; arriving there sends them into the safe zone.
+        if (following > 0) {
+          ctx.bus.emit("world:route", { pts: [here, sh.assembly] });
+          sh.routed = true;
+          if (dist(here, sh.assembly) < 7 && ctx.time - sh.shelterAt > 1) {
+            sh.shelterAt = ctx.time;
+            ctx.bus.emit("mission:shelter", { pid: "", x: sh.assembly[0], z: sh.assembly[1] });
+          }
+        } else if (sh.routed) {
+          sh.routed = false;
+          ctx.bus.emit("world:route", { pts: null });
+        }
+        if (sh.hitAt !== null || ctx.time < sh.due) return;
+        // Zero: the simulated aftershock. Whoever isn't at the assembly point yet is still inside.
+        sh.hitAt = ctx.time;
+        sh.saved = trappedOut();
+        const hc = ctx.colliderOf.get(hero.pid);
+        const dB = hc ? closestOnPoly(p.x, p.z, hc.pts).d : dist(here, heroDoor);
+        sh.caught = !p.hidden && dB < CAUGHT_R;
+        debrisFired.current = false;
+        fireDebris(); // shake + debris zones
+        ctx.bus.emit("fx:crack", { pid: hero.pid });
+        if (sh.caught) {
+          ctx.bus.emit("fx:shake", { amp: 0.6, secs: 2 });
+          ctx.bus.emit("player:hit", { damage: CAUGHT_DMG, fromX: heroDoor[0], fromZ: heroDoor[1] });
+        }
+        const out = `${sh.saved} of ${TRAPPED.length} brought out in time.`;
+        setBanner({
+          title: "Simulated aftershock",
+          sub: sh.caught ? `Bob was caught next to ${hero.label} (−${CAUGHT_DMG} health). ${out} A game event, not a real quake.` : `${out} A game event, not a real quake.`,
+          tone: "bad",
+        }, 6000);
+      };
+      /** Night -> dawn on the desk shift. real = the live agent path (goDawn + "End the shift"); dev = no agent call. */
+      const toDeskDawn = (real: boolean) => {
+        const sh = shock.current;
+        if (sh) setRescue({ saved: sh.hitAt !== null ? sh.saved : trappedOut(), of: TRAPPED.length, caught: sh.caught, hit: sh.hitAt !== null });
+        ctx.bus.emit("world:route", { pts: null });
+        assemblyMarker.current?.dispose();
+        assemblyMarker.current = null;
+        if (real) {
+          g.goDawn();
+          debriefAsked.current = true; // "End the shift" goes at dawn
+        }
+        const secs = Math.round(ctx.time - startedAt.current);
+        setScore((q) => ({ ...q, secs, health: p.health }));
+        setProg((q) => ({ ...q, survived: true }));
+        setStep("dawn");
+      };
+      if (devQuake.current && process.env.NODE_ENV !== "production") {
+        // Dev only: the quake + clock + rescue without the agent (?agent=off). Never sends anything.
+        devQuake.current = false;
+        nightAsked.current = true; // no zombie wave on the legacy night branch
+        if (s !== "night") {
+          [p.x, p.z] = ctx.collide(heroDoor[0] + dirOf(hero.door?.facing ?? 180)[0] * 2.5, heroDoor[1] + dirOf(hero.door?.facing ?? 180)[1] * 2.5, 0.5);
+          p.frozen = false;
+          p.hidden = false;
+          setStep("night");
+        }
+        fireDebris();
+        ctx.bus.emit("fx:crack", { pid: hero.pid });
+        startAftershock();
+        setBanner({ title: "Simulated quake at 5:02 pm (dev trigger)", sub: "A game event, not a real quake.", tone: "bad" }, 4000);
+        return;
+      }
+      if (s === "night" && shock.current) {
+        aftershockTick();
+        if (agentOff) ctx.day = Math.max(0, ctx.day - dt / 6);
+        if (devDawn.current && process.env.NODE_ENV !== "production") {
+          devDawn.current = false;
+          toDeskDawn(false);
+          return;
+        }
+      }
 
       if (downed.current) {
         downed.current = false;
@@ -816,6 +1048,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
           nightAsked.current = true;
           fireDebris();
           ctx.bus.emit("fx:crack", { pid: hero.pid });
+          startAftershock();
           let at5: number | null = null; // contract v1.1: the people inside at the quake hour, from the building's card
           for (let i = g.messages.length - 1; i >= 0 && at5 === null; i--) {
             const m = g.messages[i] as Msg;
@@ -835,14 +1068,12 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
             const t = g.tagResult.tag;
             setBanner({ title: t ? `${t.toUpperCase()} tag posted (simulated)` : "No tag posted", sub: t === "red" ? `${g.tagResult.label ?? hero.label}: nobody goes in.` : t === "yellow" ? `${g.tagResult.label ?? hero.label}: restricted use.` : t === "green" ? `${g.tagResult.label ?? hero.label}: inspected, open.` : "The building stays open.", tone: t === "red" ? "bad" : "info" }, 4000);
           }
-          if (ctx.time - tagSeenAt.current > 5) {
-            g.goDawn();
-            debriefAsked.current = true; // "End the shift" goes at dawn
-            const secs = Math.round(ctx.time - startedAt.current);
-            setScore((q) => ({ ...q, secs, health: p.health }));
-            setProg((q) => ({ ...q, survived: true }));
-            setStep("dawn");
-          }
+          // Dawn waits for the tag AND the simulated aftershock (or both people out), then the 5 s beat. Capped: never
+          // more than AFTERSHOCK_CAP_S after the quake on the clock's account.
+          const sh = shock.current;
+          const clockDone = !sh || sh.hitAt !== null || trappedOut() >= TRAPPED.length || ctx.time - sh.at > AFTERSHOCK_CAP_S;
+          if (clockDone && dawnReadyAt.current === null) dawnReadyAt.current = ctx.time;
+          if (dawnReadyAt.current !== null && ctx.time - dawnReadyAt.current > 5) toDeskDawn(true);
         }
         return;
       }
@@ -1036,8 +1267,9 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
       const st = stepRef.current;
       const left = nightfallAt.current - ctx.time;
       void left; // the desk shift has no nightfall countdown (the quake comes when you step out of the inspection)
-      const timer = null;
-      const next = { flares: m.flares, boards: m.boards, medkits: m.medkits, found: m.found, crates: cratesTotal.current, survivors: m.survivors.map((v) => ({ name: v.name, state: v.state })), barricade: m.barricade.active ? { hp: Math.round(m.barricade.hp), max: m.barricade.max } : null, timer };
+      const sh = shock.current;
+      const timer = sh && sh.hitAt === null && st === "night" ? { label: "Simulated aftershock", secs: Math.max(1, Math.ceil(sh.due - ctx.time)), urgent: true } : null;
+      const next = { flares: m.flares, boards: m.boards, medkits: m.medkits, found: m.found, crates: cratesTotal.current, survivors: m.survivors.map((v) => ({ id: v.id, name: v.name, state: v.state })), barricade: m.barricade.active ? { hp: Math.round(m.barricade.hp), max: m.barricade.max } : null, timer };
       setMhud((c) => (JSON.stringify(c) === JSON.stringify(next) ? c : next));
       const f = feedsRef.current;
       if (f) {
@@ -1306,6 +1538,11 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
     scoutStarted.current = false;
     nightAsked.current = false;
     tagSeenAt.current = null;
+    shock.current = null;
+    dawnReadyAt.current = null;
+    assemblyMarker.current?.dispose();
+    assemblyMarker.current = null;
+    setRescue(null);
     shockFired.current = false;
     tipSending.current = false;
     debrisFired.current = false;
@@ -1386,8 +1623,11 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
     : step === "result" ? "The night is decided"
     : step === "dawn" ? "Dawn" : "";
 
-  const saved = mhud.survivors.filter((v) => v.state === "safe").length;
-  const withYou = mhud.survivors.filter((v) => v.state === "following").length;
+  const officePeople = mhud.survivors.filter((v) => !v.id.startsWith("trap-"));
+  const saved = officePeople.filter((v) => v.state === "safe").length;
+  const withYou = officePeople.filter((v) => v.state === "following").length;
+  const trapped = mhud.survivors.filter((v) => v.id.startsWith("trap-"));
+  const trappedSafe = trapped.filter((v) => v.state === "safe").length;
   const case7Weighed = !!office && game.messages.some((m) => {
     if (kind(m as Msg) !== "tool" || (m as Msg).name !== "weigh_case") return false;
     return String(parse<{ property_id?: string }>(m as Msg)?.property_id) === office.pid;
@@ -1403,8 +1643,11 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
     { id: "walls", kind: "main", text: "Inspect its walls from inside", done: prog.checked },
     { id: "night", kind: "main", text: "After the 5 pm quake: post a tag (green, yellow or red)", done: prog.survived },
     { id: "report", kind: "main", text: "End the shift: file the reports", done: prog.filed },
-    ...(mhud.survivors.length
-      ? [{ id: "survivors", kind: "side" as const, text: "Bring the office's people to safety", done: saved === mhud.survivors.length, progress: `${saved + withYou}/${mhud.survivors.length}` }]
+    ...(officePeople.length
+      ? [{ id: "survivors", kind: "side" as const, text: "Bring the office's people to safety", done: saved === officePeople.length, progress: `${saved + withYou}/${officePeople.length}` }]
+      : []),
+    ...(trapped.length
+      ? [{ id: "rescue", kind: "side" as const, text: `Lead the ${trapped.length} people trapped in ${heroLabel} out before the aftershock (simulated)`, done: trappedSafe === trapped.length, progress: `${trappedSafe}/${trapped.length}` }]
       : []),
     ...(sweep.stamped ? [{ id: "sweep", kind: "side" as const, text: "Sweep the suites on record", done: false, progress: `${sweep.right} right of ${sweep.stamped}` }] : []),
     ...(stale.some((c) => c.x > -500 && c.x < 140 && c.z > -300 && c.z < 200) ? [{ id: "stale", kind: "side" as const, text: "Same building? Check the city's list", done: stale.some((c) => staleStamps[c.pid]), progress: `${Object.keys(staleStamps).length} checked` }] : []),
@@ -1469,7 +1712,12 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
 
   const verifiedN = (tip.sentAt !== null ? 1 : 0) + (suiteTip.sentAt !== null ? 1 : 0);
   const shift = game.shiftReport;
+  const rescueLines = rescue ? [
+    `Rescue (simulated): ${rescue.saved} of ${rescue.of} brought out before the aftershock${rescue.saved ? ` (+${rescue.saved * RESCUE_POINTS} points)` : ""}. A game outcome, not an engineering assessment.`,
+    ...(rescue.caught ? [`Bob was caught in the aftershock next to ${heroLabel} (−${CAUGHT_DMG} health, simulated).`] : []),
+  ] : [];
   const outcomeLines = DESK ? [
+    ...rescueLines,
     ...(shift ? [`${shift.people_safe ?? 0} of ${shift.people_at_stake ?? 0} people kept safe${shift.people_displaced ? ` · ${shift.people_displaced} displaced by the tags` : ""} · ${shift.records_fixed ?? 0} record${shift.records_fixed === 1 ? "" : "s"} fixed`] : [game.isLoading ? "HQ is writing the shift report…" : ""]),
     ...(shift?.buildings ?? []).map((b) => `${b.label ?? b.pid}: ${b.tag ? `${b.tag.toUpperCase()} tag` : "no tag"} · the aftershock ${b.outcome === "damaged" ? "damaged it" : "left it standing"}${b.roll != null && b.need != null ? ` (roll ${b.roll} vs ${b.need})` : ""}${b.people_safe != null ? ` · ${b.people_safe} safe` : ""}`),
     ...Object.entries(precalls).map(([pid, t]) => {
@@ -1492,7 +1740,8 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
     const safe = shift.people_safe ?? 0, stake = Math.max(1, shift.people_at_stake ?? 0), fixed = shift.records_fixed ?? 0;
     const frac = safe / stake;
     const calledIt = Object.entries(precalls).filter(([pid, t]) => (shift.buildings?.find((b) => b.pid === pid)?.tag ?? null) === t).length;
-    return { ...score, saved: safe, total: shift.people_at_stake ?? 0, points: safe + fixed * 100 + calledIt * 50, rank: frac >= 0.9 && fixed > 0 ? "S" : frac >= 0.75 ? "A" : frac >= 0.5 ? "B" : "C" };
+    const rescued = rescue?.saved ?? 0; // the simulated rescue: its own points, never folded into people_safe
+    return { ...score, saved: safe, total: shift.people_at_stake ?? 0, rescued, points: safe + fixed * 100 + calledIt * 50 + rescued * RESCUE_POINTS, rank: frac >= 0.9 && fixed > 0 ? "S" : frac >= 0.75 ? "A" : frac >= 0.5 ? "B" : "C" };
   })() : null;
 
   hopCount.current = hops.length;

@@ -24,7 +24,7 @@ export type DawnProps = {
   loading: boolean;
   onPlayAgain(): void;
   // ---- missions (v2)
-  score: { saved: number; total: number; found: number; health: number; secs: number; points: number; rank: string };
+  score: { saved: number; total: number; found: number; health: number; secs: number; points: number; rank: string; rescued?: number };
   /** Final objective: "File the report" = the draft correction goes to a human researcher for review (local; nothing is sent). */
   reportFiled: boolean;
   onFileReport(): void;
@@ -55,6 +55,8 @@ function DeskDawn({ title, lines, messages, loading, onPlayAgain, score, reportF
   const queue = useMemo(() => latestResult<{ total?: number }>(messages, "night_cases")?.total ?? null, [messages]);
   // The shift report covers the tags, people, records and calls; only the side jobs' lines (e.g. the suite sweep) add to it.
   const extra = lines.filter((l) => /^Suite sweep/i.test(l));
+  // The simulated aftershock rescue (a game outcome, its own line): shown under the report's headline.
+  const rescue = lines.filter((l) => /^(Rescue \(simulated\)|Bob was caught in the aftershock)/.test(l));
   return (
     <div className={`${styles.root} ${styles.dawn}`} role="dialog" aria-label={title} style={{ overflow: "hidden" }}>
       <div className={styles.sun} />
@@ -64,7 +66,7 @@ function DeskDawn({ title, lines, messages, loading, onPlayAgain, score, reportF
           <h1>{title}</h1>
         </header>
         <div className={d.cols}>
-          <ShiftReportView report={report} precalls={precalls} loading={loading} score={report ? score : null} />
+          <ShiftReportView report={report} precalls={precalls} loading={loading} score={report ? score : null} notes={rescue} />
           <div className={d.colR}>
             <div className={d.scrollR}>
               {drafts.length > 0 && (
