@@ -38,6 +38,7 @@ import { createFeeds, type Feeds } from "./feeds";
 import { createMission } from "./mission";
 import { createAudio } from "./audio";
 import { createFlare } from "./flare";
+import { createStreetLife } from "./streetLife";
 import { createCityMap, type City } from "./cityMap";
 import { createRoofObjects, type RoofSystem } from "./roofObjects";
 import { SuiteSweep, type SweepScore } from "./SuiteSweep";
@@ -377,7 +378,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
 
     const feeds = createFeeds(ctx);
     feedsRef.current = feeds;
-    const systems = [safely("world", createWorld(ctx)), safely("player", createPlayer(ctx)), safely("horde", createHorde(ctx)), safely("mission", createMission(ctx)), safely("flare", createFlare(ctx)), safely("roof", (roofRef.current = createRoofObjects(ctx))), safely("city", createCityMap(ctx, (c: City) => setCity({ buildings: c.buildings.length, cases: c.buildings.filter((b) => b.case).length }))), safely("audio", createAudio(ctx)), safely("feeds", feeds)];
+    const systems = [safely("world", createWorld(ctx)), safely("player", createPlayer(ctx)), safely("horde", createHorde(ctx)), safely("mission", createMission(ctx)), safely("flare", createFlare(ctx)), safely("street", createStreetLife(ctx)), safely("roof", (roofRef.current = createRoofObjects(ctx))), safely("city", createCityMap(ctx, (c: City) => setCity({ buildings: c.buildings.length, cases: c.buildings.filter((b) => b.case).length }))), safely("audio", createAudio(ctx)), safely("feeds", feeds)];
     ctx.bus.emit("world:beacon", { pid: hero.pid });
     const offDown = ctx.bus.on("player:downed", () => (downed.current = true));
     const offMission = [
