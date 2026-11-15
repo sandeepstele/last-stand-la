@@ -60,6 +60,20 @@ def _thread_id(runtime: ToolRuntime) -> str | None:
     return str(((getattr(runtime, "config", None) or {}).get("configurable") or {}).get("thread_id") or "") or None
 
 
+def _no_suite(suite: str | None) -> str | None:
+    """The critic's case_ref uses "-" for a building case; the model sometimes passes it back as a suite. Treat "-",
+    "none", "null" and blanks as no suite, so the walls case is never drafted as a ghost-tenant case."""
+    return None if suite is None or str(suite).strip().lower() in ("", "-", "none", "null", "n/a") else suite
+
+
+def _critic_answered(runtime: ToolRuntime, pid: str, suite: str | None) -> bool:
+    """True once a critic task for this case has come back (whatever it said)."""
+    marker = f"case_ref={_case_key(pid, suite)}"
+    ids = {call.get("id") for m in (getattr(runtime, "state", None) or {}).get("messages", []) if isinstance(m, AIMessage)
+           for call in m.tool_calls or [] if call.get("name") == "task" and marker in json.dumps(call.get("args") or {}, default=str)}
+    return any(isinstance(m, ToolMessage) and m.tool_call_id in ids for m in (getattr(runtime, "state", None) or {}).get("messages", []))
+
+
 def _case_key(pid: str, suite: str | None) -> str:
     from app.tenants import norm_suite
 
@@ -436,6 +450,12 @@ async def draft_correction(property_id: str, runtime: ToolRuntime, suite: str | 
     report if they made one. Nothing is sent: the player files it in the auditor."""
     if bad := await _outside(property_id):
         return bad
+    suite = _no_suite(suite)
+    if _flag("RADAR_CRITIC") and not _critic_answered(runtime, property_id, suite):
+        # the order the night's design needs: the critic reviews first, the draft second (calling both in one message
+        # left every draft "not reviewed")
+        return {"error": f"Wait for the critic: call task for the critic with case_ref={_case_key(property_id, suite)} "
+                         "first, then call draft_correction for this case in your next message."}
     _, checks = _wave_and_checks(runtime, property_id, suite)
     notes = await _notes(runtime, property_id, suite)
     draft = await asyncio.to_thread(fortress.draft, property_id, suite, checks, notes)

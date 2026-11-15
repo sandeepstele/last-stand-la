@@ -126,3 +126,13 @@ def test_demo_reset_seeds_only_the_isolated_log_namespace():
     assert store.written[0:2] == (["laststand_log"], "/latest.md")
     assert "## Night 2026-11-13" in LAST_STAND_LOG_SEED
     assert any(x["namespace"] == ["memories"] for x in store.items)
+
+
+def test_dash_suite_is_a_building_case_and_drafts_wait_for_the_critic(monkeypatch):
+    game = _game_module(monkeypatch)
+    assert game._no_suite("-") is None and game._no_suite(" none ") is None and game._no_suite("1100") == "1100"
+    asked = AIMessage(content="", tool_calls=[{"name": "task", "args": {"description": "case_ref=6375735:- review"}, "id": "t1"}])
+    runtime = SimpleNamespace(state={"messages": [asked]})
+    assert not game._critic_answered(runtime, "6375735", None)  # asked, not answered yet
+    runtime.state["messages"].append(ToolMessage(content="{}", tool_call_id="t1", name="task"))
+    assert game._critic_answered(runtime, "6375735", None)
