@@ -139,7 +139,7 @@ export function AgentLogView({ steps, error, big = false, follow = true }: { ste
 export function AgentLogPanel({ threadId, onClose }: { threadId: string | null; onClose?(): void }) {
   const { steps, error } = useAgentLog(threadId, true);
   return (
-    <aside aria-label="The deep agent's log" style={{ position: "absolute", left: 12, top: 64, bottom: 240, width: "min(460px, 40vw)", zIndex: 44, overflow: "auto", background: "rgba(5,7,13,.9)", border: "1px solid #1e293b", padding: "10px 12px", pointerEvents: "auto" }}>
+    <aside aria-label="The deep agent's log" style={{ position: "absolute", left: 12, top: 92, bottom: 240, width: "min(500px, 42vw)", zIndex: 44, overflow: "auto", background: "rgba(5,7,13,.9)", border: "1px solid #1e293b", padding: "10px 12px", pointerEvents: "auto" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6, font: "600 14px system-ui, sans-serif", color: "#e2e8f0" }}>
         <span>Agent log <span style={{ color: "#64748b", fontWeight: 400 }}>· {steps.length} steps · code does every number</span></span>
         <span style={{ display: "flex", gap: 10, fontSize: 12 }}>

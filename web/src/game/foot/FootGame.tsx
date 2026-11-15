@@ -1491,7 +1491,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
           playAgain();
         }} />
       )}
-      {logOpen && !paused && step !== "intro" && !agentOff && !game.stub && <AgentLogPanel threadId={game.threadId} onClose={() => setLogOpen(false)} />}
+      {logOpen && !paused && step !== "intro" && step !== "dawn" && !agentOff && !game.stub && <AgentLogPanel threadId={game.threadId} onClose={() => setLogOpen(false)} />}
       {step === "intro" && city && (
         <div className={footStyles.cityLine}>
           Pillars of light: <b>{city.cases.toLocaleString("en-US")} buildings with open cases</b>, of {city.buildings.toLocaleString("en-US")} in CoStar&apos;s LA records
