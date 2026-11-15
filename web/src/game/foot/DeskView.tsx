@@ -361,7 +361,7 @@ export function DeskView({ messages, threadId, cases, tags = {}, precalls = {}, 
           <span><i style={{ color: TAG_COLOR.yellow, fontStyle: "normal" }}>●</i> yellow</span>
           <span><i style={{ color: TAG_COLOR.red, fontStyle: "normal" }}>●</i> red</span>
           <span><i style={{ color: "#94a3b8", fontStyle: "normal" }}>●</i> open case</span>
-          <span style={{ flexBasis: "100%", color: FAINT }}>Colours are a simulated quake screening · game outcome, not an engineering assessment.</span>
+          <span style={{ flexBasis: "100%", color: FAINT }}>Map colours: a records-only screening, before any evidence · simulated · game outcome, not an engineering assessment.</span>
         </div>
       </section>
 
