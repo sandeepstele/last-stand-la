@@ -113,7 +113,11 @@ export type HordeStatus = {
 };
 
 /** find_fallback(pid, away_from?) tool result */
-export type Fallback = { from_pid: string; to_pid: string; to_label: string; distance_band: string; reason: string };
+export type Fallback = {
+  from_pid: string; to_pid: string; to_label: string; distance_band: string; reason: string;
+  /** Code's side-by-side, e.g. "stay: walls 77, quake 35 | run: walls 60 on foot, quake 78", and the action it favours. */
+  compare?: string; suggest?: "hold" | "run";
+};
 
 /** commit_plan(pid, action, to_pid?) args, shown in HOLD/RUN (interrupt_on). */
 export type CommitPlanArgs = { pid: string; action: PlanAction; to_pid?: string };
