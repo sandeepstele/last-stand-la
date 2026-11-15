@@ -283,6 +283,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
   const [paused, setPausedState] = useState(false);
   const [logOpen, setLogOpen] = useState(false); // L: the deep agent's live log beside the game
   const [deskOpen, setDeskOpen] = useState(false); // Tab: Bob's desk (inbox, building cards, map, calculation sheet, radio)
+  const [precalls, setPrecalls] = useState<Record<string, Tag>>({}); // Bob's calls from outside, graded at dawn
   const deskOpenRef = useRef(false);
   useEffect(() => {
     deskOpenRef.current = deskOpen;
@@ -1284,6 +1285,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
     debriefSent.current = false;
     setSuiteTip({ chosen: null, sentAt: null });
     setSweep({ stamped: 0, right: 0 });
+    setPrecalls({});
     setSolarStamps({});
     setStaleStamps({});
     setStaleOpen(null);
@@ -1434,6 +1436,11 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
   const outcomeLines = DESK ? [
     ...(shift ? [`${shift.people_safe ?? 0} of ${shift.people_at_stake ?? 0} people kept safe${shift.people_displaced ? ` · ${shift.people_displaced} displaced by the tags` : ""} · ${shift.records_fixed ?? 0} record${shift.records_fixed === 1 ? "" : "s"} fixed`] : [game.isLoading ? "HQ is writing the shift report…" : ""]),
     ...(shift?.buildings ?? []).map((b) => `${b.label ?? b.pid}: ${b.tag ? `${b.tag.toUpperCase()} tag` : "no tag"} · the aftershock ${b.outcome === "damaged" ? "damaged it" : "left it standing"}${b.roll != null && b.need != null ? ` (roll ${b.roll} vs ${b.need})` : ""}${b.people_safe != null ? ` · ${b.people_safe} safe` : ""}`),
+    ...Object.entries(precalls).map(([pid, t]) => {
+      const final = shift?.buildings?.find((b) => b.pid === pid)?.tag ?? (game.tagResult?.pid === pid ? game.tagResult.tag : undefined);
+      const name = shift?.buildings?.find((b) => b.pid === pid)?.label ?? labelOf(pid);
+      return final ? `${name}: you called ${t.toUpperCase()} from outside; the final tag was ${final.toUpperCase()}${final === t ? ". Called it." : "."}` : `${name}: you called ${t.toUpperCase()} from outside.`;
+    }),
     ...(shift?.disclaimer ? [shift.disclaimer] : []),
     ...(sweep.stamped ? [`Suite sweep: ${sweep.right} of ${sweep.stamped} stamps match what the records support.`] : []),
   ].filter(Boolean) : [
@@ -1448,7 +1455,8 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
   const deskScore = DESK && shift ? (() => {
     const safe = shift.people_safe ?? 0, stake = Math.max(1, shift.people_at_stake ?? 0), fixed = shift.records_fixed ?? 0;
     const frac = safe / stake;
-    return { ...score, saved: safe, total: shift.people_at_stake ?? 0, points: safe + fixed * 100, rank: frac >= 0.9 && fixed > 0 ? "S" : frac >= 0.75 ? "A" : frac >= 0.5 ? "B" : "C" };
+    const calledIt = Object.entries(precalls).filter(([pid, t]) => (shift.buildings?.find((b) => b.pid === pid)?.tag ?? null) === t).length;
+    return { ...score, saved: safe, total: shift.people_at_stake ?? 0, points: safe + fixed * 100 + calledIt * 50, rank: frac >= 0.9 && fixed > 0 ? "S" : frac >= 0.75 ? "A" : frac >= 0.5 ? "B" : "C" };
   })() : null;
 
   hopCount.current = hops.length;
@@ -1576,6 +1584,8 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
           cases={(brief?.cases ?? []).map((c) => ({ ...c, property_id: String(c.property_id), suite: c.suite ? String(c.suite) : null })) as DeskCase[]}
           clock={{ office: "9:00 am", suite: "10:40 am", visit: "noon", approach: "1:30 pm", inside: "3:45 pm", night: "5:02 pm" }[step as string] ?? "9:00 am"}
           tags={game.tagResult?.tag ? { [game.tagResult.pid]: game.tagResult.tag } : {}}
+          precalls={precalls}
+          onPrecall={(pid, t) => setPrecalls((m) => (m[pid] ? m : { ...m, [pid]: t }))}
           busy={game.isLoading}
           onClose={() => {
             setDeskOpen(false);

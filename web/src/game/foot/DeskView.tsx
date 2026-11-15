@@ -133,8 +133,10 @@ function CityPane({ city, cards, tags, triage, selected, onSelect }: { city: Cit
 const pane: React.CSSProperties = { background: "rgba(10,14,24,.94)", border: "1px solid #1e293b", padding: "10px 12px", overflow: "auto", minHeight: 0 };
 const head: React.CSSProperties = { margin: "0 0 8px", font: "600 13px/1.2 system-ui, sans-serif", letterSpacing: ".06em", textTransform: "uppercase", color: "#94a3b8" };
 
-export function DeskView({ messages, threadId, cases, tags = {}, clock, busy, onVisit, onClose }: {
+export function DeskView({ messages, threadId, cases, tags = {}, precalls = {}, onPrecall, clock, busy, onVisit, onClose }: {
   messages: readonly unknown[]; threadId: string | null; cases: DeskCase[]; tags?: Record<string, Tag>; clock: string; busy: boolean;
+  /** Bob's own call from the card and the aerial, made before the scan squad reports; graded against the final tag at dawn. */
+  precalls?: Record<string, Tag>; onPrecall?(pid: string, t: Tag): void;
   onVisit(c: DeskCase): void; onClose(): void;
 }) {
   const { steps } = useAgentLog(threadId, true);
@@ -230,6 +232,22 @@ export function DeskView({ messages, threadId, cases, tags = {}, clock, busy, on
               </div>
               {verdictLine(c.math) && <div style={{ color: "#f5a524", fontWeight: 600 }}>{verdictLine(c.math)}</div>}
               {deskCards[c.pid] && <SourceBlock card={deskCards[c.pid]} />}
+              {onPrecall && !tags[c.pid] && (() => {
+                const scanned = (deskCards[c.pid]?.sources ?? []).some((x) => x.key === "matterport" && x.status === "ok") && live.has(c.pid);
+                const mine = precalls[c.pid];
+                if (scanned && !mine) return null;
+                return (
+                  <div style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 6, fontSize: 12 }} onClick={(e) => e.stopPropagation()}>
+                    <span style={{ color: "#94a3b8" }}>{mine ? "Your call from outside:" : "Call it from outside:"}</span>
+                    {(["green", "yellow", "red"] as Tag[]).map((t) => (
+                      <button key={t} type="button" disabled={!!mine} onClick={() => onPrecall(c.pid, t)}
+                        style={{ padding: "2px 8px", border: `1px solid ${TAG_COLOR[t]}`, background: mine === t ? TAG_COLOR[t] : "transparent", color: mine === t ? "#111" : TAG_COLOR[t], fontWeight: 700, cursor: mine ? "default" : "pointer", opacity: mine && mine !== t ? 0.35 : 1 }}>
+                        {t}
+                      </button>
+                    ))}
+                  </div>
+                );
+              })()}
               <ul style={{ listStyle: "none", margin: "4px 0 0", padding: 0, fontSize: 12.5 }}>
                 {c.lines.slice(-6).map((l) => (
                   <li key={l.n} style={{ padding: "3px 0", borderTop: "1px solid #111827" }}>
