@@ -807,7 +807,14 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
           nightAsked.current = true;
           fireDebris();
           ctx.bus.emit("fx:crack", { pid: hero.pid });
-          setBanner({ title: "Simulated quake at 5:02 pm", sub: "A game event, not a real quake: a strong shake hits downtown. Screen the building and post a tag before dark.", tone: "bad" }, 5500);
+          let at5: number | null = null; // contract v1.1: the people inside at the quake hour, from the building's card
+          for (let i = g.messages.length - 1; i >= 0 && at5 === null; i--) {
+            const m = g.messages[i] as Msg;
+            if (kind(m) !== "tool" || m.name !== "building_card") continue;
+            const c = parse<{ pid?: string; people?: { at_5pm?: number } }>(m);
+            if (String(c?.pid) === hero.pid && typeof c?.people?.at_5pm === "number") at5 = c.people.at_5pm;
+          }
+          setBanner({ title: "Simulated quake at 5:02 pm", sub: `A game event, not a real quake: a strong shake hits downtown.${at5 != null ? ` About ${at5} people are inside ${hero.label}.` : ""} Screen it and post a tag before dark.`, tone: "bad" }, 5500);
         }
         if (g.tagProposal && !g.tagDecision && !g.tagResult) {
           for (const [code, t] of [["Digit1", "green"], ["Digit2", "yellow"], ["Digit3", "red"]] as const) if (k.has(code)) g.decideTag(t);
@@ -1381,7 +1388,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
   ];
 
   type Screen = { pid?: string; label?: string; score?: number; fema_type?: string; p_damage?: number; suggest?: string; borderline?: boolean; why?: string;
-    people?: { day?: number; night?: number; at_stake?: number; low?: number; high?: number } };
+    people?: { day?: number; night?: number; at_stake?: number; low?: number; high?: number; at_5pm?: number } };
   const screen = DESK ? latestResult<Screen>(game.messages, "screen_building") : null;
   const tagWords: Record<Tag, string> = { green: "GREEN", yellow: "YELLOW", red: "RED" };
   const deskDecision = DESK && step === "night" ? {
@@ -1390,6 +1397,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
     why: screen ? [
       screen.score != null ? `Screening score ${screen.score}${screen.fema_type ? ` (${screen.fema_type})` : ""}` : "",
       screen.p_damage != null ? `chance of damage ${Math.round(screen.p_damage * 100)}%` : "",
+      screen.people?.at_5pm != null ? `inside at 5 pm: ${screen.people.at_5pm}` : "",
       screen.people?.at_stake != null ? `${screen.people.at_stake} people at stake${screen.people.low != null && screen.people.high != null ? ` (inside by day ${screen.people.low}–${screen.people.high}, an estimate)` : ""}` : "",
       screen.borderline ? "borderline: close to a tag threshold" : "",
       "Green = safe to occupy, yellow = limited entry, red = unsafe (simulated placards)",
