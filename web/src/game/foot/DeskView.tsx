@@ -5,9 +5,9 @@
 // every number on it is the code's. OWNER: coding lead.
 
 import { useEffect, useMemo, useState } from "react";
-import { MathTable, useAgentLog, type LogMath, type LogStep } from "./AgentLog";
+import { useAgentLog, type LogMath, type LogStep } from "./AgentLog";
 import type { City, CityBuilding } from "./cityMap";
-import { SHORT, plain } from "./copy";
+import { SHORT, cap, plain } from "./copy";
 import { parse, kind, radioLines, type Msg } from "../radio";
 
 /** building_card (the desk contract): one building's data, by source, with the conflicts between sources. */
@@ -379,45 +379,74 @@ export function DeskView({ messages, threadId, cases, tags = {}, precalls = {}, 
         </div>
       </section>
 
-      <section style={{ ...pane, gridColumn: "2 / 4", gridRow: "3", maxHeight: "min(400px, 46vh)", minHeight: 170, padding: "12px 16px", background: "rgba(16,14,10,.94)", boxShadow: `inset 0 2px 0 ${AMBER}` }} aria-label="Calculation sheet">
-        <h3 style={{ ...head, color: AMBER }}>Calculation sheet <span style={{ textTransform: "none", letterSpacing: 0, fontWeight: 400, color: MUTED }}>· the evidence maths, done in code (no model): start → each check&apos;s shift → sum → ÷ total → %</span></h3>
-        {sheet ? <Sheet m={sheet} name={sheetPid ? nameOf(sheetPid) : null} card={sheetPid ? deskCards[sheetPid] : undefined} tag={sheetPid ? tags[sheetPid] : undefined} following={!!selected && sheetPid !== selected} /> : <p style={{ color: MUTED, margin: 0 }}>The maths appears when the agent weighs a case.</p>}
+      <section style={{ ...pane, gridColumn: "2 / 4", gridRow: "3", maxHeight: "min(400px, 46vh)", minHeight: 170, padding: "12px 16px" }} aria-label="Calculation">
+        {sheet ? <Sheet m={sheet} name={sheetPid ? nameOf(sheetPid) : null} following={!!selected && sheetPid !== selected} /> : <p style={{ color: MUTED, margin: 0 }}>No calculation yet. It appears when a case is weighed.</p>}
       </section>
     </div>
   );
 }
 
-/** The sheet, front and centre: the building and the verdict at a glance, then the arithmetic that gets there. */
-function Sheet({ m, name, card, tag, following }: { m: LogMath; name: string | null; card?: DeskCard; tag?: Tag; following: boolean }) {
-  const v = verdictOf(m);
-  const ppl = card?.people;
+/** Plain names for the checks and the explanations, as an inspector's worksheet would put them. */
+const CHECK_NAME: Record<string, string> = {
+  look_from_above: "Aerial photo", compare_captures: "Old vs new aerial photo", site_structures: "Aerial footprint",
+  lot_activity: "Parked cars on the lot", compliance_filings: "City retrofit filings", interior_geometry: "3D scan of the interior",
+  human_report: "Bob's site report", suite_tour: "3D tour of the suite", listing_timeline: "Listing and tenancy dates",
+  lease_terms: "Lease terms", tenancy_trail: "Tenant's other moves", permits: "Building permits",
+};
+const ANSWER_NAME: Record<string, string> = {
+  city_list_current: "Concrete (city list)", costar_current: "Recorded material (CoStar)", different_structure: "Something else",
+  still_there: "Still there", gone_dark: "Gone", subleasing: "Subleasing", moved_within: "Moved suites", listing_stale: "Listing out of date",
+  replaced: "Replaced", year_is_renovation: "Renovated",
+};
+const nameCheck = (k: string) => CHECK_NAME[k] ?? cap(plain(k));
+const nameAnswer = (k: string) => ANSWER_NAME[k] ?? cap(plain(k));
+const fmt = (x: number | undefined) => (typeof x === "number" ? x.toFixed(2) : "");
+const signed = (x: number) => `${x >= 0 ? "+" : "−"}${Math.abs(x).toFixed(2)}`;
+
+/** The calculation as a plain worksheet: starting odds, each check's points, totals, then each share of the total. */
+function Sheet({ m, name, following }: { m: LogMath; name: string | null; following: boolean }) {
+  const keys = Object.keys(m.start);
+  const rows: { check: string; by: Record<string, number> }[] = [];
+  for (const sh of m.shifts) {
+    const last = rows[rows.length - 1];
+    if (last && last.check === sh.check && last.by[sh.hypothesis] == null) last.by[sh.hypothesis] = sh.shift;
+    else rows.push({ check: sh.check, by: { [sh.hypothesis]: sh.shift } });
+  }
+  const leader = m.leader ?? keys[0];
+  const td: React.CSSProperties = { padding: "4px 12px", textAlign: "right", borderBottom: `1px solid ${HAIR}`, whiteSpace: "nowrap" };
+  const th: React.CSSProperties = { ...td, textAlign: "left", fontWeight: 400, color: MUTED };
+  const pct = (k: string) => (typeof m.result[k] === "number" ? `${Math.round(m.result[k] * 100)}%` : "");
   return (
-    <div style={{ display: "flex", gap: 20, alignItems: "flex-start", flexWrap: "wrap" }}>
-      <div style={{ flex: "0 1 270px", minWidth: 220 }}>
-        <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
-          <b style={{ font: `700 19px/1.2 ${UI}` }}>{name ?? "The latest case"}</b>
-          {card?.screening?.suggest && <ScreensChip s={card.screening.suggest} />}
-          {tag && <TagChip t={tag} />}
-        </div>
-        {following && <div style={{ color: FAINT, fontSize: 12 }}>(the latest weighed case; the selected building has no maths yet)</div>}
-        {v && (
-          <div style={{ marginTop: 4 }}>
-            <div style={{ color: AMBER, font: `700 46px/1 ${UI}`, fontVariantNumeric: "tabular-nums" }}>{v.pct}</div>
-            <div style={{ color: AMBER, font: `600 16px/1.25 ${UI}` }}>{v.label} {v.what}</div>
-          </div>
-        )}
-        {ppl && (ppl.low != null || ppl.day != null) && (
-          <div style={{ marginTop: 8, color: INK }}>
-            <b style={{ fontSize: 17 }}>{ppl.low != null && ppl.high != null ? `${n(ppl.low)}–${n(ppl.high)}` : n(ppl.day ?? 0)}</b> <span style={{ color: MUTED }}>people inside by day (an estimate)</span>
-            {ppl.at_5pm != null && <div><b>{n(ppl.at_5pm)}</b> <span style={{ color: MUTED }}>inside at 5 pm</span></div>}
-          </div>
-        )}
-        {(card?.conflicts ?? []).map((k, i) => <Conflict key={i} k={k} />)}
+    <div style={{ font: `400 14px/1.4 ${UI}`, color: INK, fontVariantNumeric: "tabular-nums" }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 6 }}>
+        <b style={{ fontWeight: 600, fontSize: 15 }}>Calculation{name ? `: ${name}` : ""}</b>
+        {following && <span style={{ color: FAINT, fontSize: 12 }}>(latest case; the selected building has none yet)</span>}
       </div>
-      <div className="desk-sheet-table" style={{ flex: "1 1 420px", minWidth: 0 }}>
-        <style>{".desk-sheet-table{zoom:.88}@media (min-width:1400px){.desk-sheet-table{zoom:1}}"}</style>
-        <MathTable m={m} big />
-      </div>
+      <table style={{ borderCollapse: "collapse", width: "100%", maxWidth: 760 }}>
+        <thead>
+          <tr>
+            <th style={th} />
+            {keys.map((k) => <th key={k} style={{ ...td, fontWeight: 600, color: INK }}>{nameAnswer(k)}</th>)}
+          </tr>
+        </thead>
+        <tbody>
+          <tr><th style={th}>Starting odds</th>{keys.map((k) => <td key={k} style={td}>{fmt(m.start[k])}</td>)}</tr>
+          {rows.map((r, i) => (
+            <tr key={i}><th style={th}>{nameCheck(r.check)}</th>{keys.map((k) => <td key={k} style={td}>{r.by[k] == null ? "" : signed(r.by[k])}</td>)}</tr>
+          ))}
+          <tr><th style={th}>Total</th>{keys.map((k) => <td key={k} style={td}>{fmt(m.sum[k])}</td>)}</tr>
+          <tr>
+            <th style={th}>Share of {m.total.toFixed(2)}</th>
+            {keys.map((k) => <td key={k} style={{ ...td, fontWeight: k === leader ? 700 : 400 }}>{pct(k)}</td>)}
+          </tr>
+        </tbody>
+      </table>
+      <p style={{ margin: "8px 0 0", color: MUTED }}>
+        Result: {m.label ?? "leaning"} {nameAnswer(leader).toLowerCase()}, {pct(leader)}.
+      </p>
+      <p style={{ margin: "2px 0 0", color: FAINT, fontSize: 12 }}>
+        Each check adds or takes away points; each column&apos;s total is then divided by the sum of all three. A site report counts for at most 0.35 and a photo for at most 0.20.
+      </p>
     </div>
   );
 }
