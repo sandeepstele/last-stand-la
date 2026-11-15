@@ -323,8 +323,14 @@ def _shift_facts(runtime: ToolRuntime) -> list[str]:
     for m in (getattr(runtime, "state", None) or {}).get("messages", []):
         d = _result(m.content) if isinstance(m, ToolMessage) and m.name == "shift_report" else None
         if d:
-            lines = [f"- {r['label']}: tag={r['tag']}; damage={r.get('damage')}; right_tag={r.get('right_tag')}; "
-                     f"tag_right={r.get('tag_right')}; people_safe={r['people_safe']}" for r in d.get("buildings") or []]
+            tagged = {str(x.get("pid")): x for x in _tags(runtime)}
+            lines = []
+            for r in d.get("buildings") or []:
+                sug = (tagged.get(str(r["pid"])) or {}).get("suggested") or "unknown"
+                b = lambda v: str(bool(v)).lower()
+                lines.append(f"- {r['label']}: agent_suggested={sug}; bob_tag={r['tag']}; agreed={b(sug == r['tag'])}; "
+                             f"damage={r.get('damage')}; right_tag={r.get('right_tag')}; bob_right={b(r.get('tag_right'))}; "
+                             f"agent_right={b(sug == r.get('right_tag'))}; people_safe={r['people_safe']}")
             lines.append(f"- score: people_safe={d.get('people_safe')}/{d.get('people_at_stake')}; "
                          f"records_fixed={d.get('records_fixed')}")
     return lines
@@ -394,7 +400,9 @@ Messages, in the order a shift usually runs:
 1. "Start Bob's shift"
    In ONE message call inbox() and read_file("/shift_log/latest.md"). Next message: write_todos with one item per case
    the inbox returns (e.g. "Case #7: suite 1100, 122 7th St: is the tenant still there?") plus "Tag the block before the
-   aftershock". Then answer in at most 3 lines: how many open cases the queue holds and how many are in Bob's district
+   aftershock". Then answer in at most 4 lines. If the log's last shift has agreed=false (Bob changed your tag), your
+   FIRST line says so plainly, from the log only, e.g. "Last shift Bob changed my yellow to red at 601 Broadway, and
+   the aftershock showed red was right." Then: how many open cases the queue holds and how many are in Bob's district
    (total, in_area), today's cases with their stakes, and the last shift's lesson if the log has one (no facts beyond it).
 
 2. "Check suite <suite> at building <pid>: is the tenant on record still there?"
@@ -439,7 +447,8 @@ Messages, in the order a shift usually runs:
    case_ref=<property_id>:<normalized-suite-or-dash> marker and tell it to call case_file for that case and return
    CriticOut. Next message: draft_correction once per case (the building for the walls case; the building and suite for
    the suite case). Next message: shift_report(). Next message: log_shift with one lesson line of at most 20 words (no
-   number unless it appears in the shift report; never a company name or Bob's own words). Then answer in at most 4
+   number unless it appears in the shift report; never a company name or Bob's own words). If Bob changed your tag,
+   the lesson says what you will weigh differently next shift. Then answer in at most 4
    lines: what the aftershock did to each tagged building and the people kept safe (from shift_report), and each case's
    draft (its text starts with "DRAFT") waiting for Bob to file it, or that none is drafted yet.
 
