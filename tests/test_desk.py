@@ -51,3 +51,9 @@ def test_edited_tag_result_is_read_past_the_reviewer_note(monkeypatch):
               '{"pid": "123", "tag": "red", "suggested": "yellow"}')
     rt = SimpleNamespace(state={"messages": [ToolMessage(content=edited, name="tag_building", tool_call_id="1")]})
     assert desk_agent._tags(rt) == [{"pid": "123", "tag": "red", "suggested": "yellow"}]
+
+
+def test_yellow_is_not_free():
+    assert desk._exposure("yellow", "complete") == (desk.YELLOW_ENTRY, 0.0)
+    assert desk._exposure("yellow", "none") == (0.0, desk.YELLOW_DISPLACED)
+    assert desk._exposure("red", "slight") == (0.0, 1.0) and desk._exposure("green", "extensive") == (1.0, 0.0)

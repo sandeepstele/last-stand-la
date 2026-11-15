@@ -361,12 +361,25 @@ def tag(pid: str, tag_: str, checks: list[str] | tuple[str, ...] = (), notes: li
 
 
 RIGHT_TAG = {"none": "green", "slight": "green", "moderate": "yellow", "extensive": "red", "complete": "red"}
+SERIOUS = ("extensive", "complete")
+# Game parts (labelled): under ATC-20 Restricted Use (yellow) entry is limited, not barred, so some people are still
+# exposed when the damage turns out serious; and a yellow posting keeps some people out of an undamaged building.
+YELLOW_ENTRY = 0.10      # share of occupants still inside a yellow building (limited entry)
+YELLOW_DISPLACED = 0.25  # share displaced by a yellow posting when the damage is none or slight
 
 
-def aftershock(pid: str, checks: list[str] | tuple[str, ...] = (), notes: list[dict] | None = None) -> dict[str, Any]:
-    """What the dawn aftershock reveals for one building: a seeded draw from today's damage odds (the HAZUS damage
-    states for each material, weighted by the evidence). Same evidence, same dawn."""
-    s = screen(pid, checks, notes)
+def _exposure(tag: str, state: str) -> tuple[float, float]:
+    """(share of occupants exposed to serious damage, share displaced for nothing) for a tag and a damage state."""
+    exposed = {"green": 1.0, "yellow": YELLOW_ENTRY, "red": 0.0}[tag] if state in SERIOUS else 0.0
+    displaced = {"green": 0.0, "yellow": YELLOW_DISPLACED, "red": 1.0}[tag] if state in ("none", "slight") else 0.0
+    return exposed, displaced
+
+
+def aftershock(pid: str) -> dict[str, Any]:
+    """What the dawn aftershock reveals for one building: a seeded draw from the building's own damage odds (its
+    records only: the HAZUS damage states for each material it may be, weighted by the records). What Bob checked
+    changes his tag, never the building. Same building, same dawn."""
+    s = screen(pid)
     mixed = {k: sum(r["odds"] * r["damage"][k] for r in s["by_material"]) for k in STATES}
     roll = random.Random(f"{SEED}:aftershock:{pid}").random()
     acc, state = 0.0, STATES[-1]
@@ -379,18 +392,18 @@ def aftershock(pid: str, checks: list[str] | tuple[str, ...] = (), notes: list[d
 
 
 def shift_report(tags: list[dict], evidence_by_pid: dict[str, tuple[list[str], list[dict]]], drafts: list[dict]) -> dict[str, Any]:
-    """Dawn: the aftershock reveals each tagged building's damage (seeded) and tests the tag against the ATC-20 posting
-    that damage calls for (none/slight green, moderate yellow, extensive/complete red). Open (green) during serious
-    damage: the people inside are hurt in the game (HAZUS indoor rates). Kept out (yellow/red): safe. Red with little
-    damage: displaced for nothing. Records fixed: correction drafts the reviewer agreed with."""
+    """Dawn: the aftershock reveals each tagged building's damage (seeded, from the building's own odds) and tests the
+    tag against the ATC-20 posting that damage calls for (none/slight green, moderate yellow, extensive/complete red).
+    People exposed to serious damage: all of them under green, a limited-entry share under yellow, none under red; they
+    are hurt in the game at HAZUS indoor rates. Displaced for nothing: all under red, a share under yellow, when the
+    damage is none or slight. Each row also carries the expected outcome of every tag (decision quality, not luck).
+    Records fixed: correction drafts the reviewer agreed with."""
     rows, safe, stake, displaced, hurt, right = [], 0, 0, 0, 0.0, 0
     for t in tags:
         pid = str(t["pid"])
-        checks, notes = evidence_by_pid.get(pid, ([], []))
-        a = aftershock(pid, checks, notes)
+        a = aftershock(pid)
         s, state = a["screen"], a["state"]
         n = s["people"]["at_stake"]
-        serious = state in ("extensive", "complete")
         cls = s["by_material"][0]["hazus_class"]
         rates = INJURY["URM" if cls.startswith("URM") else "W" if cls.startswith("W") else "C"]
         if state == "complete":
@@ -398,20 +411,23 @@ def shift_report(tags: list[dict], evidence_by_pid: dict[str, tuple[list[str], l
             per = sum((1 - pc) * x + pc * y for x, y in zip(rates["complete"], rates["collapse"])) / 100
         else:
             per = sum(rates.get(state, (0, 0, 0, 0))) / 100
-        open_ = t["tag"] == "green"
-        h = round(n * per, 1) if open_ and state != "none" else 0.0
-        kept = 0 if open_ and serious else n
-        disp = n if t["tag"] == "red" and state in ("none", "slight") else 0
+        ex, dp = _exposure(t["tag"], state)
+        exposed, disp = round(n * ex), round(n * dp)
+        h = round(exposed * per, 1)
+        kept = n - exposed
         ok = t["tag"] == RIGHT_TAG[state]
-        why = {"none": "no damage", "slight": "slight damage", "moderate": "moderate damage",
-               "extensive": "extensive damage", "complete": "complete damage"}[state]
-        why += f" (roll {a['roll']:.3f} on today's odds)"
-        why += ("; it was open: people were inside" if open_ and serious else
-                "; the tag kept people out" if serious else
-                "; the red tag kept people out for nothing" if disp else "")
-        rows.append({"pid": pid, "label": s["label"], "tag": t["tag"], "damage": state, "outcome": "damaged" if serious else "held",
-                     "right_tag": RIGHT_TAG[state], "tag_right": ok, "roll": a["roll"], "odds": a["odds"],
-                     "people_at_stake": n, "people_safe": kept, "people_displaced": disp, "people_hurt": h, "why": why})
+        expected = {tag: {"exposed": round(n * sum(a["odds"][k] * _exposure(tag, k)[0] for k in STATES), 1),
+                          "displaced": round(n * sum(a["odds"][k] * _exposure(tag, k)[1] for k in STATES), 1)}
+                    for tag in ("green", "yellow", "red")}
+        why = f"{state} damage (roll {a['roll']:.3f} on the building's own odds)"
+        why += (f"; {exposed} people were inside" if exposed else
+                "; the tag kept people out" if state in SERIOUS else
+                f"; {disp} people were kept out for nothing" if disp else "")
+        rows.append({"pid": pid, "label": s["label"], "tag": t["tag"], "damage": state,
+                     "outcome": "damaged" if state in SERIOUS else "held", "right_tag": RIGHT_TAG[state], "tag_right": ok,
+                     "roll": a["roll"], "odds": a["odds"], "people_at_stake": n, "people_safe": kept,
+                     "people_exposed": exposed, "people_displaced": disp, "people_hurt": h, "expected": expected,
+                     "why": why})
         safe, stake, displaced, hurt, right = safe + kept, stake + n, displaced + disp, hurt + h, right + ok
     fixed = [d for d in drafts if (d.get("critic") or {}).get("status") == "reviewed" and (d["critic"].get("follows") is True)
              and str(d.get("text", "")).startswith("DRAFT")]
@@ -420,5 +436,7 @@ def shift_report(tags: list[dict], evidence_by_pid: dict[str, tuple[list[str], l
             "records": [{"label": d.get("label"), "verdict": d.get("label_verdict"),
                          "critic": (d.get("critic") or {}).get("status")} for d in drafts],
             "rule": "ATC-20 posting for the revealed damage: none/slight green, moderate yellow, extensive/complete red. "
-                    "People hurt use HAZUS indoor casualty rates (game).",
+                    f"Yellow allows limited entry ({round(YELLOW_ENTRY * 100)}% still inside) and displaces "
+                    f"{round(YELLOW_DISPLACED * 100)}% when the damage is minor (game shares). People hurt use HAZUS indoor "
+                    "casualty rates (game). 'expected' gives every tag's average outcome on the building's own odds.",
             "disclaimer": f"{DISCLAIMER}."}

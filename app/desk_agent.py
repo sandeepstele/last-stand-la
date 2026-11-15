@@ -215,8 +215,7 @@ async def shift_report(runtime: ToolRuntime) -> dict:
     """Dawn: the aftershock hits (seeded, in code) and tests every tag Bob confirmed today. Returns, per building, what
     happened and the people kept safe, plus the records fixed (drafts a reviewer agreed with). Call it after the drafts."""
     tags = _tags(runtime)
-    evidence_by_pid = {t["pid"]: await _evidence(runtime, t["pid"]) for t in tags}
-    return await asyncio.to_thread(desk.shift_report, tags, evidence_by_pid, _drafts(runtime))
+    return await asyncio.to_thread(desk.shift_report, tags, {}, _drafts(runtime))
 
 
 async def _log_text(runtime: ToolRuntime) -> str:
