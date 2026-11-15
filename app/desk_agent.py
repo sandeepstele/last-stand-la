@@ -81,9 +81,12 @@ class ShiftStart(NightStart):
                 await store.adelete(it.namespace, it.key)
         for it in await store.asearch(("laststand_cases",), limit=200):
             await store.adelete(it.namespace, it.key)
-        # The seeded previous shift only fills an EMPTY log (a fresh server; Play again's /demo/reset re-seeds it): a
-        # second shift without a reset reads Bob's real override from the shift before, which is the point of the log.
-        if replay.mode() is not None and not await store.aget(LOG_NS, "/latest.md"):
+        msgs = (state or {}).get("messages") or []
+        last_h = max((i for i, m in enumerate(msgs) if isinstance(m, HumanMessage)), default=-1)
+        day = desk.parse_day(_text(msgs[last_h])) if last_h >= 0 else None
+        # Day 1 starts a career: it always opens from the seeded previous shift (a reload, crash or second tab starts
+        # clean and replays). Later days keep the real log, so they open with Bob's actual correction.
+        if replay.mode() is not None and (day == 1 or not await store.aget(LOG_NS, "/latest.md")):
             from deepagents.backends.utils import create_file_data
 
             await store.aput(LOG_NS, "/latest.md", create_file_data(desk.LOG_SEED))

@@ -545,9 +545,9 @@ def shift_report(tags: list[dict], evidence_by_pid: dict[str, tuple[list[str], l
 # in), Matterport scans, and an office suite case with a door. Day 1 is the recorded stage shift, unchanged.
 DAYS = [
     {"day": 1, "hero_pid": "6375735", "office_pid": "254167", "suite": "1100"},
-    {"day": 2, "hero_pid": "7762448", "office_pid": "249218", "suite": "404"},
-    {"day": 3, "hero_pid": "256445", "office_pid": "254167", "suite": "1400"},
-    {"day": 4, "hero_pid": "7376255", "office_pid": "249218", "suite": "401402"},
+    {"day": 2, "hero_pid": "256445", "office_pid": "249218", "suite": "404"},
+    {"day": 3, "hero_pid": "7376255", "office_pid": "254167", "suite": "1400"},
+    {"day": 4, "hero_pid": "7762448", "office_pid": "249218", "suite": "401402"},  # no outline: drawn as a box
 ]
 _DAY_RE = __import__("re").compile(r"^start bob's shift(?:[,:]?\s*day\s*(\d+))?\.?$", __import__("re").I)
 
