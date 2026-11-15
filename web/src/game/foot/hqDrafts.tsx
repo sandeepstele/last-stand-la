@@ -8,6 +8,7 @@ import { useMemo } from "react";
 import { CASE_WORDS, draftsModel, type DraftView, type DraftsView } from "./hqModel";
 import { cap, placeName, plain, sureWords } from "./copy";
 import styles from "./hq.module.css";
+import { Thumbs } from "./FeedbackUI";
 
 export type HqDraftsProps = {
   messages: readonly unknown[]; // the laststand thread
@@ -70,6 +71,7 @@ export function DraftList({ view, variant, error = null }: { view: DraftsView; v
               <div className={styles.draftTop}>
                 <b>{d.n != null ? `Case #${d.n} · ` : ""}{placeName(plain(d.where))}</b>
                 <span>{d.yourReport ? "Your report + HQ" : "HQ, from the records"}</span>
+                <Thumbs kind="draft" pid={d.key.split("|")[0]} label={placeName(plain(d.where))} item={plain(d.text)} style={{ alignSelf: "center", marginLeft: 6 }} />
               </div>
               {d.verdict && <p className={styles.draftVerdict}>{verdictOf(d.verdict)}</p>}
               {d.critic && (
