@@ -24,6 +24,7 @@ from pathlib import Path
 from langgraph_sdk import get_client
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from game_nights import SUITE_Q, SUITE_TIPS, TIPS, _text  # noqa: E402  the same player strings as the night game
 
 ROOT = Path(__file__).resolve().parent.parent
