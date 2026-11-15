@@ -86,7 +86,7 @@ Your report from inside changes the real case. That's "Inside and Out". Case #7 
    - **Verify or re-record:** `scripts/game_nights.py` (see CONTRACT.md).
 2. **Web:** `cd web && npm run build && npm start` (production; port 3000). Open `http://127.0.0.1:3000/play?mode=foot` once to warm it up.
 3. **Between judges:** press Enter on the dawn screen (Play again resets the night, restores the night log and re-seeds the auditor). From a terminal: `uv run python scripts/demo_reset.py`. The server also resets tonight's cases at each "Brief the night shift".
-   - A reload or a crash is safe now (the night-start reset is on the server), but a second tab starting a new night clears the first tab's case notes.
+   - **Play again (or `demo_reset`) between judges is mandatory.** The night itself survives a reload (the server resets tonight's cases at the briefing), but the auditor case file's replay missed once when the previous night wasn't fully reset (8:40 pm test). After a reload or crash, run `uv run python scripts/demo_reset.py` before the next night. A second tab starting a new night clears the first tab's case notes.
    - **One browser tab** on the game during judging. Close every other tab on :3000 / :3110.
 4. **Fallback ladder:**
    1. Live mode, if replay misbehaves (`RADAR_REPLAY` unset; timings in CONTRACT.md).

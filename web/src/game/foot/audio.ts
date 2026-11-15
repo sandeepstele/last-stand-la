@@ -145,6 +145,10 @@ function buildGraph(ac: AudioContext): Graph {
 }
 
 /** Stereo pan (-1 left .. 1 right) of a world point as heard by the player. */
+/** Groans start when the nearest zombie is this close (m); the horde swell and breach groans need one within HORDE_EAR_M. */
+const GROAN_M = 15;
+const HORDE_EAR_M = 40;
+
 function panOf(ctx: FootCtx, x: number, z: number): number {
   const p = ctx.player;
   const dx = x - p.x;
@@ -370,12 +374,14 @@ export function createAudio(ctx: FootCtx): System {
   on(bus.on("wave:start", (e) => live((a) => {
     const d = dirOf(SECTOR_DEG[e.sector] ?? 0);
     const pan = panOf(ctx, ctx.player.x + d[0] * 100, ctx.player.z + d[1] * 100);
-    a.sfx.horde(a.zom, clamp(0.3 + (e.size || 0) / 400, 0.3, 0.55), pan, 3.8);
+    // the horde swell only when zombies are actually close; the siren is the wave's cue from anywhere
+    if (Number.isFinite(ctx.horde.nearest) && ctx.horde.nearest < HORDE_EAR_M) a.sfx.horde(a.zom, clamp(0.3 + (e.size || 0) / 400, 0.3, 0.55), pan, 3.8);
     a.sfx.siren(a.fx, 0.09, pan * 0.5);
   })));
   on(bus.on("wave:breach", (e) => live((a) => {
     const pan = panOf(ctx, e.x, e.z);
     a.sfx.crash(a.fx, 0.6, pan);
+    if (Math.hypot(e.x - ctx.player.x, e.z - ctx.player.z) > HORDE_EAR_M) return; // groans only from a breach you're near
     for (let i = 0; i < 3; i++) setTimeout(() => live((b) => b.sfx.groan(b.zom, 0.35, pan + rnd(-0.3, 0.3), rnd(0.9, 1.2))), 150 + i * 220);
   })));
   const hammer = () => {
@@ -515,18 +521,19 @@ export function createAudio(ctx: FootCtx): System {
         }
       } else heartT = 0;
 
-      // Zombie groans: more and louder the closer and the more of them.
-      const near = h.alive > 0 && Number.isFinite(h.nearest) ? clamp(1 - h.nearest / 45, 0, 1) : 0;
+      // Zombie groans: only when one is near you (within GROAN_M), louder as it closes, from its direction.
+      const near = h.alive > 0 && Number.isFinite(h.nearest) ? clamp(1 - h.nearest / GROAN_M, 0, 1) : 0;
       if (near > 0) {
         groanT -= dt;
         if (groanT <= 0) {
           const close = h.nearest < 10;
           const crowd = Math.min(1, (h.chasing + 1) / 8);
-          const level = close ? 0.32 + 0.25 * (1 - h.nearest / 10) : 0.04 + 0.22 * near * near + 0.06 * crowd;
-          const pan = () => (ctx.time - lastHit.at < 4 ? lastHit.pan * 0.7 + rnd(-0.3, 0.3) : rnd(-0.7, 0.7));
+          const level = close ? 0.32 + 0.25 * (1 - h.nearest / 10) : 0.08 + 0.2 * near + 0.04 * crowd;
+          const toward = Number.isFinite(h.nearestX) && Number.isFinite(h.nearestZ) ? panOf(ctx, h.nearestX, h.nearestZ) : null;
+          const pan = () => (toward != null ? clamp(toward + rnd(-0.12, 0.12), -1, 1) : ctx.time - lastHit.at < 4 ? lastHit.pan * 0.7 + rnd(-0.3, 0.3) : rnd(-0.7, 0.7));
           a.sfx.groan(a.zom, level, pan(), rnd(0.85, 1.15));
           if (close && h.chasing > 3 && Math.random() < 0.45) a.sfx.groan(a.zom, level * 0.7, pan(), rnd(0.8, 1.2));
-          const base = close ? rnd(0.45, 1.1) : 3.4 - 2.1 * near - 0.8 * crowd;
+          const base = close ? rnd(0.45, 1.1) : 2.6 - 1.6 * near - 0.5 * crowd;
           groanT = Math.max(0.35, base * rnd(0.6, 1.4));
         }
       } else groanT = Math.min(groanT, 1.2);
