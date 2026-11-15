@@ -7,6 +7,7 @@ import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
 import type { InsideHop } from "../types";
+import { footStyles as styles } from "./ui";
 
 export function InsideMesh3D({ url, hops, at, heading }: { url: string; hops: InsideHop[]; at: number; heading: number }) {
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -44,8 +45,8 @@ export function InsideMesh3D({ url, hops, at, heading }: { url: string; hops: In
         obj.traverse((o) => {
           const m = o as THREE.Mesh;
           if (!m.isMesh) return;
-          const surf = new THREE.Mesh(m.geometry, new THREE.MeshLambertMaterial({ color: 0x1c2438, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false }));
-          const edges = new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry, 28), new THREE.LineBasicMaterial({ color: 0xf5a524, transparent: true, opacity: 0.55 }));
+          const surf = new THREE.Mesh(m.geometry, new THREE.MeshLambertMaterial({ color: 0x1e1e21, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false }));
+          const edges = new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry, 28), new THREE.LineBasicMaterial({ color: 0xe9e4da, transparent: true, opacity: 0.5 }));
           root.add(surf, edges);
           disposables.push(m.geometry, surf.material as THREE.Material, edges.geometry, edges.material as THREE.Material);
         });
@@ -57,8 +58,8 @@ export function InsideMesh3D({ url, hops, at, heading }: { url: string; hops: In
 
     // Scan spots (in the mesh frame, standing at z=0).
     const dotGeo = new THREE.SphereGeometry(0.45, 10, 8);
-    const dotMat = new THREE.MeshBasicMaterial({ color: 0xcbd5e1 });
-    const youMat = new THREE.MeshBasicMaterial({ color: 0xf5a524 });
+    const dotMat = new THREE.MeshBasicMaterial({ color: 0x9a968f });
+    const youMat = new THREE.MeshBasicMaterial({ color: 0xf2a33a });
     const dots = hops.map((h) => {
       const d = new THREE.Mesh(dotGeo, dotMat);
       d.position.set(h.x, h.y, 0.6);
@@ -102,8 +103,10 @@ export function InsideMesh3D({ url, hops, at, heading }: { url: string; hops: In
   }, [key]);
 
   return (
-    <div style={{ position: "absolute", left: 16, top: "34%", zIndex: 36, background: "rgba(5,7,13,.78)", border: "1px solid rgba(245,165,36,.5)", padding: 8, color: "#e2e8f0", font: "600 11px/1.3 ui-monospace, monospace" }}>
-      <div style={{ marginBottom: 4, color: "#f5a524" }}>REAL 3D FLOOR (Matterport mesh) · [W]/[S] walk · drag to look</div>
+    <div className={`${styles.root} ${styles.plan}`}>
+      <div className={styles.planHead}>
+        <b>Floor plan</b> · real 3D scan · W/S to walk, drag to look
+      </div>
       <div ref={wrapRef} />
     </div>
   );

@@ -1,11 +1,11 @@
 "use client";
-// OWNER: builder D. Keep the props type.
-// Full-screen look-around of the REAL interior (Matterport cube faces) + the walls question.
-// The director draws its radio log over this view at the top-right (16 px in, 360 x 260): keep that corner free.
+// Keep the props type. Full-screen look-around of the REAL interior (its 3D scan's cube faces) + HQ's question.
+// One small caption top-left; the question along the bottom; the director draws the radio subtitles above it.
 
 import type { PanoFace } from "../types";
 import { InsidePano } from "./InsidePano";
 import { InsideWalk, type WalkProps } from "./InsideWalk";
+import { cap, plain, suiteName } from "./copy";
 import { Keycap, footStyles as styles, splitKeyHint } from "./ui";
 
 export type InsideMode = "look" | "barricade" | "safe";
@@ -26,16 +26,17 @@ export type InsideProps = {
 };
 
 const swatchOf = (label: string) => (/concrete/i.test(label) ? "concrete" : /brick|masonry/i.test(label) ? "brick" : "unknown");
+/** "suite 1100" -> "suite 1100" ("suite 301302" -> "suites 301–302"). */
+const suiteWhere = (w: string) => w.replace(/^suite\s+(\S+)$/i, (_, s: string) => suiteName(s));
 
 // A bar along the bottom: the walls the question is about stay in view above it.
 function Question({ q, onChoose, exit }: { q: InsideQuestion; onChoose(i: number): void; exit: string | null }) {
+  const materials = q.choices.some((c) => swatchOf(c) !== "unknown");
   return (
     <div className={styles.question}>
       <div className={styles.qText}>
-        <h3>
-          <small>HQ asks · your report is testimony</small>
-          {q.prompt}
-        </h3>
+        <span className={styles.qAsk}>HQ asks</span>
+        <h3>{plain(q.prompt)}</h3>
         <div className={styles.qFoot}>
           <p className={styles.status}>{q.status}</p>
           {exit && <ExitHint hint={exit} inline />}
@@ -43,14 +44,13 @@ function Question({ q, onChoose, exit }: { q: InsideQuestion; onChoose(i: number
       </div>
       <div className={styles.answerRow}>
         {q.choices.map((c, i) => {
+          // a texture sample only when the answer is a material (concrete, brick): it helps you match what you see
           const state = q.chosen === null ? "open" : q.chosen === i ? "chosen" : "dim";
           const m = swatchOf(c);
           return (
             <button key={c} type="button" className={styles.answer} data-state={state} disabled={q.chosen !== null} onClick={() => onChoose(i)}>
-              {state === "chosen" && <span className={styles.chosenTag}>YOUR REPORT</span>}
-              <span className={styles.swatch} data-m={m}>
-                {m === "unknown" ? "?" : null}
-              </span>
+              {state === "chosen" && <span className={styles.chosenTag}>Your report</span>}
+              {materials && <span className={styles.swatch} data-m={m} />}
               <span className={styles.answerTop}>
                 <Keycap k={String(i + 1)} tone={state === "chosen" ? "amber" : undefined} />
                 <strong>{c}</strong>
@@ -70,7 +70,7 @@ function ExitHint({ hint, inline = false }: { hint: string; inline?: boolean }) 
     return (
       <div className={cls} data-kind="go">
         <Keycap k={k.key} size="lg" />
-        <span>{k.rest}</span>
+        <span>{cap(k.rest)}</span>
       </div>
     );
   }
@@ -100,7 +100,7 @@ export function InsideView({ faces, title, mode, question, note, exitHint, onCho
           walk && walk.hops.length > 1 ? <InsideWalk {...walk} className={styles.panoBox} /> : <InsidePano faces={faces} drift={!barricade} className={styles.panoBox} />
         ) : (
           <div className={styles.emptyRoom}>
-            <p>No scan of this interior</p>
+            <p>No 3D scan of this interior on file</p>
           </div>
         )}
         <div className={styles.insideShade} />
@@ -119,22 +119,22 @@ export function InsideView({ faces, title, mode, question, note, exitHint, onCho
         )}
       </div>
 
+      {/* One small caption: where you are, and that the room is a real scan. */}
       <div className={styles.insideTop}>
         <div className={styles.insideTitle}>
-          <span className={styles.tag}>{barricade ? "Barricaded inside" : (where ?? "inside").toUpperCase()}</span>
-          <h2>{name}</h2>
-          {real && (
-            <span className={styles.realChip}>
-              <b>REAL INTERIOR</b> this building&apos;s own 3D tour
-            </span>
-          )}
-          {faces.length > 0 && !barricade && <p className={styles.note}>Drag to look around.</p>}
-          {note && !real && !barricade && <p className={styles.note}>{note}</p>}
+          <h2>
+            {barricade ? "Barricaded in " : "Inside "}
+            {name}
+            {where && where !== "inside" ? `, ${suiteWhere(where)}` : ""}
+            {real && <span> · real 3D scan</span>}
+          </h2>
+          {faces.length > 0 && !barricade && !walk && <p className={styles.note}>Drag to look around</p>}
+          {note && !real && !barricade && <p className={styles.note}>{plain(note).replace(/\.$/, "")}</p>}
         </div>
       </div>
 
       {barricade && note && (
-        <div className={`${styles.panel} ${styles.holdCard}`}>
+        <div className={styles.holdCard}>
           <h3>Hold the door</h3>
           <p>{note}</p>
         </div>

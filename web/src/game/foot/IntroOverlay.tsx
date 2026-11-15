@@ -1,11 +1,11 @@
 "use client";
-// OWNER: builder D (intro, inside, HUD). The director flies the camera over the real district while this shows;
-// onStart hands control to the player. Title card, then three briefing cards (auto-advance, click or arrow keys to skip).
-// Enter starts the game (the director listens for it); the Start button starts it from a real click (pointer lock).
+// The director flies the camera over the real district while this shows; onStart hands control to the player.
+// Title, then three short briefing cards (auto-advance; click or arrow keys to skip). Enter starts the game (the director
+// listens for it); the Start button starts it from a real click (pointer lock).
 
 import { useEffect, useState, type ReactNode } from "react";
 import { DISCLAIMER } from "../types";
-import { Badges, Icon, Keycap, footStyles as styles } from "./ui";
+import { Badges, Keycap, footStyles as styles } from "./ui";
 
 export type IntroProps = {
   heroLabel: string;
@@ -20,19 +20,13 @@ const TITLE_MS = 3200;
 const CARD_MS = 5000;
 const CARDS = 3;
 
-// Four controls up front; G, Q, Space and V are taught in play by the hint chips.
+// Five controls up front; the rest are in the pause menu (P).
 const CONTROLS: { keys: string[]; what: string }[] = [
-  { keys: ["W", "A", "S", "D"], what: "move" },
-  { keys: ["Shift"], what: "sprint" },
-  { keys: ["E"], what: "go inside" },
-  { keys: ["H", "R"], what: "hold or run" },
-];
-
-const SOURCES: { icon: "record" | "city" | "aerial" | "tour"; name: string; what: string }[] = [
-  { icon: "record", name: "CoStar record", what: "material, floors, people" },
-  { icon: "city", name: "City retrofit orders", what: "seismic retrofit lists" },
-  { icon: "aerial", name: "Vexcel aerials", what: "roofs from above" },
-  { icon: "tour", name: "Matterport 3D tours", what: "the real interiors" },
+  { keys: ["W", "A", "S", "D"], what: "Move" },
+  { keys: ["Shift"], what: "Sprint" },
+  { keys: ["E"], what: "Go inside" },
+  { keys: ["H", "R"], what: "Hold or run" },
+  { keys: ["P"], what: "Menu and all controls" },
 ];
 
 // Card 1 carries the point (judges press Enter early): the AI agent is the commander.
@@ -41,63 +35,45 @@ function Card({ n, heroLabel }: { n: number; heroLabel: string }) {
   if (n === 1) {
     body = (
       <>
-        <h2>Your commander is <em>an AI agent.</em></h2>
+        <h2>
+          Your commander, HQ, is <em>an AI agent.</em>
+        </h2>
         <p>
-          It reads CoStar&apos;s real case queue, picks tonight&apos;s cases, checks the evidence and looks at the aerials itself.{" "}
+          A LangChain deep agent. It reads the real open-case queue, picks tonight&apos;s cases and checks the evidence itself.{" "}
           <b>It proposes. You decide.</b>
         </p>
-        <div className={styles.flow}>
-          <div className={styles.flowNode}>
-            <strong>Case queue</strong>real open cases
-          </div>
-          <span className={styles.flowArrow}>&rarr;</span>
-          <div className={styles.flowNode} data-tone="hq">
-            <strong>HQ agent</strong>checks the evidence
-          </div>
-          <span className={styles.flowArrow}>&rarr;</span>
-          <div className={styles.flowNode}>
-            <strong>Proposal</strong>HOLD or RUN
-          </div>
-          <span className={styles.flowArrow}>&rarr;</span>
-          <div className={styles.flowNode} data-tone="you">
-            <strong>You</strong>the final call
-          </div>
-        </div>
+        <p className={styles.flowLine}>
+          Case queue → <b>HQ checks the evidence</b> → hold or run? → <b>your call</b>
+        </p>
       </>
     );
   } else if (n === 2) {
     body = (
       <>
-        <h2>Downtown Los Angeles. <em>Every building is real.</em></h2>
-        <p>Up to four real sources describe each one. Where they disagree, nobody knows yet.</p>
-        <div className={styles.sources}>
-          {SOURCES.map((s) => (
-            <div key={s.name} className={styles.source}>
-              <Icon name={s.icon} size={24} />
-              <span>
-                <strong>{s.name}</strong>
-                <small>{s.what}</small>
-              </span>
-            </div>
-          ))}
-        </div>
+        <h2>
+          Every building is <em>real.</em>
+        </h2>
+        <p>
+          Property records, city retrofit lists, aerial photos and 3D interior scans describe each one. Where they disagree, nobody knows yet.{" "}
+          <b>You go and look.</b>
+        </p>
       </>
     );
   } else {
     body = (
       <>
         <h2>
-          Settle tonight&apos;s cases <em>and make it to dawn.</em>
+          Settle tonight&apos;s cases. <em>Make it to dawn.</em>
         </h2>
         <p>
-          First stop: <b>{heroLabel || "the beacon building"}</b>. The records disagree about its walls. Go inside and look.
+          First stop: <b>{heroLabel || "the lit building"}</b>. The records disagree about its walls.
         </p>
         <ul className={styles.ctrlGrid}>
           {CONTROLS.map((c) => (
             <li key={c.what}>
               <span className={styles.ctrlKeys}>
                 {c.keys.map((k) => (
-                  <Keycap key={k} k={k} size="lg" />
+                  <Keycap key={k} k={k} />
                 ))}
               </span>
               <span>{c.what}</span>
@@ -110,8 +86,7 @@ function Card({ n, heroLabel }: { n: number; heroLabel: string }) {
   return (
     <section className={styles.brief} key={n}>
       <div className={styles.briefHead}>
-        <span>BRIEFING {n} / {CARDS}</span>
-        <span>{n === 1 ? "THE COMMANDER" : n === 2 ? "THE CITY" : "YOUR NIGHT"}</span>
+        {n} of {CARDS}
       </div>
       {body}
     </section>
@@ -119,7 +94,7 @@ function Card({ n, heroLabel }: { n: number; heroLabel: string }) {
 }
 
 export function IntroOverlay({ heroLabel, ready, stub, replay, attribution, onStart }: IntroProps) {
-  // 0 = the title card alone; 1..3 = briefing cards.
+  // 0 = the title alone; 1..3 = briefing cards.
   const [idx, setIdx] = useState(0);
 
   useEffect(() => {
@@ -143,19 +118,16 @@ export function IntroOverlay({ heroLabel, ready, stub, replay, attribution, onSt
   return (
     <div className={`${styles.root} ${styles.intro}`} onClick={next} role="dialog" aria-label="Last Stand LA briefing">
       <div className={styles.letterbox}>
-        <span className={styles.rec}>DOWNTOWN LOS ANGELES · DUSK</span>
+        <span className={styles.rec}>Downtown Los Angeles, dusk</span>
         <Badges stub={stub} replay={replay} />
       </div>
 
       <div className={styles.stage}>
         <header className={styles.titleBlock} data-big={idx === 0}>
-          <div className={styles.kicker}>One night · Real buildings · An AI commander</div>
           <h1 className={styles.title}>
             Last Stand <span>LA</span>
           </h1>
-          <p className={styles.tagline}>
-            Settle tonight&apos;s cases <b>and make it to dawn.</b>
-          </p>
+          <p className={styles.tagline}>One night. Real buildings. An AI commander.</p>
         </header>
 
         <div className={styles.briefRow} data-show={idx > 0}>
@@ -190,9 +162,7 @@ export function IntroOverlay({ heroLabel, ready, stub, replay, attribution, onSt
               />
             ))}
           </div>
-          <span className={styles.skipHint}>
-            Click for the next briefing · <Keycap k="Enter" size="sm" /> to start now
-          </span>
+          <span className={styles.skipHint}>Click for the next card · Enter to start</span>
         </div>
       </div>
 
