@@ -59,6 +59,17 @@ const word = (k: string) => SHORT[k] ?? plain(k);
 const pct = (x: number | undefined) => (typeof x === "number" ? `${Math.round(x * 100)}%` : "—");
 const sign = (x: number) => `${x >= 0 ? "+" : "−"}${Math.abs(x).toFixed(2)}`;
 
+/** One row per check (a check that moves two explanations shows both shifts on its row). */
+function rowsOf(shifts: LogMath["shifts"]): { check: string; by: Record<string, number> }[] {
+  const rows: { check: string; by: Record<string, number> }[] = [];
+  for (const s of shifts) {
+    const last = rows[rows.length - 1];
+    if (last && last.check === s.check && last.by[s.hypothesis] == null) last.by[s.hypothesis] = s.shift;
+    else rows.push({ check: s.check, by: { [s.hypothesis]: s.shift } });
+  }
+  return rows;
+}
+
 /** start → each shift → sum → ÷ total → %, one column per explanation. */
 export function MathTable({ m, big }: { m: LogMath; big: boolean }) {
   const keys = Object.keys(m.start);
@@ -75,10 +86,13 @@ export function MathTable({ m, big }: { m: LogMath; big: boolean }) {
         </thead>
         <tbody>
           <tr><td style={head}>start (prior)</td>{keys.map((k) => <td key={k} style={cell}>{m.start[k]?.toFixed(2)}</td>)}</tr>
-          {m.shifts.map((s, i) => (
+          {rowsOf(m.shifts).map((r, i) => (
             <tr key={i}>
-              <td style={head}>{plain(s.check)}</td>
-              {keys.map((k) => <td key={k} style={{ ...cell, color: k === s.hypothesis ? (s.shift >= 0 ? "#4cc38a" : "#f87171") : "#475569" }}>{k === s.hypothesis ? sign(s.shift) : "·"}</td>)}
+              <td style={head}>{plain(r.check)}</td>
+              {keys.map((k) => {
+                const v = r.by[k];
+                return <td key={k} style={{ ...cell, color: v == null ? "#475569" : v >= 0 ? "#4cc38a" : "#f87171" }}>{v == null ? "·" : sign(v)}</td>;
+              })}
             </tr>
           ))}
           <tr style={{ borderTop: "1px solid #334155" }}><td style={head}>sum</td>{keys.map((k) => <td key={k} style={cell}>{m.sum[k]?.toFixed(2)}</td>)}</tr>
