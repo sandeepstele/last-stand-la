@@ -1383,7 +1383,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
   type Screen = { pid?: string; label?: string; score?: number; fema_type?: string; p_damage?: number; suggest?: string; borderline?: boolean; why?: string;
     people?: { day?: number; night?: number; at_stake?: number; low?: number; high?: number } };
   const screen = DESK ? latestResult<Screen>(game.messages, "screen_building") : null;
-  const tagWords: Record<Tag, string> = { green: "GREEN · safe to occupy", yellow: "YELLOW · limited entry", red: "RED · unsafe" };
+  const tagWords: Record<Tag, string> = { green: "GREEN", yellow: "YELLOW", red: "RED" };
   const deskDecision = DESK && step === "night" ? {
     prompt: game.tagProposal ? `HQ proposes a ${game.tagProposal.tag.toUpperCase()} tag for ${heroLabel} (simulated)${screen?.suggest ? `; code suggests ${screen.suggest.toUpperCase()}` : ""}.` : game.isLoading ? "HQ is screening the building after the simulated quake…" : "Waiting for HQ's screening.",
     proposed: null,
@@ -1392,6 +1392,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
       screen.p_damage != null ? `chance of damage ${Math.round(screen.p_damage * 100)}%` : "",
       screen.people?.at_stake != null ? `${screen.people.at_stake} people at stake${screen.people.low != null && screen.people.high != null ? ` (inside by day ${screen.people.low}–${screen.people.high}, an estimate)` : ""}` : "",
       screen.borderline ? "borderline: close to a tag threshold" : "",
+      "Green = safe to occupy, yellow = limited entry, red = unsafe (simulated placards)",
       "Game outcome, not an engineering assessment.",
     ].filter(Boolean).join(" · ") : "Game outcome, not an engineering assessment.",
     runLabel: null,
@@ -1477,7 +1478,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
           wallsNote={wallsNote}
           heroLabel={heroLabel}
           decision={decision}
-          compass={{ yawDeg: hud.yawDeg, waveSector: step === "night" || step === "escape" || step === "hold" ? game.wave?.sector ?? null : null, target: hud.target }}
+          compass={{ yawDeg: hud.yawDeg, waveSector: !DESK && (step === "night" || step === "escape" || step === "hold") ? game.wave?.sector ?? null : null, target: hud.target }}
           threat={hud.threat}
           threatDir={hud.threatDir}
           feeds={{ drone: { caption: feedCaps.drone, photo: dronePhoto }, cctv: { caption: feedCaps.cctv, photo: cctvPhoto ?? nearPhoto } }}

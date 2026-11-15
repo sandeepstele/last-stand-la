@@ -79,7 +79,9 @@ export function cardsFrom(steps: LogStep[]): Card[] {
       if (s.math) c.math = s.math;
       const label = /^([^:;]{3,60}?)(?::|;| —| - )/.exec(s.summary)?.[1];
       if (!c.label && label && /\d/.test(label)) c.label = label.trim();
-      c.lines.push({ n: s.n, actor: call.actor.replace(/\s*\(.*\)\s*$/, ""), source: call.source, text: s.summary });
+      // building_card / screen_building land in the source block; raw JSON summaries never reach the card
+      if (s.tool !== "building_card" && s.tool !== "screen_building" && !/^\s*[{[]/.test(s.summary))
+        c.lines.push({ n: s.n, actor: call.actor.replace(/\s*\(.*\)\s*$/, ""), source: call.source, text: s.summary });
     }
   }
   return [...cards.values()].filter((c) => c.lines.length || c.busy);

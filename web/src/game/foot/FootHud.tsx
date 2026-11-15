@@ -374,7 +374,7 @@ export function FootHud(p: HudProps) {
       )}
       <BannerView banner={p.banner} />
 
-      <RadioSubs lines={p.radio} />
+      {!p.decision?.choices && <RadioSubs lines={p.radio} />}
       {/* One action slot, bottom centre between the vitals and the camera views. */}
       <div className={styles.actionSlot}>
         {p.decision ? (
