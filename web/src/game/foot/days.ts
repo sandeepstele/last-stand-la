@@ -58,7 +58,14 @@ export function setCareerDay(day: number) {
 /** Record (or replace) one day's result. */
 export function recordDay(entry: CareerDay) {
   const c = careerNow();
-  write({ ...c, log: [...c.log.filter((d) => d.day !== entry.day), entry].sort((a, b) => a.day - b.day) });
+  // A resumed dawn (Continue after a reload, or back from the auditor) may not have the tag decision in memory:
+  // keep what this day already recorded rather than overwriting it with blanks.
+  const prev = c.log.find((d) => d.day === entry.day);
+  const merged: CareerDay = prev
+    ? { ...entry, agent_tag: entry.agent_tag ?? prev.agent_tag, bob_tag: entry.bob_tag ?? prev.bob_tag, right_tag: entry.right_tag ?? prev.right_tag,
+        rescued: Math.max(entry.rescued, prev.rescued), rescue_of: Math.max(entry.rescue_of, prev.rescue_of), points: Math.max(entry.points, prev.points) }
+    : entry;
+  write({ ...c, log: [...c.log.filter((d) => d.day !== entry.day), merged].sort((a, b) => a.day - b.day) });
 }
 export function resetCareer() {
   write(FRESH);
