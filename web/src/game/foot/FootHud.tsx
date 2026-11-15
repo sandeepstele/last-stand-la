@@ -272,7 +272,7 @@ function Decision({ d, busy }: { d: DecisionView; busy: boolean }) {
             style={{ borderColor: c.proposed || c.sent ? c.color : undefined }}>
             <Keycap k={c.key} size="lg" tone={c.proposed && !d.sent ? "amber" : undefined} />
             <span className={styles.orderText} style={{ color: c.color }}>{c.label}</span>
-            {c.proposed && <span className={styles.hqCall}>HQ&apos;s call</span>}
+            {c.proposed && <span className={styles.hqCall} style={{ position: "absolute", top: -8, right: 8, padding: "1px 5px", borderRadius: 2, background: "#17130d" }}>HQ&apos;s call</span>}
           </div>
         )) : order("hold", "H", "Hold")}
         {!d.choices && order("run", "R", d.runLabel ? `Run to ${d.runLabel}` : "Run (no fallback yet)", !d.runLabel)}
