@@ -305,6 +305,43 @@ def card(pid: str, checks: list[str] | tuple[str, ...] = (), notes: list[dict] |
         sources.append({"key": "vexcel", "source": "Vexcel aerial", "status": status, "lines": lines})
     else:
         sources.append({"key": "vexcel", "source": "Vexcel aerial", "status": "missing", "lines": ["no aerial cached for this building"]})
+    from app import county
+
+    ca = county.assessor(pid)
+    if ca:
+        cy, gy = ca.get("year_built"), rec.get("year_built")
+        lines = [f"built {cy or 'year not on the roll'}" + (f", effective year {ca['effective_year']}" if ca.get("effective_year") else "")
+                 + (f", about {ca['sqft']:,} sq ft" if ca.get("sqft") else ""),
+                 f"use on the roll: {(ca.get('use') or 'not given').lower()}"]
+        status = "ok"
+        if cy and gy and abs(int(cy) - int(gy)) > 5:
+            status = "conflict"
+            conflicts.append({"field": "year built", "a": {"source": "CoStar record", "value": str(gy)},
+                              "b": {"source": "LA County Assessor", "value": str(cy)}})
+        if ca.get("sqft") and gba and not 0.8 <= ca["sqft"] / gba <= 1.25:
+            status = "conflict"
+            conflicts.append({"field": "floor area", "a": {"source": "CoStar record", "value": f"{round(gba):,} sq ft"},
+                              "b": {"source": "LA County Assessor", "value": f"{ca['sqft']:,} sq ft"}})
+        sources.append({"key": "assessor", "source": "LA County Assessor", "status": status, "lines": lines})
+    lr = county.lariac(pid)
+    if lr and lr.get("height_m"):
+        st = rec.get("stories")
+        lines = [f"surveyed roof height {lr['height_m']:.0f} m ({lr['height_ft']:.0f} ft)"
+                 + (f", about {lr['height_m'] / st:.1f} m per floor" if st else ""), "LA County survey, 2008 imagery"]
+        status = "ok"
+        if st and not 2.4 <= lr["height_m"] / st <= 6.0:
+            status = "conflict"
+            conflicts.append({"field": "height", "a": {"source": "CoStar record", "value": f"{st} floors"},
+                              "b": {"source": "LA County survey", "value": f"{lr['height_m']:.0f} m tall"}})
+        sources.append({"key": "lariac", "source": "LA County building survey", "status": status, "lines": lines})
+    bz = county.businesses(pid)
+    if bz is not None:
+        on_record = fortress._employees().get(pid, 0)
+        top = ", ".join(i["what"] for i in bz["industries"][:2])
+        sources.append({"key": "businesses", "source": "LA City business registry", "status": "ok", "lines": [
+            f"{bz['active']} active business registration{'s' if bz['active'] != 1 else ''} at this parcel"
+            + (f" (mostly {top})" if top else ""),
+            f"CoStar tenancies on record: {'about ' + str(on_record) + ' employees' if on_record else 'none with an employee count'}"]})
     models = len(rec.get("matterport_model_ids") or [])
     inside = bool(feeds.get("inside"))
     sources.append({"key": "matterport", "source": "Matterport scan", "status": "ok" if models else "missing", "lines": [
