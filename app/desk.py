@@ -228,7 +228,7 @@ def screen(pid: str, checks: list[str] | tuple[str, ...] = (), notes: list[dict]
         why += f" (the walls are still in question: {', '.join(r['material'] + ' ' + str(round(r['odds'] * 100)) + '%' for r in rows)})"
     return {"pid": pid, "label": fortress._label(rec), "by_material": rows, "score": s, "mmi": mmi, "pga_g": round(pga, 3),
             "p_damage": p_ext, "p_extensive_plus": p_ext, "p_moderate_plus": p_mod, "people": ppl,
-            "injuries_if_open": hurt, "expected_at_risk": round(p_ext * ppl["at_stake"], 1), "suggest": suggest,
+            "injuries_if_open": hurt, "expected_at_risk": round(p_ext * ppl["at_stake"]), "suggest": suggest,
             "borderline": borderline, "why": why,
             "rule": f"Screening: FEMA P-154 Level 1, Very High seismicity, basic score + year modifiers (pre-code before "
                     f"{PRE_CODE_BEFORE}, benchmark years assumed), {CUTOFF} cut-off. Damage: HAZUS fragility for the "
@@ -312,8 +312,8 @@ def card(pid: str, checks: list[str] | tuple[str, ...] = (), notes: list[dict] |
             f"{len(mine)} open case{'s' if len(mine) != 1 else ''}: " + ", ".join(sorted({c['case'].replace('_', ' ') for c in mine}))]})
     s = screen(pid, checks, notes)
     return {"pid": pid, "label": fortress._label(rec), "sources": sources, "conflicts": conflicts, "people": s["people"],
-            "screening": {"score": s["score"], "fema_type": s["by_material"][0]["fema_type"], "suggest": s["suggest"],
-                          "p_damage": s["p_damage"], "borderline": s["borderline"], "why": s["why"]},
+            # no tag colour before the quake: the card carries the score and the damage odds only (screen_building tags)
+            "screening": {"score": s["score"], "fema_type": s["by_material"][0]["fema_type"], "p_damage": s["p_damage"]},
             "unknowns": ["exits and stairs: not in the data", "soil and irregularities: not in the data (left out of the score)"]}
 
 
@@ -413,11 +413,11 @@ def shift_report(tags: list[dict], evidence_by_pid: dict[str, tuple[list[str], l
             per = sum(rates.get(state, (0, 0, 0, 0))) / 100
         ex, dp = _exposure(t["tag"], state)
         exposed, disp = round(n * ex), round(n * dp)
-        h = round(exposed * per, 1)
+        h = round(exposed * per)
         kept = n - exposed
         ok = t["tag"] == RIGHT_TAG[state]
-        expected = {tag: {"exposed": round(n * sum(a["odds"][k] * _exposure(tag, k)[0] for k in STATES), 1),
-                          "displaced": round(n * sum(a["odds"][k] * _exposure(tag, k)[1] for k in STATES), 1)}
+        expected = {tag: {"exposed": round(n * sum(a["odds"][k] * _exposure(tag, k)[0] for k in STATES)),
+                          "displaced": round(n * sum(a["odds"][k] * _exposure(tag, k)[1] for k in STATES))}
                     for tag in ("green", "yellow", "red")}
         why = f"{state} damage (roll {a['roll']:.3f} on the building's own odds)"
         why += (f"; {exposed} people were inside" if exposed else
@@ -432,7 +432,7 @@ def shift_report(tags: list[dict], evidence_by_pid: dict[str, tuple[list[str], l
     fixed = [d for d in drafts if (d.get("critic") or {}).get("status") == "reviewed" and (d["critic"].get("follows") is True)
              and str(d.get("text", "")).startswith("DRAFT")]
     return {"buildings": rows, "people_safe": safe, "people_at_stake": stake, "people_displaced": displaced,
-            "people_hurt": round(hurt, 1), "tags_right": right, "tags": len(rows), "records_fixed": len(fixed),
+            "people_hurt": round(hurt), "tags_right": right, "tags": len(rows), "records_fixed": len(fixed),
             "records": [{"label": d.get("label"), "verdict": d.get("label_verdict"),
                          "critic": (d.get("critic") or {}).get("status")} for d in drafts],
             "rule": "ATC-20 posting for the revealed damage: none/slight green, moderate yellow, extensive/complete red. "

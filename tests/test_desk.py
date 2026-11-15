@@ -57,3 +57,36 @@ def test_yellow_is_not_free():
     assert desk._exposure("yellow", "complete") == (desk.YELLOW_ENTRY, 0.0)
     assert desk._exposure("yellow", "none") == (0.0, desk.YELLOW_DISPLACED)
     assert desk._exposure("red", "slight") == (0.0, 1.0) and desk._exposure("green", "extensive") == (1.0, 0.0)
+
+
+def _desk_agent(monkeypatch):
+    import threading
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "dummy-key-for-compile-only")
+    with monkeypatch.context() as m:
+        m.setattr(threading.Thread, "start", lambda self: None)
+        from app import desk_agent
+    return desk_agent
+
+
+def test_force_tag_pins_the_code_suggestion_and_skips_a_failed_screen(monkeypatch):
+    da = _desk_agent(monkeypatch)
+    from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+    quake = HumanMessage("Quake at 5:02 pm. Tag building 123")
+    ok = ToolMessage(content='{"pid": "123", "suggest": "yellow", "why": "x"}', name="screen_building", tool_call_id="s")
+    bad = ToolMessage(content='{"error": "not a building"}', name="screen_building", tool_call_id="s")
+    assert da.needs_tag([quake, ok]) and not da.needs_tag([quake, bad])
+    proposed = AIMessage(content="", tool_calls=[{"name": "tag_building", "args": {"pid": "999", "tag": "red"}, "id": "t"}])
+    pinned = da._pin(proposed, da._screened([quake, ok]))
+    assert pinned.tool_calls[0]["args"] == {"pid": "123", "tag": "yellow"}
+
+
+def test_blank_after_a_tag_speaks_the_tag_line(monkeypatch):
+    da = _desk_agent(monkeypatch)
+    from types import SimpleNamespace
+
+    from langchain_core.messages import HumanMessage, ToolMessage
+    msgs = [HumanMessage("Quake at 5:02 pm. Tag building 123"),
+            ToolMessage(content='{"pid": "123", "tag": "red", "why": "Simulated post-quake placard (game): RED"}',
+                        name="tag_building", tool_call_id="t")]
+    assert da.DeskRetryBlank("say again")._say(SimpleNamespace(messages=msgs)).startswith("Simulated post-quake placard")

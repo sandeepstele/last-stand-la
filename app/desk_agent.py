@@ -30,14 +30,27 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from app import desk, fortress, prompts
 from app.agent import MODELS, _errors, _specialists, make_model
-from app.game_agent import (CriticOut, NightStart, _flag, _outside, _payload, _echoes_player, _wave_and_checks,
-                            case_file, draft_correction, night_cases, open_case, run_check, weigh_case)
-from app.guards import DISCLAIMER, RetryBlank, _last_ai, _replace, _text
+from app import evidence
+from app.game_agent import (CriticOut, NightStart, _hints, _outside as _game_outside, _payload, _echoes_player,
+                            _wave_and_checks, case_file, draft_correction, run_check, weigh_case)
+from app.guards import DISCLAIMER, RetryBlank, _last_ai, _replace, _text, latest_verdict
 from app.tools import _notes, record_note
 
 LOG_NS = ("desk_log",)
 START = "start bob's shift"
 QUAKE = "Quake at "
+
+
+OUTSIDE = ("{pid} is not a building in Bob's district. The building is the property id in this thread's latest "
+           "'Inspect building <pid>' or 'Tag building <pid>' message; use that one.")
+
+
+async def _outside(*pids: str | None) -> dict | None:
+    bad = await _game_outside(*pids)
+    if bad:
+        p = next((x for x in pids if x is not None and str(x) in bad["error"]), pids[0])
+        return {"error": OUTSIDE.format(pid=p)}
+    return None
 
 
 # ------------------------------------------------------------------ middleware (re-keyed from Last Stand's)
@@ -74,28 +87,73 @@ class ShiftStart(NightStart):
         return None
 
 
+def _screened(messages) -> dict | None:
+    """The latest successful screen_building result since the last human message (None if none, or it failed)."""
+    last_h = max((i for i, m in enumerate(messages) if isinstance(m, HumanMessage)), default=-1)
+    for m in reversed(messages[last_h + 1:]):
+        if isinstance(m, ToolMessage) and m.name == "screen_building":
+            d = _result(m.content)
+            return d if d and not d.get("error") and d.get("pid") and d.get("suggest") else None
+    return None
+
+
 def needs_tag(messages) -> bool:
-    """True after a "Quake at ..." message once screen_building has answered and tag_building hasn't been called."""
+    """True after a "Quake at ..." message once screen_building has answered (successfully) and tag_building hasn't
+    been called yet."""
     last_h = max((i for i, m in enumerate(messages) if isinstance(m, HumanMessage)), default=-1)
     if last_h < 0 or not _text(messages[last_h]).strip().startswith(QUAKE):
         return False
     tail = messages[last_h + 1:]
-    screened = any(isinstance(m, ToolMessage) and m.name == "screen_building" for m in tail)
     asked = any(isinstance(m, AIMessage) and any(c.get("name") == "tag_building" for c in m.tool_calls or []) for m in tail)
-    return screened and not asked
+    return _screened(messages) is not None and not asked
+
+
+def _pin(result, screened: dict):
+    """The forced proposal is the code's: tag_building's args become the screened building and its suggested tag."""
+    ai = _last_ai(result)
+    if ai is None:
+        return result
+    calls = [dict(c, args={"pid": str(screened["pid"]), "tag": screened["suggest"]}) if c.get("name") == "tag_building" else c
+             for c in ai.tool_calls or []]
+    if calls == list(ai.tool_calls or []):
+        return result
+    new = ai.model_copy(update={"tool_calls": calls})
+    if isinstance(result, AIMessage):
+        return new
+    result.result = [new if m is ai else m for m in result.result]
+    return result
 
 
 class ForceTag(AgentMiddleware):
-    """Bob's tag decision is never skipped: once the screening is in, the next model call must call tag_building."""
-
-    def _force(self, request):
-        return request.override(tool_choice="tag_building") if needs_tag(request.messages) else request
+    """Bob's tag decision is never skipped: once the screening is in, the next model call must call tag_building, and
+    the proposal is pinned to the screened building and the code's suggestion (the model never picks the colour)."""
 
     def wrap_model_call(self, request, handler):
-        return handler(self._force(request))
+        if not needs_tag(request.messages):
+            return handler(request)
+        return _pin(handler(request.override(tool_choice="tag_building")), _screened(request.messages))
 
     async def awrap_model_call(self, request, handler):
-        return await handler(self._force(request))
+        if not needs_tag(request.messages):
+            return await handler(request)
+        return _pin(await handler(request.override(tool_choice="tag_building")), _screened(request.messages))
+
+
+class DeskRetryBlank(RetryBlank):
+    """A blank answer after a tag or the shift report speaks that tool's own code-built line, not "say again"."""
+
+    def _say(self, request) -> str:
+        msgs = getattr(request, "messages", []) or []
+        last_h = max((i for i, m in enumerate(msgs) if isinstance(m, HumanMessage)), default=-1)
+        for m in reversed(msgs[last_h + 1:]):
+            if isinstance(m, ToolMessage) and m.name in ("tag_building", "shift_report"):
+                d = _result(m.content) or {}
+                if m.name == "tag_building" and d.get("why"):
+                    return d["why"]
+                if m.name == "shift_report" and d.get("buildings") is not None:
+                    return (f"Dawn: {d.get('people_safe')} of {d.get('people_at_stake')} people kept safe, "
+                            f"{d.get('people_displaced')} displaced, {d.get('records_fixed')} record(s) fixed.")
+        return latest_verdict(msgs) or self.fallback
 
 
 class TagDisclaimer(AgentMiddleware):
@@ -132,6 +190,27 @@ async def _evidence(runtime: ToolRuntime, pid: str) -> tuple[list[str], list[dic
     if notes and "human_report" not in checks:
         checks.append("human_report")
     return checks, notes
+
+
+@tool
+async def open_case(property_id: str, runtime: ToolRuntime, suite: str | None = None) -> dict:
+    """Open a record case on Bob's desk and show code-measured hints for the checks available here."""
+    if bad := await _outside(property_id):
+        return bad
+    out = await asyncio.to_thread(evidence.open_case, property_id, suite)
+    notes = await _notes(runtime, property_id, suite)
+    if notes:
+        out["team_notes"] = [{"note": n.get("note"), "noted_on": n.get("at"), "source": n.get("source")} for n in notes]
+        for case_data in out.get("cases", []):
+            if not any(c["check"] == "human_report" for c in case_data["checks"]):
+                case_data["checks"].append({"check": "human_report", "looks_at": evidence.CHECK_WHAT["human_report"]})
+    stats = await asyncio.to_thread(evidence.check_stats)
+
+    def attach() -> None:  # _hints globs the image cache: off the event loop
+        for case_data in out.get("cases", []):
+            case_data["check_hints"] = _hints(property_id, case_data, suite, stats, None)  # no night-game memory
+    await asyncio.to_thread(attach)
+    return out
 
 
 @tool
@@ -174,6 +253,10 @@ async def tag_building(pid: str, tag: str, runtime: ToolRuntime) -> dict:
     ALWAYS waits for Bob, who may approve or change it. The tag is recorded for the dawn aftershock."""
     if bad := await _outside(pid):
         return bad
+    msgs = (getattr(runtime, "state", None) or {}).get("messages", [])
+    sc = _screened(msgs)
+    if not sc or str(sc["pid"]) != str(pid):
+        return {"error": "Tags come only after the quake: screen_building for this building first, in a 'Quake at ...' turn."}
     checks, notes = await _evidence(runtime, pid)
     return await asyncio.to_thread(desk.tag, pid, tag, checks, notes)
 
@@ -234,8 +317,8 @@ def _shift_facts(runtime: ToolRuntime) -> list[str]:
     for m in (getattr(runtime, "state", None) or {}).get("messages", []):
         d = _result(m.content) if isinstance(m, ToolMessage) and m.name == "shift_report" else None
         if d:
-            lines = [f"- {r['label']}: tag={r['tag']}; aftershock={r['outcome']}; people_safe={r['people_safe']}"
-                     for r in d.get("buildings") or []]
+            lines = [f"- {r['label']}: tag={r['tag']}; damage={r.get('damage')}; right_tag={r.get('right_tag')}; "
+                     f"tag_right={r.get('tag_right')}; people_safe={r['people_safe']}" for r in d.get("buildings") or []]
             lines.append(f"- score: people_safe={d.get('people_safe')}/{d.get('people_at_stake')}; "
                          f"records_fixed={d.get('records_fixed')}")
     return lines
@@ -271,7 +354,7 @@ DESK_TOOLS = [inbox, building_card, screen_building, triage, tag_building, shift
 
 DESK_CRITIC_PROMPT = """You are the review desk for one of Bob's record cases. Call case_file once for the exact property and suite in
 the task (the case_ref marker). Judge only whether that code-built evidence trail supports its verdict: follows=true if
-it does, false if a step doesn't hold. Give one plain-words why (no numbers, no ids, no company names) and the weakest
+it does, false if a step doesn't hold. Give one plain-words why of at most 25 words (no numbers, no ids, no company names) and the weakest
 link (a check name, or case_file if you couldn't read it). Never say a record or an owner is wrong."""
 
 
@@ -362,7 +445,9 @@ Rules: name buildings by their address label (e.g. "737 Broadway"), never by pro
 ("concrete, as the city lists it", "the material CoStar records", "a different structure", "still there", "gone"), never
 as keys like city_list_current. Never name a company (say "a 3-person office"). Never say a record or an owner is wrong;
 say the records disagree and which way the evidence leans. Exits, stairs and soil are not in the data: say so if asked.
-Tags and the aftershock are game outcomes, not engineering assessments."""
+Before a "Quake at ..." message, never name a tag colour and never say whether a building is safe to enter: give the
+screening score and the people only. Tags exist only after the quake, as simulated post-quake placards, and only
+through tag_building. Tags and the aftershock are game outcomes, not engineering assessments."""
 
 DESK_TODO_PROMPT = """## The plan on screen (write_todos)
 The todo list is shown live on Bob's desk. At the start of the shift, write it right after inbox returns. When
@@ -378,7 +463,7 @@ def build(store=None, checkpointer=None, m=None):
         model=m.orch,
         tools=DESK_TOOLS,
         system_prompt=DESK_PROMPT,
-        middleware=[ShiftStart(), todos, _errors(), RetryBlank("The line dropped. Say again?"), ForceTag(), TagDisclaimer(),
+        middleware=[ShiftStart(), todos, _errors(), TagDisclaimer(), DeskRetryBlank("The line dropped. Say again?"), ForceTag(),
                     ModelFallbackMiddleware(*m.orch_fallbacks)],
         subagents=_subagents(m),
         backend=backend,
