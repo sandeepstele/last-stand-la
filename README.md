@@ -2,7 +2,7 @@
 
 **A deep-agent game, built on real CoStar data, with real feedback enforcement.**
 
-You're **Bob**, a building officer at the city of LA, on retrofit-deadline day. Real open cases from CoStar's queue land on your desk: buildings whose records disagree. Your analyst is an AI agent. It sends squads to pull each building's data, weighs the evidence in code, and sends you out on site visits into real downtown buildings. At **5:02 pm a simulated quake hits**. The agent screens each building and proposes a post-quake placard (green, yellow or red). **You post it.** At dawn a simulated aftershock tests your tags: the score is the **people you kept safe** and the **records you fixed**.
+You're **Bob**, a building officer at the city of LA, for **Day 1 to Day N**: one shift a day, each on a different real building in the district (Day 1 is retrofit-deadline day at 737 Broadway). Real open cases from CoStar's queue land on your desk: buildings whose records disagree. Your analyst is an AI agent. It sends squads to pull each building's data, weighs the evidence in code, and sends you out on site visits into real downtown buildings. At **5:02 pm a simulated quake hits**. The agent screens each building and proposes a post-quake placard (green, yellow or red). **You post it.** At dawn a simulated aftershock tests your tags: the score is the **people you kept safe** and the **records you fixed**. Then **Next day** (the agent keeps its log and opens with your last correction) or **New game**; after Day N, a **career summary**.
 
 | The claim | What it means in the game |
 |---|---|
@@ -28,6 +28,18 @@ You're **Bob**, a building officer at the city of LA, on retrofit-deadline day. 
 | **5:02 pm, the simulated quake** | Day fades to night; pedestrians run, cars stop. "Simulated aftershock in 1:00" (0:45 on `?demo=1`); two people trapped at the door: lead them to the green assembly point. Posts the tag: **1** green · **2** yellow · **3** red · N none | `Quake at 5:02 pm. Tag building 6375735`: `screen_building`, then `tag_building` (the interrupt: approve, change or reject) | A FEMA P-154-style screening score per material (weighted by today's odds), the chance of serious damage, people inside at 5 pm, and the tag the code suggests (shown beside the agent's proposal) |
 | **Dawn** | Reads the shift report, "Rescue (simulated): N of 2" and **Agent vs Bob** (proposal vs Bob's tag vs the right tag, a running track record); rates drafts 👍/👎; files the drafts | `End the shift`: the critic reviews each case, `draft_correction` per case, `shift_report`, `log_shift` | A seeded aftershock from the building's own odds: damage state, the right tag, people safe / exposed / hurt / displaced, and what each tag would have done on average |
 
+**Days 1..N.** Every day runs the shift above on a different district building; `?demo=1` is Day 1 only.
+- **Next day** (Enter on the dawn screen) starts the next building and keeps the shift log, so the agent's first line names Bob's last real correction.
+- **New game** resets the log to the seeded 601 Broadway line; use it between judges.
+- After Day N, the **career summary** totals the people kept safe, the tags that were right (x of y) and the Agent vs Bob record.
+- The memory is in context (the shift log); no weights change between days.
+
+| Day | Building | Case |
+|---|---|---|
+| 1 | 737 Broadway, plus suite 1100 at 122 7th St | Masonry or concrete; a suite on record as occupied that may be empty |
+| 2 | **[fb: building]** | **[fb: what the records disagree on]** |
+| 3 | **[fb: building]** | **[fb: what the records disagree on]** |
+
 **Tags are simulated placards** (ATC-20 style: green = safe to occupy, yellow = limited entry, red = unsafe). Every tag, the quake and the aftershock say so: *game outcome, not an engineering assessment.*
 
 **The judges' view of the agent:**
@@ -38,7 +50,7 @@ You're **Bob**, a building officer at the city of LA, on retrofit-deadline day. 
 - **Street life:** traffic and pedestrians on lanes derived from the building grid, reacting to the quake (decoration). Near buildings with real Vexcel imagery, the drone and camera views show the real photos.
 
 ## B2. What changed from the night game (for agents picking this up)
-- New graph `desk` (`app/desk_agent.py`) and code model (`app/desk.py`: card, screen, triage, tag, shift). Routes: `GET /desk/card/{pid}[?checks=&live=1]`, `/desk/screen/{pid}`, `/desk/triage[?scope=city]`; `POST /demo/reset` re-seeds the desk log too.
+- New graph `desk` (`app/desk_agent.py`) and code model (`app/desk.py`: card, screen, triage, tag, shift). Routes: `GET /desk/card/{pid}[?checks=&live=1]`, `/desk/screen/{pid}`, `/desk/triage[?scope=city]`, `/desk/days` (the day list; **[fb: confirm the route and its fields]**); `POST /demo/reset` re-seeds the desk log too.
 - Frontend (`web/src/game/`): `useGame.ts` talks to `desk` (`GAME_GRAPH`), sends the exact shift messages, handles the `tag_building` interrupt and reads `shift_report`. New: `foot/DeskView.tsx` (the desk), `foot/ShiftReport.tsx` (dawn), the day palette in `foot/world.ts` (`ctx.day`). The horde, flares, barricades and the crate hunt are off in the shift.
 - Replay: strict replay keys on the exact messages above; the desk recordings live in `fixtures/replay/` next to the night game's (`app/replay.py` explains record / fill / strict).
 

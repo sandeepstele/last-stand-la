@@ -1,10 +1,10 @@
 # Video shot list: Bob's Desk (2:00 cut)
 
-For whoever records the submission video (about 1 am). The voice-over is the pitch in DEMO.md, line for line. Build: `desk` a4279e2 (merged into `game`). **[TEAM]** marks a human decision.
+For whoever records the submission video (about 1 am). The voice-over is the pitch in DEMO.md, line for line. Build: `desk` a4279e2 (merged into `game`). **[TEAM]** marks a human decision. **The cut is Day 1 only** (`?demo=1`); the later days and the career summary are one spoken line in shot 8, plus an optional 3-second B-roll (see the end).
 
 ## Before you record
 1. **Server:** the agent server on :2024 in replay (stage recordings). Ask the backend session for "SLOT FREE" first: one client only while recording.
-2. **Reset:** `uv run python scripts/demo_reset.py` (or Play again on the dawn screen). Every take starts from a reset. The first shift after a reset opens from a seeded previous shift (601 Broadway); after that, each shift opens with what Bob actually corrected last time.
+2. **Reset:** `uv run python scripts/demo_reset.py` (or New game / Play again on the dawn screen; **never Next day** between takes, which keeps the history and starts Day 2). Every take starts from a reset. The first shift after a reset opens from a seeded previous shift (601 Broadway); after that, each shift opens with what Bob actually corrected last time.
    **Also clear the browser's rehearsal record** so dawn's "track record" and the feedback count start at zero: on the dawn screen click "Reset record" (Agent vs Bob) and "Clear" (the feedback export in the pause menu's Agent log tab), or run `localStorage.removeItem("laststand.track.v1"); localStorage.removeItem("laststand.feedback.v1")` in the browser console.
 3. **Window A (the game):** `http://127.0.0.1:3112/play?mode=foot&demo=1`, 1920×1080, browser zoom 100%, sound on (V toggles it). For the cleanest frame rate use the production build instead: `cd web && npm run build && npm start`, then `http://127.0.0.1:3000/play?mode=foot&demo=1`.
 4. **Window B (the agent log):** `/play/log` on the same host, in the same browser so it follows the live shift.
@@ -22,7 +22,7 @@ For whoever records the submission video (about 1 am). The voice-over is the pit
 | 5 | 0:58–1:20 | A | **Tab** to close, **E** (step out). When HQ proposes YELLOW, press **3** (RED). Then **W A S D** to Maya and Luis (HELP beacons) and lead them to the green ring | "Simulated quake at 5:02 pm"; day to night; people running, cars on hazards; "Simulated aftershock in 0:45"; "HQ proposes a YELLOW tag … code suggests YELLOW"; RED posted | "A simulated quake. Aftershock in 45 seconds, two people trapped. The agent proposes yellow and waits for me. 251 people work here: red. And I get those two out." |
 | 6 | 1:20–1:42 | A (dawn) | Let the dawn screen settle; slow pan from the shift report to Agent vs Bob | Complete damage, RED right, **251 of 251 safe**; "Rescue (simulated): 2 of 2"; **"the agent proposed YELLOW · Bob posted RED (override) · the aftershock says RED: Bob was right"** | "Complete damage. Red kept all 251 safe; yellow would have left 25 inside. I overrode the agent and I was right, and that goes into its log for tomorrow. Every call is also saved as a preference pair, the format RLHF uses. We didn't train anything tonight; we collect it." |
 | 7 | 1:42–1:52 | B: `/play/log` | Scroll slowly | The agent's steps: who acted, which data it pulled, the maths table | "Every number is published maths in code: FEMA screening, HAZUS damage, ATC-20 placards." |
-| 8 | 1:52–2:00 | A | Click **File the reports**; end on the auditor case and the title card | The auditor case with Bob's report in it | "The same agent works the real record queue. Bob's Desk: a deep agent does the work, you correct it, the aftershock grades you both." |
+| 8 | 1:52–2:00 | A | Click **File the reports**; end on the auditor case and the title card | The auditor case with Bob's report in it | "Tomorrow is a different building, and the agent opens it with today's correction. Bob's Desk: a deep agent does the work, you correct it, the aftershock grades you both." |
 
 ## If a take goes wrong
 - **The aftershock hits before Maya and Luis are out:** keep rolling. Dawn says "Rescue (simulated): 0 of 2" and Bob may be hurt; replace the rescue line with "I didn't make it to them."
@@ -36,3 +36,6 @@ For whoever records the submission video (about 1 am). The voice-over is the pit
 - Hide the cursor except in the desk shots (3) and the File click (8).
 - Record the voice-over separately and lay it over; mute game sound with V if it clashes.
 - Keep it at 2:00 or less; cut shot 7 shorter before cutting anything else.
+
+## Optional B-roll: Day 2 and the career summary
+Only if shot 8 has room (about 3 s), and only from a **separate take**, so the main take stays a clean Day 1. After the Day 1 take, press **Next day** (Enter) on the dawn screen. Capture Day 2's first radio line naming the Day 1 correction (and, if you play through to the end, the career summary). Lay it under the "Tomorrow is a different building" line. **[fb: confirm whether Day 2 runs on strict replay; if not, it is live and may differ between takes.]**

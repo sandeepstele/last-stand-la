@@ -1,6 +1,6 @@
 # Demo: Bob's Desk (the 2-minute pitch)
 
-One pitch for the judging table and the video voice-over (the shots are in VIDEO_SHOTLIST.md). About 300 spoken words: a calm 2 minutes. **[TEAM]** marks a human decision. Framing: **the agent is the main character; Bob corrects it, and the aftershock grades them both.**
+One pitch for the judging table and the video voice-over (the shots are in VIDEO_SHOTLIST.md). About 300 spoken words: a calm 2 minutes. **The stage cut (`?demo=1`) is Day 1 only**; the later days and the career summary get one spoken line and are for play at the table. **[TEAM]** marks a human decision. Framing: **the agent is the main character; Bob corrects it, and the aftershock grades them both.**
 
 **Setup:** reset first (Play again, or `uv run python scripts/demo_reset.py`), then `http://127.0.0.1:3112/play?mode=foot&demo=1` (or the production build). Put `/play/log` on a second screen facing the judges. One client on the agent server. **Never** use `agent=off` or `stub=1` on stage.
 
@@ -14,15 +14,23 @@ One pitch for the judging table and the video voice-over (the shots are in VIDEO
 | 0:40–0:58 | F to 737 Broadway, E inside its 3D tour, **1** concrete; the calculation 66% → **73%** | "On records alone, probably masonry. I walk in and report concrete. My report is evidence, capped at 0.35, never final: 73% concrete now." |
 | 0:58–1:20 | E out: **"Simulated quake at 5:02 pm"**; people run, cars stop; "Simulated aftershock in 0:45"; two HELP beacons; HQ proposes **YELLOW** ("code suggests YELLOW"); press **3** RED; walk Maya and Luis to the green assembly point | "A simulated quake. Aftershock in 45 seconds, two people trapped. The agent proposes yellow and waits for me. 251 people work here: red. And I get those two out." |
 | 1:20–1:42 | Dawn: complete damage; RED kept 251 of 251 safe; "Rescue: 2 of 2"; **Agent vs Bob**: "Bob was right; the agent was wrong" | "Complete damage. Red kept all 251 safe; yellow would have left 25 inside. I overrode the agent and I was right, and that goes into its log for tomorrow. Every call is also saved as a preference pair, the format RLHF uses. We didn't train anything tonight; we collect it." |
-| 1:42–2:00 | `/play/log` scrolling; File the reports → the auditor case with Bob's report | "Every number is published maths in code: FEMA screening, HAZUS damage, ATC-20 placards. The same agent works the real record queue. Bob's Desk: a deep agent does the work, you correct it, the aftershock grades you both." |
+| 1:42–2:00 | `/play/log` scrolling; File the reports → the auditor case with Bob's report | "Every number is published maths in code: FEMA screening, HAZUS damage, ATC-20 placards. Tomorrow is a different building, and the agent opens it with today's correction. Bob's Desk: a deep agent does the work, you correct it, the aftershock grades you both." |
 
 **The memory line on stage:** The first shift after a reset opens from a seeded previous shift (601 Broadway); after that, each shift opens with what Bob actually corrected last time. So the opening line in the pitch is the seeded one; say "what it learned last shift", not "from me today".
+
+**After the pitch: the next days (at the table, not in the 2-minute cut).** At dawn, **Next day** (Enter) keeps the history; **New game** resets it. Day 2's first radio line names the correction the judge just made on Day 1, which is the best live proof of the memory. After Day N, the **career summary** totals the people kept safe, the tags that were right (x of y) and the Agent vs Bob record. **Before the next judge, use New game (or `demo_reset`), never Next day**, so every judge starts on Day 1 from the seeded line.
+
+| Day | Building | Case |
+|---|---|---|
+| 1 | 737 Broadway, plus suite 1100 at 122 7th St | Masonry or concrete; a suite on record as occupied that may be empty |
+| 2 | **[fb: building]** | **[fb: what the records disagree on]** |
+| 3 | **[fb: building]** | **[fb: what the records disagree on]** |
 
 **Read the numbers off the screen** (66%, 73%, 251, 25, YELLOW → RED). If the recording differs, say what the screen shows. If Bob doesn't get Maya and Luis out, the aftershock still hits at 0:45 (dawn waits up to 75 s after the quake); say "I didn't make it to them" and move on.
 
 **Simulated:** say "simulated quake" and "game outcome" at least once each. The video's lower third carries "Simulated post-quake placards. Game outcomes, not engineering assessments."
 
-**Ops:** one client at a time on the agent server (a second tab or a script starting a shift clears the first one's notes). A reload mid-shift shows "Saved shift … Enter continues it". Play again between judges. The night game (Last Stand LA) is the fallback: `NEXT_PUBLIC_GAME_GRAPH=laststand`; its script is below.
+**Ops:** one client at a time on the agent server (a second tab or a script starting a shift clears the first one's notes). A reload mid-shift shows "Saved shift … Enter continues it". New game (or Play again) between judges, not Next day. **[fb: confirm whether the later days run on strict replay or live; if live, say so before pressing Next day.]** The night game (Last Stand LA) is the fallback: `NEXT_PUBLIC_GAME_GRAPH=laststand`; its script is below.
 
 ## If a judge asks
 
@@ -36,6 +44,7 @@ One pitch for the judging table and the video voice-over (the shots are in VIDEO
 - **"Why does better evidence still end in red?"** "Settling masonry versus concrete matters less than the building's age and the shaking. The evidence made the record more accurate, and the odds still said 'old building, strong shaking.'"
 - **"Isn't yellow always safest?"** "Not any more. Yellow allows limited entry, so 10% are exposed if the damage is serious, and 25% are displaced if it's minor. Both are labelled game shares."
 - **"Is the agent learning, is this RLHF?"** "It learns in context: my override and how it turned out go into its shift log, and the next shift opens with that lesson. (On stage we start from a reset, so the first shift opens from a seeded previous shift; play a second shift and it opens with your real correction.) Every decision and every thumbs up or down is also saved as preference pairs in the format RLHF and DPO use. We didn't train any weights tonight; we collect the data."
+- **"Is there more than one day?"** "Yes. Each day is a different real building in the district, and the agent carries its log forward, so it opens Day 2 with your Day 1 call. After the last day you get a career summary: people kept safe, tags right, and you versus the agent. Same honesty: it's in-context memory; no weights change." Offer to press Next day.
 - **"Is it live?"** "The stage run is a recorded replay of the real agent, so it's repeatable. The data, tools and images are live." Offer one live building card from the map.
 - **"What about the whole city?"** "All 1,581 LA buildings in the kit, screened from records alone: 918 green, 446 yellow, 217 red suggestions. Those are odds for a commercial sample, not a prediction."
 - **"What's different from other projects?"** "Most entries use code for the numbers and a person to approve. We found none that models earthquakes, and none where the cost of a wrong call plays out on a clock. A past Claude Code hackathon winner put AI at the permit counter before a building is built; Bob puts it at the counter after the quake, and lets you overrule it."
