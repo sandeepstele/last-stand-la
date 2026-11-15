@@ -1385,7 +1385,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
   const screen = DESK ? latestResult<Screen>(game.messages, "screen_building") : null;
   const tagWords: Record<Tag, string> = { green: "GREEN · safe to occupy", yellow: "YELLOW · limited entry", red: "RED · unsafe" };
   const deskDecision = DESK && step === "night" ? {
-    prompt: game.tagProposal ? `HQ proposes a ${game.tagProposal.tag.toUpperCase()} tag for ${heroLabel} (simulated).` : game.isLoading ? "HQ is screening the building after the simulated quake…" : "Waiting for HQ's screening.",
+    prompt: game.tagProposal ? `HQ proposes a ${game.tagProposal.tag.toUpperCase()} tag for ${heroLabel} (simulated)${screen?.suggest ? `; code suggests ${screen.suggest.toUpperCase()}` : ""}.` : game.isLoading ? "HQ is screening the building after the simulated quake…" : "Waiting for HQ's screening.",
     proposed: null,
     why: screen ? [
       screen.score != null ? `Screening score ${screen.score}${screen.fema_type ? ` (${screen.fema_type})` : ""}` : "",

@@ -36,8 +36,13 @@ async function forward(req: Request, path: string[]): Promise<Response> {
   const init: RequestInit = { method: req.method, headers: { "content-type": req.headers.get("content-type") ?? "application/json" } };
   if (req.method === "POST") init.body = await req.text();
   // The dossier may carry the checks run so far (the server recomputes walls with them + people's notes). Whitelisted shape.
-  const checks = new URL(req.url).searchParams.get("checks");
-  const q = (p.startsWith("game/dossier/") || p.startsWith("desk/card/") || p.startsWith("desk/screen/")) && checks && /^[a-z_,]{1,300}$/.test(checks) ? `?checks=${checks}` : "";
+  const sp = new URL(req.url).searchParams;
+  const checks = sp.get("checks");
+  const params = new URLSearchParams();
+  if ((p.startsWith("game/dossier/") || p.startsWith("desk/card/") || p.startsWith("desk/screen/")) && checks && /^[a-z_,]{1,300}$/.test(checks)) params.set("checks", checks);
+  if (p === "desk/triage" && sp.get("scope") === "city") params.set("scope", "city"); // all LA kit buildings, screened in code
+  if (p.startsWith("desk/card/") && sp.get("live") === "1") params.set("live", "1"); // pull Vexcel live when no aerial is cached
+  const q = params.toString() ? `?${params.toString()}` : "";
   const r = await fetch(`${BACKEND}/${p}${q}`, init).catch(() => null);
   if (!r) return Response.json({ error: "agent server unreachable" }, { status: 502 });
   return new Response(r.body, { status: r.status, headers: { "content-type": r.headers.get("content-type") ?? "application/json" } });

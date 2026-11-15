@@ -18,7 +18,10 @@ export type DeskCard = {
   people?: { day?: number; night?: number; at_stake?: number; low?: number; high?: number; basis?: string };
   screening?: { score?: number; fema_type?: string; suggest?: string };
 };
-type Triage = { buildings?: { pid: string; label?: string; people?: number; p_damage?: number; at_risk?: number; suggest?: string; rank?: number }[]; basis?: string };
+type Triage = {
+  buildings?: { pid: string; label?: string; x?: number; z?: number; people?: number; p_damage?: number; at_risk?: number; suggest?: string; score?: number; rank?: number }[];
+  basis?: string; counts?: Record<string, number>; people_at_stake?: number; expected_at_risk?: number;
+};
 
 /** The newest building_card result per pid in the thread. */
 function streamCards(messages: readonly unknown[]): Map<string, DeskCard> {
@@ -116,12 +119,12 @@ function CityPane({ city, cards, tags, triage, selected, onSelect }: { city: Cit
     <svg viewBox={`${box.x0 - pad} ${box.z0 - pad} ${box.x1 - box.x0 + 2 * pad} ${box.z1 - box.z0 + 2 * pad}`} style={{ width: "100%", height: "100%", background: "#0b1220" }} preserveAspectRatio="xMidYMid meet" aria-label="LA city map, coloured as the agent works">
       {city.buildings.map((b) => {
         const tri = risk.get(b.pid);
-        const hot = !!tags[b.pid] || worked.has(b.pid) || !!tri;
-        const r = unit * (tags[b.pid] || worked.has(b.pid) ? 5 : tri ? 2 + 4 * Math.sqrt((tri.people ?? 0) / maxPeople) : b.case ? 2.6 : 1.2);
+        const hot = !!tags[b.pid] || worked.has(b.pid);
+        const r = unit * (hot ? 5 : tri ? 1 + 3.5 * Math.sqrt((tri.people ?? 0) / maxPeople) : b.case ? 2.6 : 1.2);
         return (
           <circle key={b.pid} cx={b.x} cy={b.z} r={r} fill={colour(b)} opacity={hot ? 1 : b.case ? 0.8 : 0.5}
             stroke={b.pid === selected ? "#fff" : hot ? "#0b1220" : "none"} strokeWidth={unit * (b.pid === selected ? 1.6 : 0.6)}
-            style={{ cursor: hot || b.case ? "pointer" : "default" }} onClick={() => (hot || b.case) && onSelect(b.pid)}>
+            style={{ cursor: "pointer" }} onClick={() => onSelect(b.pid)}>
             <title>{`${tri?.label ?? b.pid}${b.case ? ` · ${CASE_WORDS[b.case] ?? b.case}` : ""}${tri ? ` · ${tri.people ?? "?"} people · damage ${Math.round((tri.p_damage ?? 0) * 100)}% · suggests ${tri.suggest ?? "?"}` : ""}`}</title>
           </circle>
         );
@@ -149,7 +152,7 @@ export function DeskView({ messages, threadId, cases, tags = {}, precalls = {}, 
   const tagCount = Object.keys(tags).length;
   useEffect(() => {
     let alive = true;
-    fetch("/api/game/triage").then((r) => (r.ok ? r.json() : null)).then((d: Triage | null) => alive && d && setTriage(d)).catch(() => {});
+    fetch("/api/game/triage?scope=city").then((r) => (r.ok ? r.json() : null)).then((d: Triage | null) => alive && d && setTriage(d)).catch(() => {});
     return () => {
       alive = false;
     };
@@ -165,6 +168,17 @@ export function DeskView({ messages, threadId, cases, tags = {}, precalls = {}, 
     };
   }, [casePids]);
   const deskCards = useMemo(() => ({ ...fetched, ...Object.fromEntries(live) }) as Record<string, DeskCard>, [fetched, live]);
+  const [pulling, setPulling] = useState<string | null>(null);
+  const pick = (pid: string) => {
+    setSelected(pid);
+    if (deskCards[pid]) return;
+    setPulling(pid);
+    fetch(`/api/game/card/${encodeURIComponent(pid)}?live=1`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: DeskCard | null) => d?.pid && setFetched((m) => ({ ...m, [pid]: d })))
+      .catch(() => {})
+      .finally(() => setPulling((x) => (x === pid ? null : x)));
+  };
   useEffect(() => {
     let alive = true;
     fetch("/api/game/city").then((r) => (r.ok ? r.json() : null)).then((d: City | null) => alive && d && setCity(d)).catch(() => {});
@@ -262,8 +276,10 @@ export function DeskView({ messages, threadId, cases, tags = {}, precalls = {}, 
       </section>
 
       <section style={{ ...pane, padding: 0, gridColumn: "3", gridRow: "2 / 3", display: "grid", gridTemplateRows: "1fr auto" }} aria-label="City map">
-        <CityPane city={city} cards={cards} tags={tags} triage={triage} selected={selected} onSelect={setSelected} />
+        <CityPane city={city} cards={cards} tags={tags} triage={triage} selected={selected} onSelect={pick} />
         <div style={{ display: "flex", gap: 10, padding: "6px 10px", fontSize: 12, color: "#94a3b8", flexWrap: "wrap" }}>
+          {triage?.counts && <span style={{ flexBasis: "100%", color: "#cbd5e1" }}>All LA ({(triage.buildings ?? []).length.toLocaleString("en-US")} buildings, screened in code): <b style={{ color: TAG_COLOR.green }}>{triage.counts.green ?? 0}</b> green · <b style={{ color: TAG_COLOR.yellow }}>{triage.counts.yellow ?? 0}</b> yellow · <b style={{ color: TAG_COLOR.red }}>{triage.counts.red ?? 0}</b> red{triage.people_at_stake ? ` · about ${Math.round(triage.people_at_stake / 1000)}k people inside by day` : ""}. Click any building for its card.</span>}
+          {pulling && <span style={{ flexBasis: "100%", color: "#38bdf8" }}>Pulling building {pulling}&apos;s card (live from the sources)…</span>}
           <span><i style={{ color: "#38bdf8" }}>●</i> being worked</span>
           <span><i style={{ color: "#f5a524" }}>●</i> weighed</span>
           <span><i style={{ color: TAG_COLOR.green }}>●</i> green</span>
