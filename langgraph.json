@@ -5,7 +5,8 @@
   "graphs": {
     "radar": "./app/agent.py:live_agent",
     "radar_worker": "./app/agent.py:worker_agent",
-    "laststand": "./app/game_agent.py:game_agent"
+    "laststand": "./app/game_agent.py:game_agent",
+    "desk": "./app/desk_agent.py:desk_agent"
   },
   "env": ".env",
   "http": {

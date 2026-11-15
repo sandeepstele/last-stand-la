@@ -199,7 +199,7 @@ def test_demo_reset_clears_one_nights_traces():
     c = TestClient(routes.app)
     assert c.post("/demo/reset", json={}).status_code == 400
     r = c.post("/demo/reset", json={"confirm": "reset"})
-    assert r.status_code == 200 and r.json()["cleared"] == {"notes": 2, "corrections": 1, "outbox": 0, "laststand_cases": 0, "laststand_log": 0}
+    assert r.status_code == 200 and r.json()["cleared"] == {"notes": 2, "corrections": 1, "outbox": 0, "laststand_cases": 0, "laststand_log": 0, "desk_log": 0}
     assert r.json()["night_log"] == "seeded" and store.get(("laststand_log",), "/latest.md")  # every night starts from the seed
     assert not store.search(("notes",)) and store.search(("keep",))
 

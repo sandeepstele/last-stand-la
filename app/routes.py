@@ -271,6 +271,52 @@ async def game_dossier(request: Request) -> JSONResponse:
     return JSONResponse(d)
 
 
+async def _desk_evidence(request: Request, pid: str) -> tuple[list[str], list[dict]]:
+    """?checks=a,b plus any stored report on the building, the same evidence the desk tools weigh."""
+    from app import evidence
+
+    raw = request.query_params.get("checks") or ""
+    checks = [c for c in dict.fromkeys(x.strip() for x in raw.split(",")) if c in evidence.CHECK_WHAT and c != "human_report"]
+    notes = [i.value for i in await _store(request).asearch(("notes", pid), limit=10)]
+    if notes:
+        checks.append("human_report")
+    return checks, notes
+
+
+async def _desk_pid(request: Request) -> str | None:
+    from app import fortress
+
+    pid = request.path_params["pid"]
+    return pid if PID.match(pid) and await asyncio.to_thread(fortress.building, pid) else None
+
+
+async def desk_card(request: Request) -> JSONResponse:
+    # GET /desk/card/{pid}?checks=a,b: Bob's live building card, one line per data source (code only)
+    from app import desk
+
+    if not (pid := await _desk_pid(request)):
+        return JSONResponse({"error": "not a building in the district"}, status_code=404)
+    checks, notes = await _desk_evidence(request, pid)
+    return JSONResponse(await asyncio.to_thread(desk.card, pid, checks, notes))
+
+
+async def desk_screen(request: Request) -> JSONResponse:
+    # GET /desk/screen/{pid}?checks=a,b: the rapid screening and the suggested tag (code only)
+    from app import desk
+
+    if not (pid := await _desk_pid(request)):
+        return JSONResponse({"error": "not a building in the district"}, status_code=404)
+    checks, notes = await _desk_evidence(request, pid)
+    return JSONResponse(await asyncio.to_thread(desk.screen, pid, checks, notes))
+
+
+async def desk_triage(request: Request) -> JSONResponse:
+    # GET /desk/triage: every district building ranked by people at risk in the aftershock (the map layer)
+    from app import desk
+
+    return JSONResponse(await asyncio.to_thread(desk.triage))
+
+
 async def game_resolve(request: Request) -> JSONResponse:
     """The fallback path when the agent is down: same code, same seeded rolls as commit_plan."""
     from app import fortress
@@ -310,7 +356,7 @@ async def demo_reset(request: Request) -> JSONResponse:
     if body.get("confirm") != "reset":
         return JSONResponse({"error": 'send {"confirm": "reset"}'}, status_code=400)
     store, cleared = _store(request), {}
-    for prefix in (("notes",), ("corrections",), ("outbox",), ("laststand_cases",), ("laststand_log",)):
+    for prefix in (("notes",), ("corrections",), ("outbox",), ("laststand_cases",), ("laststand_log",), ("desk_log",)):
         n = 0
         while items := await store.asearch(prefix, limit=100):
             for it in items:
@@ -323,6 +369,9 @@ async def demo_reset(request: Request) -> JSONResponse:
 
     # every night starts from the same fixed "previous night", so the briefing reads the recorded memory
     await store.aput(("laststand_log",), "/latest.md", create_file_data(LAST_STAND_LOG_SEED))
+    from app.desk import LOG_SEED as DESK_LOG_SEED
+
+    await store.aput(("desk_log",), "/latest.md", create_file_data(DESK_LOG_SEED))  # Bob's previous shift, fixed
     # the auditor's standing orders and skills (scripts/seed_store.py), if this server's Store doesn't have them yet:
     # the bridge's recorded replay depends on them
     seed = __import__("pathlib").Path(__file__).resolve().parent.parent / "seed"
@@ -351,6 +400,9 @@ app = Starlette(
         Route("/game/mesh/{pid}", game_mesh, methods=["GET"]),
         Route("/game/dossier/{pid}", game_dossier, methods=["GET"]),
         Route("/game/resolve", game_resolve, methods=["POST"]),
+        Route("/desk/card/{pid}", desk_card, methods=["GET"]),
+        Route("/desk/screen/{pid}", desk_screen, methods=["GET"]),
+        Route("/desk/triage", desk_triage, methods=["GET"]),
         Route("/cases/queue", cases_queue, methods=["GET"]),
         Route("/cases/decision", cases_decision, methods=["POST"]),
         Route("/cases/inbox", cases_inbox, methods=["GET"]),
