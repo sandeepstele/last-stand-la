@@ -76,11 +76,13 @@ STATES = ("none", "slight", "moderate", "extensive", "complete")
 LOAD_SQFT = {"office": 150, "retail": 60, "industrial": 100, "hospitality": 200}  # business 150 verified
 TYPICAL_SHARE = 0.5  # people typically inside vs the code's design maximum (assumed, labelled)
 HOUSEHOLD = 2.64     # people per household, City of LA (ACS 2019-2023)
-TIME_OF_DAY = {"residential": {"night": 1.0, "day": 0.53}, "commercial": {"night": 0.01, "day": 1.0}}  # HAZUS 6.1
+# HAZUS 6.1 share of peak population present: night 0-5 h & 20-23 h, day 9-15 h, commute 6-8 h & 16-19 h (5 pm = commute)
+TIME_OF_DAY = {"residential": {"night": 1.0, "day": 0.53, "commute": 0.35},
+               "commercial": {"night": 0.01, "day": 1.0, "commute": 0.75}}
 
 # ---------------------------------------------------------------- game parts (labelled as such)
-RED_AT = 0.40     # game: chance of extensive-or-worse damage at or above this suggests red (ATC-20: severe, overall)
-YELLOW_AT = 0.40  # game: chance of moderate-or-worse at or above this, or a score under the cut-off, suggests yellow
+RED_AT = 0.40           # game: chance of extensive-or-worse damage at or above this suggests red (ATC-20: severe, overall)
+YELLOW_AT = RED_AT / 2  # ATC-138's rule: "inspection required" at half of each red-tag threshold
 BORDER = 0.05     # within this of a threshold: borderline
 SEED = 2026
 
@@ -165,10 +167,10 @@ def people(pid: str) -> dict[str, Any]:
             low, high = round(design * 0.3), round(design)
             basis = (f"about {round(gba, -3):,.0f} sq ft / {LOAD_SQFT[kind]} sq ft per person (IBC design load) "
                      f"x {TYPICAL_SHARE} typically there (assumed)")
-    day, night = round(base * tod["day"]), round(base * tod["night"])
-    basis += f"; HAZUS share present by day {tod['day']} and at night {tod['night']}"
+    day, night, at_5pm = round(base * tod["day"]), round(base * tod["night"]), round(base * tod["commute"])
+    basis += f"; HAZUS share present by day {tod['day']}, at 5 pm (commute) {tod['commute']}, at night {tod['night']}"
     # a tag protects whoever uses the building next: the larger of the day and night counts
-    return {"day": day, "night": night, "at_stake": max(day, night), "low": low, "high": max(high, low),
+    return {"day": day, "at_5pm": at_5pm, "night": night, "at_stake": max(day, night), "low": low, "high": max(high, low),
             "kind": "residential" if units else kind, "basis": basis}
 
 
@@ -211,9 +213,9 @@ def screen(pid: str, checks: list[str] | tuple[str, ...] = (), notes: list[dict]
     if p_ext >= RED_AT:
         suggest = "red"
         why = f"a {round(p_ext * 100)}% chance of extensive or worse damage at this site's 1994 shaking (red at {round(RED_AT * 100)}%)"
-    elif p_mod >= YELLOW_AT or s < CUTOFF or city["unfinished"]:
+    elif p_ext >= YELLOW_AT or s < CUTOFF or city["unfinished"]:
         suggest = "yellow"
-        bits = [f"a {round(p_mod * 100)}% chance of moderate or worse damage"]
+        bits = [f"a {round(p_ext * 100)}% chance of extensive or worse damage"]
         if s < CUTOFF:
             bits.append(f"screening score {s} is under the {CUTOFF} cut-off")
         if city["unfinished"]:
@@ -221,7 +223,7 @@ def screen(pid: str, checks: list[str] | tuple[str, ...] = (), notes: list[dict]
         why = "; ".join(bits) + ": restricted use until a detailed evaluation"
     else:
         suggest, why = "green", f"screening score {s} and a {round(p_mod * 100)}% chance of moderate or worse damage"
-    borderline = abs(p_ext - RED_AT) <= BORDER or (suggest != "red" and abs(p_mod - YELLOW_AT) <= BORDER and s >= CUTOFF)
+    borderline = abs(p_ext - RED_AT) <= BORDER or (suggest != "red" and abs(p_ext - YELLOW_AT) <= BORDER and s >= CUTOFF)
     if len(rows) > 1:
         why += f" (the walls are still in question: {', '.join(r['material'] + ' ' + str(round(r['odds'] * 100)) + '%' for r in rows)})"
     return {"pid": pid, "label": fortress._label(rec), "by_material": rows, "score": s, "mmi": mmi, "pga_g": round(pga, 3),
@@ -232,8 +234,8 @@ def screen(pid: str, checks: list[str] | tuple[str, ...] = (), notes: list[dict]
                     f"{PRE_CODE_BEFORE}, benchmark years assumed), {CUTOFF} cut-off. Damage: HAZUS fragility for the "
                     f"building class and code era at the 1994 Northridge shaking here (MMI {mmi} = {pga:.2f} g, Worden 2012), "
                     f"beta {BETA}. Each material weighted by today's odds. Tag: red if extensive-or-worse is "
-                    f"{round(RED_AT * 100)}%+, yellow if moderate-or-worse is {round(YELLOW_AT * 100)}%+ or the score is "
-                    f"under the cut-off or a city order is open, else green (game thresholds). {DISCLAIMER}."}
+                    f"{round(RED_AT * 100)}%+ (game threshold), yellow at half that ({round(YELLOW_AT * 100)}%+, ATC-138's "
+                    f"inspection rule) or when the score is under the cut-off or a city order is open, else green. {DISCLAIMER}."}
 
 
 def in_la(pid: str) -> bool:
