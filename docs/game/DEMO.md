@@ -1,25 +1,54 @@
-# Demo: Bob's Shift (the 2-minute pitch)
+# Demo: Bob's Desk (the 2-minute pitch)
 
-Run `?demo=1` on strict replay (`/play?mode=foot&demo=1`), reset first (Play again does it). Press **F** to skip the walks, **Tab** for the desk. Open `/play/log` on a second screen facing the judges. Never use `agent=off` or `stub=1` on stage.
+One pitch for the judging table and the video voice-over (the shots are in VIDEO_SHOTLIST.md). About 300 spoken words: a calm 2 minutes. **[TEAM]** marks a human decision. Framing: **the agent is the main character; Bob corrects it, and the aftershock grades them both.**
 
-| Time | Claim | On screen | Say |
-|---|---|---|---|
-| 0:00 | Hook | Intro dive over all of LA | "I'm Bob. I work at LA's building office, and it's retrofit-deadline day. These are real buildings, from CoStar's data." |
-| 0:15 | **Deep agent** | Enter → the desk opens: the inbox fills with real open cases, the cards fill line by line, each line naming its source | "My analyst is a deep agent. It reads CoStar's real queue, sends four squads in parallel, and every line it brings back says where it came from." |
-| 0:35 | **Real CoStar data** | The 737 Broadway card: the amber box "CoStar record says masonry · LA retrofit list says concrete"; the city map, all 1,581 buildings screened in code | "The records disagree. CoStar says masonry, the city says concrete. Nobody's been inside. The map is every LA building in the kit, ranked by people at risk, in code." |
-| 0:50 | **Feedback enforcement** | Site visit (F, E): the building's own 3D tour. Press **1**, concrete. The calc sheet: 66% → **73%** | "So I go and look. My report is evidence: it moves the odds, capped at 0.35, never final. Code enforces that, not the model." |
-| 1:10 | The quake | Step out: **"Simulated quake at 5:02 pm"**; day turns to night. HQ proposes **YELLOW**; "code suggests YELLOW"; the strip shows score, damage odds, people inside at 5 pm | "A simulated quake. The agent screens the building and proposes a placard, and it waits for me." |
-| 1:25 | **My call** | Press **3**: RED (override) | "The records still disagree and 251 people are inside. I post red." |
-| 1:35 | Dawn | The shift report: the aftershock did complete damage; RED was the right tag; **251 of 251 kept safe**; "on average, each tag would have…"; the critic's review on each draft | "The aftershock tests my tags. Every number here is code. And the agent drafted the correction citing what I saw, and a second agent checked it." |
-| 1:50 | Close | File the reports → the auditor case with my report in it | "One engine, two doors: the game and the real auditor. Nothing changes a record without a human." |
+**Setup:** reset first (Play again, or `uv run python scripts/demo_reset.py`), then `http://127.0.0.1:3112/play?mode=foot&demo=1` (or the production build). Put `/play/log` on a second screen facing the judges. One client on the agent server. **Never** use `agent=off` or `stub=1` on stage.
 
-**If you approve HQ's YELLOW instead** (press 2): the dawn report shows 226 safe, 25 exposed, about 5 hurt, and "wrong tag". That's an honest way to show the stakes, but the override to RED is the stronger moment. Decide before the video.
+**One-liner (open and close with it):** "Bob's Desk: a deep agent does the work, you correct it, and the aftershock grades you both."
 
-**Numbers (strict replay, recorded 11 pm):** walls 66% → 73% concrete; 737 Broadway 251 people at stake (150–501 inside by day, an estimate); tags and aftershock are simulated. Re-check the % on screen before quoting.
+| Time | On screen (keys) | Say |
+|---|---|---|
+| 0:00–0:10 | Title over downtown LA (Enter) | "After Northridge, inspectors tagged 66,000 buildings green, yellow or red, often in under half an hour each. I'm Bob, LA building office, one shift." |
+| 0:10–0:25 | The desk opens; the first radio line: *"Last shift Bob changed my yellow to red at 601 Broadway, and the aftershock showed red was right."* | "My analyst is a LangChain deep agent, and it opens with what it learned from me yesterday. My corrections become its lessons." |
+| 0:25–0:40 | Cards fill line by line, one source per line; the amber masonry-vs-concrete box; the city map (Tab to close) | "Real open cases from CoStar's data. It sends four squads in parallel, and every building gets a card: CoStar, Vexcel, Matterport, city lists, the county assessor. Amber where sources disagree." |
+| 0:40–0:58 | F to 737 Broadway, E inside its 3D tour, **1** concrete; the calculation 66% → **73%** | "On records alone, probably masonry. I walk in and report concrete. My report is evidence, capped at 0.35, never final: 73% concrete now." |
+| 0:58–1:20 | E out: **"Simulated quake at 5:02 pm"**; people run, cars stop; "Simulated aftershock in 0:45"; two HELP beacons; HQ proposes **YELLOW** ("code suggests YELLOW"); press **3** RED; walk Maya and Luis to the green assembly point | "A simulated quake. Aftershock in 45 seconds, two people trapped. The agent proposes yellow and waits for me. 251 people work here: red. And I get those two out." |
+| 1:20–1:42 | Dawn: complete damage; RED kept 251 of 251 safe; "Rescue: 2 of 2"; **Agent vs Bob**: "Bob was right; the agent was wrong" | "Complete damage. Red kept all 251 safe; yellow would have left 25 inside. I overrode the agent and I was right, and that goes into its log for tomorrow. Every call is also saved as a preference pair, the format RLHF uses. We didn't train anything tonight; we collect it." |
+| 1:42–2:00 | `/play/log` scrolling; File the reports → the auditor case with Bob's report | "Every number is published maths in code: FEMA screening, HAZUS damage, ATC-20 placards. The same agent works the real record queue. Bob's Desk: a deep agent does the work, you correct it, the aftershock grades you both." |
 
-**If asked what's enforced:** the report cap (0.35), the vision cap (0.2), the screening score and the tag the code suggests, people at stake, the aftershock roll; the model picks checks and proposes, code computes, Bob decides, a human approves any record change.
+**Read the numbers off the screen** (66%, 73%, 251, 25, YELLOW → RED). If the recording differs, say what the screen shows. If Bob doesn't get Maya and Luis out, the aftershock still hits at 0:45 (dawn waits up to 75 s after the quake); say "I didn't make it to them" and move on.
 
-**Ops:** one client at a time on the agent server (a second tab or script starting a shift clears the first one's notes). Play again between judges. The night game (Last Stand LA) is the fallback: set `NEXT_PUBLIC_GAME_GRAPH=laststand`; its script is below.
+**Simulated:** say "simulated quake" and "game outcome" at least once each. The video's lower third carries "Simulated post-quake placards. Game outcomes, not engineering assessments."
+
+**Ops:** one client at a time on the agent server (a second tab or a script starting a shift clears the first one's notes). A reload mid-shift shows "Saved shift … Enter continues it". Play again between judges. The night game (Last Stand LA) is the fallback: `NEXT_PUBLIC_GAME_GRAPH=laststand`; its script is below.
+
+## If a judge asks
+
+- **"Is the AI deciding?"** "No. The agent decides what to check and what to propose, code computes every number, and the person makes the call. The placard is an interrupt the agent can't get past without me."
+- **"Where do the numbers come from?"**
+  - FEMA P-154 Level 1 screening, Very High seismicity.
+  - The USGS 1994 ShakeMap at each building, converted with Worden et al. 2012.
+  - HAZUS fragility and indoor casualty rates.
+  - People from IBC occupant loads, CoStar employees or occupied square feet, and HAZUS time-of-day shares (5 pm counts as commute).
+  - ATC-20 posting categories; yellow at half the red threshold, from ATC-138.
+- **"Why does better evidence still end in red?"** "Settling masonry versus concrete matters less than the building's age and the shaking. The evidence made the record more accurate, and the odds still said 'old building, strong shaking.'"
+- **"Isn't yellow always safest?"** "Not any more. Yellow allows limited entry, so 10% are exposed if the damage is serious, and 25% are displaced if it's minor. Both are labelled game shares."
+- **"Is the agent learning, is this RLHF?"** "It learns in context: my override and how it turned out go into its shift log, and the next morning it opens with that lesson. Every decision and every thumbs up or down is also saved as preference pairs in the format RLHF and DPO use. We didn't train any weights tonight; we collect the data."
+- **"Is it live?"** "The stage run is a recorded replay of the real agent, so it's repeatable. The data, tools and images are live." Offer one live building card from the map.
+- **"What about the whole city?"** "All 1,581 LA buildings in the kit, screened from records alone: 918 green, 446 yellow, 217 red suggestions. Those are odds for a commercial sample, not a prediction."
+- **"What's different from other projects?"** "Most entries use code for the numbers and a person to approve. We found none that models earthquakes, and none where the cost of a wrong call plays out on a clock. A past Claude Code hackathon winner put AI at the permit counter before a building is built; Bob puts it at the counter after the quake, and lets you overrule it."
+
+## Per-judge first lines
+- **Entertainment:** "A desk game about one real decision: green, yellow or red, with 251 people inside."
+- **CoStar:** "Inside and out: the plot is a CoStar record two sources disagree on, you walk the Matterport scan, the agent reads the Vexcel aerial, and your report reaches the real case."
+- **LangChain:** "A todo plan, four parallel sub-agents, a critic sub-agent on a second model, a placard interrupt the player answers, and a shift memory that turns the player's overrides into the agent's next-morning lesson. Every step is in the log on the second screen."
+
+## Words to avoid
+- A record or an owner is "wrong". Say the records **disagree**.
+- "Real-time feeds", or "prediction" for the citywide screen.
+- "Non-compliant" for an unfinished retrofit.
+- Company or tenant names from the records.
+- **[TEAM: addresses on screen only if CoStar OKs it.]**
 
 ---
 
