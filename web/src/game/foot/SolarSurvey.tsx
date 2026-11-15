@@ -34,6 +34,8 @@ export function SolarSurvey({ roof, stamped, onStamp, onClose }: { roof: SolarRo
         <div><dt>Power</dt><dd>{fmt(roof.mwh_per_year)} MWh a year</dd></div>
         {roof.load_offset_pct != null && <div><dt>Covers</dt><dd>{fmt(roof.load_offset_pct)}% of its use</dd></div>}
         {roof.co2_t_per_year != null && <div><dt>Saves</dt><dd>{fmt(roof.co2_t_per_year)} t CO₂ a year</dd></div>}
+        {/* There is no roof-age data: the screen uses the building's age, so its "inspect first" is that assumption, not a roof finding. */}
+        <div><dt>Roof</dt><dd>Roof age unknown (we used the building&apos;s age) → inspect first</dd></div>
       </dl>
       {!!roof.readiness_reasons?.length && (
         <ul className={styles.clues}>

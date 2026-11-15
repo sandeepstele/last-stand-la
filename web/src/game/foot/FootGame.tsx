@@ -166,7 +166,7 @@ function safely(name: string, s: System): System {
  * In development, window.__foot = { ctx, step } lets test scripts emit bus events (e.g. a wave) by hand.
  */
 /** presenter (?demo=1): [F] fast-forwards the slow parts (walk to the door, the escape run, the door defence) for a 30-40 s pitch. */
-/** The code's stay-vs-run side by side, in plain words: "Stay: walls 77, quake 35 · Run: walls 60 on foot, quake 78. Code favours HOLD." */
+/** The code's stay-vs-run side by side, in plain words: "Stay: walls 77, quake 35 · Run: walls 60 on foot, quake 78. Code favours RUN." */
 function whyOf(f: Fallback | null | undefined): string | null {
   if (!f?.compare) return null;
   const parts = f.compare.split("|").map((x) => x.trim()).filter(Boolean).map((x) => x.charAt(0).toUpperCase() + x.slice(1));
