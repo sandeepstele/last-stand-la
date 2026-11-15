@@ -23,9 +23,9 @@ from typing import Any
 
 from deepagents import create_deep_agent
 from deepagents.backends import CompositeBackend, StateBackend, StoreBackend
-from langchain.agents.middleware import ModelFallbackMiddleware, TodoListMiddleware
+from langchain.agents.middleware import AgentMiddleware, ModelFallbackMiddleware, TodoListMiddleware
 from langchain.tools import ToolRuntime, tool
-from langchain_core.messages import AIMessage, ToolMessage
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from pydantic import BaseModel
 
 from app import evidence, fortress, layers, prompts, vision
@@ -76,6 +76,50 @@ def _no_suite(suite: str | None) -> str | None:
     t = "" if suite is None else str(suite).strip().lower()
     return None if t in ("", "-", "--", "dash", "none", "null", "n/a", "na", "building", "no suite") or not any(c.isdigit() for c in t) \
         and len(t) > 3 else suite
+
+
+def _opened(runtime: ToolRuntime, pid: str, suite: str | None) -> bool:
+    """True if this thread opened that case tonight (open_case for the building, or the building and suite)."""
+    key = _case_key(pid, suite)
+    return any(call.get("name") == "open_case" and _case_key(str((call.get("args") or {}).get("property_id")),
+                                                              (call.get("args") or {}).get("suite")) == key
+               for m in (getattr(runtime, "state", None) or {}).get("messages", []) if isinstance(m, AIMessage)
+               for call in m.tool_calls or [])
+
+
+class NightStart(AgentMiddleware):
+    """A night starts clean on the server: before the agent's first step on "Brief the night shift", tonight's two
+    cases lose last night's player reports and critic files (a reload, a crash or a second tab can't start dirty),
+    and under replay the night log goes back to its fixed seed so every recorded night reads the same memory."""
+
+    @staticmethod
+    def _is_start(state) -> bool:
+        msgs = (state or {}).get("messages") or []
+        last_h = max((i for i, m in enumerate(msgs) if isinstance(m, HumanMessage)), default=-1)
+        if last_h < 0 or any(isinstance(m, AIMessage) for m in msgs[last_h + 1:]):
+            return False
+        c = msgs[last_h].content
+        text = c if isinstance(c, str) else " ".join(b.get("text", "") for b in c if isinstance(b, dict))
+        return text.strip().lower().rstrip(".") == "brief the night shift"
+
+    async def abefore_agent(self, state, runtime):
+        store = getattr(runtime, "store", None)
+        if store is None or not self._is_start(state):
+            return None
+        from app import replay
+        from app.night_log import LAST_STAND_LOG_SEED
+        from app.tools import _note_key
+
+        for pid, suite in fortress.NIGHT_PIN:
+            for it in await store.asearch(("notes", _note_key(pid, suite)), limit=100):
+                await store.adelete(it.namespace, it.key)
+        for it in await store.asearch(("laststand_cases",), limit=200):
+            await store.adelete(it.namespace, it.key)
+        if replay.mode() is not None:
+            from deepagents.backends.utils import create_file_data
+
+            await store.aput(("laststand_log",), "/latest.md", create_file_data(LAST_STAND_LOG_SEED))
+        return None
 
 
 def _critic_answered(runtime: ToolRuntime, pid: str, suite: str | None) -> bool:
@@ -495,6 +539,8 @@ async def draft_correction(property_id: str, runtime: ToolRuntime, suite: str | 
     if bad := await _outside(property_id):
         return bad
     suite = _no_suite(suite)
+    if not _opened(runtime, property_id, suite):
+        return {"error": "No case was opened for this building/suite tonight; draft only the cases you opened."}
     if _flag("RADAR_CRITIC") and not _critic_answered(runtime, property_id, suite):
         # the order the night's design needs: the critic reviews first, the draft second (calling both in one message
         # left every draft "not reviewed")
@@ -550,6 +596,10 @@ def _enabled_subagents(m) -> list[dict]:
     else:
         critic = make_model(critic_name, "low", timeout=timeout, attempts=attempts)
         fallback = make_model("gemini-3.8-flash", "low", timeout=timeout, attempts=1)
+        from app import replay
+
+        if replay.mode() is not None:  # recorded and replayed like every other model (strict replay must never call live)
+            critic, fallback = replay.wrap(critic), replay.wrap(fallback)
     specs.append({"name": "critic", "description": "Reviews whether one case's code-built evidence supports its verdict.",
                   "system_prompt": CRITIC_PROMPT, "tools": [case_file], "model": critic,
                   "response_format": CriticOut, "middleware": [_errors(), ModelFallbackMiddleware(fallback)]})
@@ -606,7 +656,8 @@ Messages on this channel, in the order a night usually runs:
    in check_hints and call run_check for both in parallel. Each why is one short line quoting that hint's moved_odds_in
    and typical_move. Then weigh_case with those checks. If the leader is still under 50% and another check is available,
    run the next-highest hint and weigh again. Then answer with at most 5 radio lines: what each squad found, the
-   walls/quake/roof scores, and the final verdict using verdict.text word for word. If there is no case, skip the checks.
+   quake and roof scores, and the final verdict using verdict.text word for word (don't quote the dossier's walls
+   score: it predates tonight's evidence; the verdict is what the walls now rest on). If there is no case, skip the checks.
 
 5. "Tip: I'm inside the building. ..."  (a report about the walls of the scouted building)
    In ONE message call record_note(property_id=<the scouted building>, note, source="the player", supports=
@@ -627,8 +678,8 @@ Messages on this channel, in the order a night usually runs:
 7. "Debrief the night shift"  (dawn, after the night resolves)
    In ONE message call draft_correction once for each case you opened tonight on this thread (the building for the
    walls case; the building and suite for the suite case). Then answer in at most 3 radio lines: each case's verdict in
-   words and that the drafts wait for the player to file them. Never say a record is wrong; a draft asks a researcher
-   to review.
+   words, and for each case whether a correction was drafted (its text starts with "DRAFT") and waits for the player to
+   file it, or that no correction is drafted yet. Never say a record is wrong; a draft asks a researcher to review.
 
 The scouted building, for waves, fallbacks and walls reports, is ALWAYS the property id from this thread's latest "Scout
 property <pid>" message. A suite question names its own building and suite. Never use any other id, from memory or
@@ -656,7 +707,7 @@ def build(store=None, checkpointer=None, m=None):
         model=m.orch,
         tools=_enabled_tools(),
         system_prompt=_enabled_prompt(),
-        middleware=[todos, _errors(), RetryBlank("Static on the line. Say again?"), ForceCommitPlan(),
+        middleware=[NightStart(), todos, _errors(), RetryBlank("Static on the line. Say again?"), ForceCommitPlan(),
                     ModelFallbackMiddleware(*m.orch_fallbacks)],
         subagents=_enabled_subagents(m),
         # Its own scratch space only: the auditor's memories and worklog (other buildings) stay out of the game.

@@ -14,6 +14,7 @@ Deltas are judgment calls, stated in each check's `why`, and kept small for weak
 from __future__ import annotations
 
 import json
+from datetime import date
 from functools import lru_cache
 from statistics import median
 from typing import Any, Callable
@@ -366,7 +367,7 @@ def listing_timeline(pid: str, case: str, suite: str) -> dict[str, Any]:
     kinds = sorted({x["type"] for x in f["listings"]})
     today = date.today().isoformat()
     months = _months(on, today) if on else None
-    finding = (f"listed since {on} ({months} months, {', '.join(kinds)} listing); CoStar records {t['tenant']} here since {t['tenant_since']}"
+    finding = (f"listed since {on} ({months} month{'' if months == 1 else 's'}, {', '.join(kinds)} listing); CoStar records {t['tenant']} here since {t['tenant_since']}"
                + (f", and {len(f['tenants'])} current tenancies in this one suite" if len(f["tenants"]) > 1 else ""))
     if any(k in ("sublet", "assignment") for k in kinds):
         return {"finding": finding, "effects": _effects(subleasing=+0.4, gone_dark=-0.05), "why": "a sublet listing is the tenant offering its own space"}
@@ -405,11 +406,15 @@ def tenancy_trail(pid: str, case: str, suite: str) -> dict[str, Any]:
                 "why": "the company record itself says it is no longer operating here"}
     if f["trail_same_building"]:
         x = f["trail_same_building"][0]
-        return {"finding": f"the same company took suite {x['suite']} in this building on {x['since']}",
+        took = (f"is due to move into suite {x['suite']} in this building on {x['since']} (a future move-in on record)"
+                if x["since"] > date.today().isoformat() else f"took suite {x['suite']} in this building on {x['since']}")
+        return {"finding": f"the same company {took}",
                 "effects": _effects(moved_within=+0.45, gone_dark=-0.1), "why": "a newer suite in the same building fits a move within it"}
     if f["trail_elsewhere"]:
         x = sorted(f["trail_elsewhere"], key=lambda o: o["since"])[0]
-        return {"finding": f"the same company has {len(f['trail_elsewhere'])} newer location(s) elsewhere, first in {x['city']} on {x['since']} (after this listing)",
+        when = (f"due to open in {x['city']} on {x['since']} (a future move-in on record)" if x["since"] > date.today().isoformat()
+                else f"first in {x['city']} on {x['since']} (after this listing)")
+        return {"finding": f"the same company has {len(f['trail_elsewhere'])} newer location(s) elsewhere, {when}",
                 "effects": _effects(gone_dark=+0.3, still_there=-0.1), "why": "it opened elsewhere after this suite went on the market"}
     return {"finding": "no newer location for this company on record", "effects": [], "why": "no trail either way"}
 
