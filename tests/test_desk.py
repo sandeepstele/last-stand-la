@@ -90,3 +90,11 @@ def test_blank_after_a_tag_speaks_the_tag_line(monkeypatch):
             ToolMessage(content='{"pid": "123", "tag": "red", "why": "Simulated post-quake placard (game): RED"}',
                         name="tag_building", tool_call_id="t")]
     assert da.DeskRetryBlank("say again")._say(SimpleNamespace(messages=msgs)).startswith("Simulated post-quake placard")
+
+
+def test_no_forced_tag_when_the_screened_building_is_not_the_named_one(monkeypatch):
+    da = _desk_agent(monkeypatch)
+    from langchain_core.messages import HumanMessage, ToolMessage
+    ok = ToolMessage(content='{"pid": "123", "suggest": "yellow", "why": "x"}', name="screen_building", tool_call_id="s")
+    assert da.needs_tag([HumanMessage("Quake at 5:02 pm. Tag building 123"), ok])
+    assert not da.needs_tag([HumanMessage("Quake at 5:02 pm. Tag building 999999"), ok])

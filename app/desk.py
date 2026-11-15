@@ -74,7 +74,7 @@ STATES = ("none", "slight", "moderate", "extensive", "complete")
 
 # ---------------------------------------------------------------- people (IBC 2021 Table 1004.5; ACS; HAZUS 6.1)
 LOAD_SQFT = {"office": 150, "retail": 60, "industrial": 100, "hospitality": 200}  # business 150 verified
-TYPICAL_SHARE = 0.5  # people typically inside vs the code's design maximum (assumed, labelled)
+TYPICAL_SHARE = 0.5  # people typically inside vs the code's design maximum (assumed, labelled; the last fallback)
 HOUSEHOLD = 2.64     # people per household, City of LA (ACS 2019-2023)
 # HAZUS 6.1 share of peak population present: night 0-5 h & 20-23 h, day 9-15 h, commute 6-8 h & 16-19 h (5 pm = commute)
 TIME_OF_DAY = {"residential": {"night": 1.0, "day": 0.53, "commute": 0.35},
@@ -145,6 +145,22 @@ def injuries(cls: str, p_ds: dict[str, float], occupants: float) -> list[float]:
     return [round(occupants * o, 2) for o in out]
 
 
+@lru_cache(maxsize=1)
+def _occupied() -> dict[str, float]:
+    """Square feet CoStar's current tenancies occupy in each building (location-occupancy spaces). Totals only."""
+    import collections
+
+    from app import tenants
+
+    out: dict[str, float] = collections.defaultdict(float)
+    try:
+        for (pid, _suite), recs in tenants._index()["current"].items():
+            out[str(pid)] += sum(r.get("sqft") or 0 for r in recs)
+    except Exception:
+        return {}
+    return dict(out)
+
+
 def people(pid: str) -> dict[str, Any]:
     rec = costar.get(pid)
     kind = _kind(rec)
@@ -162,6 +178,12 @@ def people(pid: str) -> dict[str, Any]:
         if emp:
             base, low, high = emp, round(emp * 0.5), round(min(design, emp * 1.2) or emp * 1.2)
             basis = f"about {emp} employees on record (CoStar); up to {round(design):,} by the code's design load"
+        elif _occupied().get(pid):
+            occ = _occupied()[pid]
+            base = occ / LOAD_SQFT[kind]
+            low, high = round(base * 0.5), round(min(design, base * 1.2) or base * 1.2)
+            basis = (f"about {round(occ, -2):,.0f} sq ft occupied (CoStar tenancies) / {LOAD_SQFT[kind]} sq ft per person "
+                     f"(IBC design load)")
         else:
             base = design * TYPICAL_SHARE
             low, high = round(design * 0.3), round(design)

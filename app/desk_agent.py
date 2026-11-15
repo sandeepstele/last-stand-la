@@ -105,7 +105,11 @@ def needs_tag(messages) -> bool:
         return False
     tail = messages[last_h + 1:]
     asked = any(isinstance(m, AIMessage) and any(c.get("name") == "tag_building" for c in m.tool_calls or []) for m in tail)
-    return _screened(messages) is not None and not asked
+    sc = _screened(messages)
+    named = re.search(r"Tag building (\d+)", _text(messages[last_h]))
+    if sc is None or (named and named.group(1) != str(sc["pid"])):
+        return False  # no screening, or the screened building isn't the one Bob named: never force a proposal
+    return not asked
 
 
 def _pin(result, screened: dict):
@@ -255,7 +259,9 @@ async def tag_building(pid: str, tag: str, runtime: ToolRuntime) -> dict:
         return bad
     msgs = (getattr(runtime, "state", None) or {}).get("messages", [])
     sc = _screened(msgs)
-    if not sc or str(sc["pid"]) != str(pid):
+    last_h = max((i for i, m in enumerate(msgs) if isinstance(m, HumanMessage)), default=-1)
+    named = re.search(r"Tag building (\d+)", _text(msgs[last_h])) if last_h >= 0 else None
+    if not sc or str(sc["pid"]) != str(pid) or (named and named.group(1) != str(pid)):
         return {"error": "Tags come only after the quake: screen_building for this building first, in a 'Quake at ...' turn."}
     checks, notes = await _evidence(runtime, pid)
     return await asyncio.to_thread(desk.tag, pid, tag, checks, notes)
