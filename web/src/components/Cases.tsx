@@ -34,6 +34,7 @@ const CHECK_LABEL: Record<string, string> = {
   era_and_height: "Era and floor height",
   site_structures: "Structures on the parcel",
   look_from_above: "Looked at the building",
+  interior_geometry: "Measured the interior (3D scan)",
   compare_captures: "Compared captures over time",
   listing_timeline: "Listing and tenancy dates",
   lease_terms: "Lease terms",

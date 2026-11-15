@@ -56,6 +56,7 @@ export const CHECK_NAME: Record<string, string> = {
   era_and_height: "Era and floor height",
   site_structures: "Structures on the parcel",
   look_from_above: "Vision: looked at the aerial",
+  interior_geometry: "Measured the interior (3D scan)",
   compare_captures: "Vision: old vs new aerial",
   human_report: "Your report",
   listing_timeline: "Listing and tenancy dates",
