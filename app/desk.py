@@ -27,9 +27,9 @@ from typing import Any
 from app import costar, fortress
 
 LOG_SEED = """## Shift 2026-11-13
-- 737 Broadway: tag=yellow; aftershock=held; people_safe=0
-- score: people_safe=0/0; records_fixed=0
-Lesson: The aerial settled more than the filings; look from above before the site visit.
+- 601 Broadway: agent_suggested=yellow; bob_tag=red; agreed=false; damage=extensive; right_tag=red; bob_right=true; agent_right=false; people_safe=135
+- score: people_safe=135/135; records_fixed=1
+Lesson: Bob overrode my yellow and was right; lean red sooner when the walls are uncertain.
 """
 
 DISCLAIMER = fortress.DISCLAIMER

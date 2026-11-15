@@ -98,3 +98,17 @@ def test_no_forced_tag_when_the_screened_building_is_not_the_named_one(monkeypat
     ok = ToolMessage(content='{"pid": "123", "suggest": "yellow", "why": "x"}', name="screen_building", tool_call_id="s")
     assert da.needs_tag([HumanMessage("Quake at 5:02 pm. Tag building 123"), ok])
     assert not da.needs_tag([HumanMessage("Quake at 5:02 pm. Tag building 999999"), ok])
+
+
+def test_shift_facts_record_agent_vs_bob(monkeypatch):
+    da = _desk_agent(monkeypatch)
+    from types import SimpleNamespace
+
+    from langchain_core.messages import ToolMessage
+    tag = ToolMessage(content='{"pid": "1", "tag": "red", "suggested": "yellow"}', name="tag_building", tool_call_id="t")
+    rep = ToolMessage(content='{"buildings": [{"pid": "1", "label": "X St", "tag": "red", "damage": "extensive", '
+                              '"right_tag": "red", "tag_right": true, "people_safe": 9}], "people_safe": 9, '
+                              '"people_at_stake": 9, "records_fixed": 0}', name="shift_report", tool_call_id="r")
+    facts = da._shift_facts(SimpleNamespace(state={"messages": [tag, rep]}))
+    assert facts[0] == ("- X St: agent_suggested=yellow; bob_tag=red; agreed=false; damage=extensive; right_tag=red; "
+                        "bob_right=true; agent_right=false; people_safe=9")
