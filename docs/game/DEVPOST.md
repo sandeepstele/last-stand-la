@@ -1,4 +1,4 @@
-# Devpost: Bob's Desk
+# Devpost: Last Stand LA
 
 Merged Sun Nov 15, ~1:15 am, from the 10:30 pm drafts (DEVPOST_DRAFT.md) and the build on `desk` a4279e2 (merged into `game`). Updated ~1 am for the multi-day game: four days and a career summary, from the backend's `days` branch (f20408e). The simulated aftershock is Day 1 only. One document; the video shot list is in VIDEO_SHOTLIST.md and the spoken pitch in DEMO.md. Not posted. Items marked **[TEAM]** need a human decision.
 
@@ -7,7 +7,7 @@ Merged Sun Nov 15, ~1:15 am, from the 10:30 pm drafts (DEVPOST_DRAFT.md) and the
 ---
 
 ## Title
-**Bob's Desk** [TEAM: or "Bob's Shift" as in the older draft; pick one and use it everywhere]
+**Last Stand LA**
 
 ## Tagline
 **Four shifts at the LA building office. A deep agent does the work, you correct it, and dawn grades you both.**
@@ -139,7 +139,7 @@ Code computes every number; the model never sets one. Each step is a published m
   - Every placard is labelled simulated.
 - **A live demo with an AI.** Strict replay, exact message contracts, one client at a time, and a reset between judges.
 
-## Prior art, and how Bob's Desk differs
+## Prior art, and how Last Stand LA differs
 Bob's numbers come from open engineering work: HAZUS fragility, casualty and time-of-day tables from NHERI SimCenter's damage-and-loss library ([DamageAndLossModelLibrary](https://github.com/NHERI-SimCenter/DamageAndLossModelLibrary), the data behind [pelicun](https://github.com/NHERI-SimCenter/pelicun)), and ATC-138's "inspection at half the red-tag threshold" rule ([PBEE-Recovery](https://github.com/OpenPBEE/PBEE-Recovery)). Field tools already exist for the inspector's side: [Cairn](https://github.com/nikhilpravinpise/Cairn) is an offline FEMA P-154 triage app, and [EQanalytics](https://github.com/AntonMu/EQanalytics) flags soft stories from street imagery. A past Claude Code hackathon winner put AI at the permit counter before a building is built. None of them is a game, and none puts a person's placard call on a clock against a real building's records. Of the roughly 35 public CoStar-track repos we read this weekend, none models earthquakes. Most share our pattern (code computes, agents gather, a person approves); Bob makes that pattern the gameplay. We copied no code from any of them, only published data and rules.
 
 ## Accomplishments we're proud of
@@ -176,7 +176,7 @@ langchain, deepagents, langgraph, python, gemini, vertex-ai, next.js, react, thr
 
 ---
 
-# Appendix: the night game's Devpost draft (Last Stand LA, fallback)
+# Appendix: the night mode's Devpost draft (zombie fallback)
 
 
 Drafted Sat Nov 14, ~4:00 pm. **Track: Entertainment.** Specials to consider: CoStar "Inside and Out", LangChain "Best use of deepagents". Items marked **[TEAM]** need a human.
@@ -184,7 +184,7 @@ Drafted Sat Nov 14, ~4:00 pm. **Track: Entertainment.** Specials to consider: Co
 ---
 
 ## Title
-**Last Stand LA**
+**Last Stand LA: night mode**
 
 ## Tagline
 **A deep-agent game on real CoStar data, where your feedback is enforced.**

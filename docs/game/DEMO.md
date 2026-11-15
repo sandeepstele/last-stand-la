@@ -1,10 +1,10 @@
-# Demo: Bob's Desk (the 2-minute pitch)
+# Demo: Last Stand LA (the 2-minute pitch)
 
 One pitch for the judging table and the video voice-over (the shots are in VIDEO_SHOTLIST.md). About 300 spoken words: a calm 2 minutes. **The stage cut (`?demo=1`) is Day 1 only**; the later days and the career summary get one spoken line and are for play at the table. **[TEAM]** marks a human decision. Framing: **the agent is the main character; Bob corrects it, and the aftershock grades them both.**
 
 **Setup:** reset first (Play again, or `uv run python scripts/demo_reset.py`), then `http://127.0.0.1:3112/play?mode=foot&demo=1` (or the production build). Put `/play/log` on a second screen facing the judges. One client on the agent server. **Never** use `agent=off` or `stub=1` on stage.
 
-**One-liner (open and close with it):** "Bob's Desk: a deep agent does the work, you correct it, and the aftershock grades you both."
+**One-liner (open and close with it):** "Last Stand LA: a deep agent does the work, you correct it, and the aftershock grades you both."
 
 | Time | On screen (keys) | Say |
 |---|---|---|
@@ -14,7 +14,7 @@ One pitch for the judging table and the video voice-over (the shots are in VIDEO
 | 0:40–0:58 | F to 737 Broadway, E inside its 3D tour, **1** concrete; the calculation 66% → **73%** | "On records alone, probably masonry. I walk in and report concrete. My report is evidence, capped at 0.35, never final: 73% concrete now." |
 | 0:58–1:20 | E out: **"Simulated quake at 5:02 pm"**; people run, cars stop; "Simulated aftershock in 0:45"; two HELP beacons; HQ proposes **YELLOW** ("code suggests YELLOW"); press **3** RED; walk Maya and Luis to the green assembly point | "A simulated quake. Aftershock in 45 seconds, two people trapped. The agent proposes yellow and waits for me. 251 people work here: red. And I get those two out." |
 | 1:20–1:42 | Dawn: complete damage; RED kept 251 of 251 safe; "Rescue: 2 of 2"; **Agent vs Bob**: "Bob was right; the agent was wrong" | "Complete damage. Red kept all 251 safe; yellow would have left 25 inside. I overrode the agent and I was right, and that goes into its log for tomorrow. Every call is also saved as a preference pair, the format RLHF uses. We didn't train anything tonight; we collect it." |
-| 1:42–2:00 | `/play/log` scrolling; File the reports → the auditor case with Bob's report | "Every number is published maths in code: FEMA screening, HAZUS damage, ATC-20 placards. Tomorrow is a different building, and the agent opens it with today's correction. Bob's Desk: a deep agent does the work, you correct it, the aftershock grades you both." |
+| 1:42–2:00 | `/play/log` scrolling; File the reports → the auditor case with Bob's report | "Every number is published maths in code: FEMA screening, HAZUS damage, ATC-20 placards. Tomorrow is a different building, and the agent opens it with today's correction. Last Stand LA: a deep agent does the work, you correct it, the aftershock grades you both." |
 
 **The memory line on stage:** Day 1 opens from a seeded previous shift (601 Broadway); each later day opens with what Bob corrected the day before. So the opening line in the pitch is the seeded one; say "what it learned last shift", not "from me today".
 
@@ -82,7 +82,7 @@ If a judge reaches Day 4, a good line: "red on 621 Spring when the code says yel
 
 ---
 
-# Appendix: Last Stand LA (the night game, fallback)
+# Appendix: the night mode (zombie fallback)
 
 
 ## The 2-minute pitch: a deep-agent game, real CoStar data, real feedback enforcement

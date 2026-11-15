@@ -4,20 +4,12 @@ Everything about the game in one folder. For the engine underneath (the deep age
 
 | Doc | Read it for |
 |---|---|
-| [DESIGN.md](DESIGN.md) | What the player does and sees, real data → mechanics, how the deep agent changes play, honesty rules, what's cut |
-| [BUILD_PLAN.md](BUILD_PLAN.md) | Branches and owners, architecture of `web/src/game/foot/`, how to test, timeline and gates, merge procedure, cut order |
-| [CONTRACT.md](CONTRACT.md) | HTTP contract v1.3, the exact agent messages the replay covers, the six recorded nights, the engine's bus events |
-| [CRITIQUE.md](CRITIQUE.md) | What's been fixed, the open risks ranked with owners, the judging lens, how we could lose |
-| [DEMO.md](DEMO.md) | The 2-minute demo script, per-judge lines, the ops checklist, the fallback ladder |
-
-## Status (Sat Nov 14, ~1:20 pm)
-
-- **Map mode** (`/play`): the end-to-end gate passed 3/3 live at 12:25. It's the fallback.
-- **On-foot mode** (`/play?mode=foot`):
-  - the skeleton runs (intro → walk → inside → night → escape → dawn) on synthetic data;
-  - four builders are filling in the player, zombies plus live feeds, the real city, and the UI;
-  - the gate is at **4:30**.
-- **Backend:** contract v1.3 (aerial ground, OSM outlines, doors, inside views); six on-foot nights recorded; strict replay 3× clean.
+| [HOW_TO_PLAY.md](HOW_TO_PLAY.md) | One page beside the game: keys, each step of a day, side missions, the career summary |
+| [DEMO.md](DEMO.md) | The 2-minute pitch, judge Q&A, the ops checklist (appendix: the night mode) |
+| [DEVPOST.md](DEVPOST.md) | The Devpost write-up |
+| [VIDEO_SHOTLIST.md](VIDEO_SHOTLIST.md) | The video, shot by shot |
+| [DESIGN.md](DESIGN.md) | The night mode's design and decision log (zombie fallback) |
+| [CONTRACT.md](CONTRACT.md) | The night mode's HTTP contract and the exact agent messages the replay covers |
 
 ## Try it
 
@@ -25,8 +17,10 @@ Everything about the game in one folder. For the engine underneath (the deep age
 # agent server (see the repo README for setup)
 uv run langgraph dev --host 127.0.0.1 --port 2024 --no-browser --no-reload --n-jobs-per-worker 4
 cd web && npm run dev
-# http://127.0.0.1:3000/play?mode=foot            live
+# http://127.0.0.1:3000/play?mode=foot            the four-day game (live agent)
+# http://127.0.0.1:3000/play?mode=foot&demo=1     the 2-minute stage cut (Day 1)
 # http://127.0.0.1:3000/play?mode=foot&stub=1     synthetic, no backend
 # http://127.0.0.1:3000/play?mode=foot&agent=off  real district, no agent calls (visual testing)
-# http://127.0.0.1:3000/play                      the map mode (fallback)
 ```
+
+The night mode (zombies) runs with `NEXT_PUBLIC_GAME_GRAPH=laststand` set for the web app.

@@ -171,7 +171,7 @@ export function IntroOverlay({ heroLabel, ready, stub, replay, attribution, onSt
           <span>{DISCLAIMER}</span>
           {attribution && <span>{attribution}</span>}
         </span>
-        <span>HackPrinceton · Retrofit Radar</span>
+        <span>HackPrinceton · Last Stand LA</span>
       </div>
     </div>
   );

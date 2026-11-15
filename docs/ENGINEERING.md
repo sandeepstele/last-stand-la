@@ -35,5 +35,4 @@ a draft correction for a person to approve. Case types and their code:
   - Finaled permits; float label margins.
   - Duplicate ghost cases.
   - UI: a fresh thread per question, case-scoped verdicts, no double submits, the replay badge re-polls, localhost-only dev server.
-- The original Friday plan (solar headline) is archived in [archive/ENGINEERING-friday.md](archive/ENGINEERING-friday.md). Its engineering
-  rules still hold: the model never types a number, the data layers load by property ID, and licensed data stays local.
+- Engineering rules: the model never types a number, the data layers load by property ID, and licensed data stays local.

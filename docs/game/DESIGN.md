@@ -25,7 +25,7 @@ This doc covers what the player does, what they see, how real data drives each m
 | 2:15 | **Seed 2026:** a "concrete" report makes HOLD hold (walls 76 vs roll 75); "can't tell" (74) and "brick" (71) break in; RUN holds (60 vs 12) |
 | 2:05 | **Merge cutoff 6:00 pm** for the teammate's agent improvements (another PC); re-record 6:00-6:45; strict rehearsal at 7:30 |
 
-## The Night Shift (current plan; user decision ~1:45 pm, see [AUDIT.md](AUDIT.md))
+## The Night Shift (current plan; user decision ~1:45 pm)
 
 The AI works CoStar's real open-case queue (328 cases). It **briefs the night**: the open cases inside our blocks become tonight's missions.
 - **Case #7:** is the 3-person office on record in suite 1100 still there? You walk into that suite's real 3D tour and report.

@@ -1,4 +1,4 @@
-# Video shot list: Bob's Desk (2:00 cut)
+# Video shot list: Last Stand LA (2:00 cut)
 
 For whoever records the submission video (about 1 am). The voice-over is the pitch in DEMO.md, line for line. Build: `desk` a4279e2 (merged into `game`). **[TEAM]** marks a human decision. **The cut is Day 1 only** (`?demo=1`); the later days and the career summary are one spoken line in shot 8, plus an optional 3-second B-roll (see the end).
 
@@ -22,7 +22,7 @@ For whoever records the submission video (about 1 am). The voice-over is the pit
 | 5 | 0:58–1:20 | A | **Tab** to close, **E** (step out). When HQ proposes YELLOW, press **3** (RED). Then **W A S D** to Maya and Luis (HELP beacons) and lead them to the green ring | "Simulated quake at 5:02 pm"; day to night; people running, cars on hazards; "Simulated aftershock in 0:45"; "HQ proposes a YELLOW tag … code suggests YELLOW"; RED posted | "A simulated quake. Aftershock in 45 seconds, two people trapped. The agent proposes yellow and waits for me. 251 people work here: red. And I get those two out." |
 | 6 | 1:20–1:42 | A (dawn) | Let the dawn screen settle; slow pan from the shift report to Agent vs Bob | Complete damage, RED right, **251 of 251 safe**; "Rescue (simulated): 2 of 2"; **"the agent proposed YELLOW · Bob posted RED (override) · the aftershock says RED: Bob was right"** | "Complete damage. Red kept all 251 safe; yellow would have left 25 inside. I overrode the agent and I was right, and that goes into its log for tomorrow. Every call is also saved as a preference pair, the format RLHF uses. We didn't train anything tonight; we collect it." |
 | 7 | 1:42–1:52 | B: `/play/log` | Scroll slowly | The agent's steps: who acted, which data it pulled, the maths table | "Every number is published maths in code: FEMA screening, HAZUS damage, ATC-20 placards." |
-| 8 | 1:52–2:00 | A | Click **File the reports**; end on the auditor case and the title card | The auditor case with Bob's report in it | "Tomorrow is a different building, and the agent opens it with today's correction. Bob's Desk: a deep agent does the work, you correct it, the aftershock grades you both." |
+| 8 | 1:52–2:00 | A | Click **File the reports**; end on the auditor case and the title card | The auditor case with Bob's report in it | "Tomorrow is a different building, and the agent opens it with today's correction. Last Stand LA: a deep agent does the work, you correct it, the aftershock grades you both." |
 
 ## If a take goes wrong
 - **The aftershock hits before Maya and Luis are out:** keep rolling. Dawn says "Rescue (simulated): 0 of 2" and Bob may be hurt; replace the rescue line with "I didn't make it to them."

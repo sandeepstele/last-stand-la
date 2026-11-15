@@ -1,4 +1,4 @@
-# How to play Bob's Desk
+# How to play Last Stand LA
 
 A one-page guide to keep beside the game. Keys come from the code on `desk-a` (49af19d): `FootGame.tsx`, `PauseMenu.tsx`, `DeskView.tsx`, `DawnView.tsx`, `CareerSummary.tsx`. Open `/play?mode=foot` for the full four days. `?demo=1` is the 2-minute stage cut: Day 1 only, with shortcuts.
 

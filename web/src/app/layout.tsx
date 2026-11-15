@@ -11,7 +11,7 @@ const plex = IBM_Plex_Sans_Condensed({
 });
 
 export const metadata: Metadata = {
-  title: "Retrofit Radar",
+  title: "Last Stand LA",
   description: "Ground-truths commercial buildings across CoStar, Vexcel and Matterport, then sizes the retrofit.",
 };
 
