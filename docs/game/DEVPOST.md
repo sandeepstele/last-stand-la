@@ -46,7 +46,7 @@ Building records go stale quietly. CoStar's record of a downtown tower says maso
 - **Data:** the CoStar hackathon kit (records, tenants, listings), Vexcel (aerials, obliques), Matterport (3D tours), LA open data (seismic-retrofit orders, permits), USGS ShakeMap.
 
 ## Challenges
-- **We pivoted at 9 pm** from a zombie night game to Bob's office, because the user wanted a real mission the agent must calculate. The engine, the agent tools and the data carried over; the horde didn't.
+- **We pivoted at 9 pm** from a zombie night game to Bob's office, because we wanted a real mission the agent has to calculate, not a horde. The engine, the agent tools and the data carried over; the horde didn't.
 - **Making the AI the main character:** its cards, maths and proposals are on screen, not in a chat box.
 - **Honesty under game pressure:** records "disagree", never "wrong"; "unfinished" retrofit ≠ non-compliant; every placard labelled simulated; no colour before the quake (the agent can't pre-judge a building from records alone).
 - **Making yellow cost something:** an early version made yellow a free win; limited entry now exposes people under serious damage, and dawn shows what each tag would have done on average.
