@@ -316,7 +316,7 @@ export function useGame(stub: boolean) {
   return {
     stub, district, districtError, retryDistrict,
     phase: shownPhase, selected, fortress, focusPid, dossier, wave, waveN,
-    messages, isLoading: agent.isLoading, agentError: agent.error,
+    messages, isLoading: agent.isLoading, agentError: agent.error, threadId: agent.threadId,
     horde, fallback, proposal, decision, decideError, outcome, scoutDone, runDone, say, dossiers, refreshDossier, loadDossier,
     conflictMaterials,
     select, startScout, startNight, decide, goDawn, sendTip, reset,

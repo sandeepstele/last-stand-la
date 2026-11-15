@@ -20,6 +20,8 @@ function target(method: string, path: string[]): string | null {
   if (method === "GET" && seg.length === 2 && seg[0] === "suites" && PID.test(seg[1])) return `game/suites/${encodeURIComponent(seg[1])}`;
   if (method === "GET" && seg.length === 2 && seg[0] === "dossier" && PID.test(seg[1])) return `game/dossier/${encodeURIComponent(seg[1])}`;
   if (method === "POST" && seg.length === 1 && seg[0] === "resolve") return "game/resolve";
+  // The deep agent's log for one run (read-only; built from the thread's messages).
+  if (method === "GET" && seg.length === 2 && seg[0] === "log" && /^[0-9a-f-]{8,64}$/i.test(seg[1])) return `game/log/${seg[1]}`;
   // Play again: clear people's notes so a fresh night replays exactly (the server only accepts {"confirm":"reset"}, locally).
   if (method === "POST" && seg.length === 2 && seg[0] === "demo" && seg[1] === "reset") return "demo/reset";
   return null;

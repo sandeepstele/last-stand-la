@@ -8,6 +8,7 @@ import type { QuakeReplay, SeismicStatus } from "@/lib/contracts";
 import { CaseFile, CaseQueue, InboxCard } from "@/components/Cases";
 import { WorldPane, type WorldHandle } from "@/components/WorldPane";
 import { useSceneActions } from "@/lib/useSceneActions";
+import { rememberLogThread } from "@/game/foot/AgentLog";
 import styles from "./page.module.css";
 
 // Local: `langgraph dev` on :2024 needs no key. Deployed: put a server-side proxy in front
@@ -41,6 +42,10 @@ function LiveRun() {
     deepFired.current = true;
     void stream.submit({ messages: [{ type: "human", content: `Check building ${deep}.` }] }, { threadId: null });
   }, [deep, stream]);
+  // Filed from the game: the judges' second screen (/play/log) follows this auditor run next.
+  useEffect(() => {
+    if (fromGame) rememberLogThread(stream.threadId);
+  }, [fromGame, stream.threadId]);
 
   useSceneActions(stream, async (action) =>
     world.current ? world.current.perform(action) : { id: action.id, ok: false, error: "world pane not mounted" },

@@ -4,10 +4,11 @@
 
 import { useState } from "react";
 import type { Objective } from "./FootHud";
+import { AgentLogView, useAgentLog } from "./AgentLog";
 import { cap, plain } from "./copy";
 import { footStyles as styles } from "./ui";
 
-type Tab = "how" | "missions";
+type Tab = "how" | "missions" | "log";
 
 const CONTROLS: [string, string][] = [
   ["W A S D", "Move"],
@@ -23,6 +24,7 @@ const CONTROLS: [string, string][] = [
   ["H / R", "Hold or run, when HQ asks"],
   ["Q", "Use a medkit"],
   ["V", "Sound on or off"],
+  ["L", "The deep agent's live log"],
   ["P / Esc", "This menu"],
 ];
 
@@ -34,8 +36,9 @@ const FLOW = [
   "At dawn, HQ drafts the corrections. You file them for review.",
 ];
 
-export function PauseMenu({ objectives, onResume, onRestart }: { objectives: Objective[]; onResume(): void; onRestart(): void }) {
+export function PauseMenu({ objectives, threadId = null, onResume, onRestart }: { objectives: Objective[]; threadId?: string | null; onResume(): void; onRestart(): void }) {
   const [tab, setTab] = useState<Tab>("missions");
+  const log = useAgentLog(tab === "log" ? threadId : null, true);
   const main = objectives.filter((o) => o.kind === "main");
   const side = objectives.filter((o) => o.kind === "side");
   const row = (o: Objective) => {
@@ -61,8 +64,17 @@ export function PauseMenu({ objectives, onResume, onRestart }: { objectives: Obj
         <div className={styles.tabs}>
           <button type="button" className={styles.tab} data-on={tab === "missions"} onClick={() => setTab("missions")}>Missions</button>
           <button type="button" className={styles.tab} data-on={tab === "how"} onClick={() => setTab("how")}>How to play</button>
+          {threadId && <button type="button" className={styles.tab} data-on={tab === "log"} onClick={() => setTab("log")}>Agent log</button>}
         </div>
-        {tab === "missions" ? (
+        {tab === "log" ? (
+          <div style={{ maxHeight: "52vh", overflow: "auto" }}>
+            <p style={{ margin: "0 0 8px", color: "#94a3b8", fontSize: 13 }}>
+              Every step HQ took tonight: who acted, which data it pulled, and the arithmetic behind each verdict. The model chooses; code computes every number.{" "}
+              {threadId && <a href={`/play/log?thread=${encodeURIComponent(threadId)}`} target="_blank" rel="noreferrer" style={{ color: "#f5a524" }}>Open on a second screen ↗</a>}
+            </p>
+            <AgentLogView steps={log.steps} error={log.error} follow={false} />
+          </div>
+        ) : tab === "missions" ? (
           <>
             <ul className={styles.mList}>{main.map(row)}</ul>
             {!!side.length && (

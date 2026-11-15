@@ -41,6 +41,7 @@ import { createFlare } from "./flare";
 import { createCityMap, type City } from "./cityMap";
 import { createRoofObjects, type RoofSystem } from "./roofObjects";
 import { SuiteSweep, type SweepScore } from "./SuiteSweep";
+import { AgentLogPanel, rememberLogThread } from "./AgentLog";
 import { InsideMesh3D } from "./InsideMesh3D";
 import { PauseMenu } from "./PauseMenu";
 import { SolarSurvey, type SolarRoof } from "./SolarSurvey";
@@ -276,6 +277,11 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
   }, [solar, solarStamps, stale, staleStamps]);
   // Pause (P / Esc / the button): the sim freezes; agent runs in flight keep streaming.
   const [paused, setPausedState] = useState(false);
+  const [logOpen, setLogOpen] = useState(false); // L: the deep agent's live log beside the game
+  // The second screen (/play/log) follows whichever night this tab is playing.
+  useEffect(() => {
+    if (!game.stub && !agentOff) rememberLogThread(game.threadId);
+  }, [game.threadId, game.stub, agentOff]);
   const pausedRef = useRef(false);
   const setPaused = (v: boolean) => {
     pausedRef.current = v;
@@ -492,6 +498,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
     const kd = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA")) return;
+      if (e.code === "KeyL" && !e.metaKey && !e.ctrlKey && !e.altKey) setLogOpen((v) => !v);
       if (e.code === "KeyP" || (e.code === "Escape" && !document.pointerLockElement)) {
         if (pausedRef.current) setPaused(false);
         else if (playing()) {
@@ -1199,6 +1206,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
 
   if (step === "dawn") hints.push({ key: "Enter", label: "play again" });
   if (step !== "intro" && step !== "dawn") hints.push({ key: "P", label: "menu" });
+  if (step !== "intro" && !agentOff && !game.stub) hints.push({ key: "L", label: logOpen ? "hide agent log" : "agent log" });
 
   const objective =
     step === "office" ? (case7 ? `Case #${case7.n}: look inside suite ${case7.suite} at ${office?.label ?? "the office"}` : "HQ is picking tonight's cases…")
@@ -1392,7 +1400,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
         return r ? <SolarSurvey roof={r} stamped={solarStamps[r.pid] ?? null} onStamp={(a) => setSolarStamps((m) => ({ ...m, [r.pid]: a }))} onClose={() => setSolarOpen(null)} /> : null;
       })()}
       {paused && (
-        <PauseMenu objectives={objectives} onResume={() => {
+        <PauseMenu objectives={objectives} threadId={game.stub || agentOff ? null : game.threadId} onResume={() => {
           setPaused(false);
           if (!showInside) ctxRef.current?.input.lock();
         }} onRestart={() => {
@@ -1400,6 +1408,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
           playAgain();
         }} />
       )}
+      {logOpen && !paused && step !== "intro" && !agentOff && !game.stub && <AgentLogPanel threadId={game.threadId} onClose={() => setLogOpen(false)} />}
       {step === "intro" && city && (
         <div className={footStyles.cityLine}>
           Pillars of light: <b>{city.cases.toLocaleString("en-US")} buildings with open cases</b>, of {city.buildings.toLocaleString("en-US")} in CoStar&apos;s LA records
