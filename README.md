@@ -1,4 +1,47 @@
-# Last Stand LA
+# Bob's Shift
+
+**A deep-agent game, built on real CoStar data, with real feedback enforcement.**
+
+You're **Bob**, a building officer at the city of LA, on retrofit-deadline day. Real open cases from CoStar's queue land on your desk: buildings whose records disagree. Your analyst is an AI agent. It sends squads to pull each building's data, weighs the evidence in code, and sends you out on site visits into real downtown buildings. At **5:02 pm a simulated quake hits**. The agent screens each building and proposes a post-quake placard (green, yellow or red). **You post it.** At dawn a simulated aftershock tests your tags: the score is the **people you kept safe** and the **records you fixed**.
+
+| The claim | What it means in the game |
+|---|---|
+| **Deep-agent game** | Bob's analyst is a LangChain **deepagents** agent (graph `desk`). It plans the shift, sends four squads in parallel (records, aerial, interior, city), picks its own evidence and says why, proposes each tag and **pauses for Bob's call** (a human-in-the-loop interrupt), then a second agent (the critic) reviews every draft correction at dawn |
+| **Real CoStar data** | All 1,581 LA buildings in CoStar's kit, screened in code on the city map; CoStar's real open-case queue (328 cases; 156 in LA). Each building card lists every source on its own line (CoStar record, Vexcel aerial, Matterport 3D scan, LA retrofit lists, permits, the 1994 Northridge ShakeMap) and glows where two sources disagree |
+| **Real feedback enforcement** | What Bob reports from a site visit is weighed as evidence: strong, **capped at 0.35**, never final. At 737 Broadway the report moves the walls from 66% to 73% concrete (with the 3D-scan read), which moves the screening, the proposed tag and the people at stake. At dawn the agent drafts a correction **citing Bob's words**, the critic reviews it, and "File" opens the real auditor case. Code sets every number; nothing changes a record without human approval |
+
+**Track:** Entertainment. **Also:** CoStar "Inside and Out", LangChain "Best use of deepagents". Built at HackPrinceton Fall 2026.
+
+> **For AI agents and new contributors:** this README is the full context. Read it top to bottom. The night game it replaced (**Last Stand LA**, zombies) is kept as the fallback: section A at the end, and `NEXT_PUBLIC_GAME_GRAPH=laststand`. Section 9 lists the rules you must follow before changing anything.
+
+---
+
+## B1. The shift (`/play?mode=foot`; `?demo=1` is the 2-minute stage cut)
+
+| Time | What Bob does | What the agent does (graph `desk`) | What code computes |
+|---|---|---|---|
+| **9 am, the desk** (Tab) | Reads the inbox; picks a site visit; can **pre-call** a tag from the card and the aerial | `Start Bob's shift`: `inbox()` (the real queue), `building_card` for each case, its squads in parallel | Every card line, by source; the conflicts; people inside by day/night (IBC occupant loads × HAZUS time-of-day shares, shown as a range: an estimate) |
+| **Site visit 1**: suite 1100, 122 7th St | Walks into the real suite (its Matterport tour), answers: empty / people working / can't tell | The suite check, then Bob's tip | The ghost-tenant case odds |
+| **Site visit 2**: 737 Broadway | Walks in (its own 3D tour + the untextured scan), answers: concrete / brick / can't tell | `Inspect building 6375735`: open the case, choose checks (each with "why"), the aerial read by vision, the 3D-scan geometry, then Bob's tip | The walls odds: priors + each check's capped shift, ÷ total (66% → 73% concrete after the report + scan) |
+| **5:02 pm, the simulated quake** | Day fades to night. Posts the tag: **1** green · **2** yellow · **3** red · N none | `Quake at 5:02 pm. Tag building 6375735`: `screen_building`, then `tag_building` (the interrupt: approve, change or reject) | A FEMA P-154-style screening score per material (weighted by today's odds), the chance of serious damage, people inside at 5 pm, and the tag the code suggests (shown beside the agent's proposal) |
+| **Dawn** | Reads the shift report; files the drafts | `End the shift`: the critic reviews each case, `draft_correction` per case, `shift_report`, `log_shift` | A seeded aftershock from the building's own odds: damage state, the right tag, people safe / exposed / hurt / displaced, and what each tag would have done on average |
+
+**Tags are simulated placards** (ATC-20 style: green = safe to occupy, yellow = limited entry, red = unsafe). Every tag, the quake and the aftershock say so: *game outcome, not an engineering assessment.*
+
+**The judges' view of the agent:**
+- **Tab:** Bob's desk: the inbox, live building cards (every line names its source), the city map (all LA, coloured by the code's triage; click any building for its card, Vexcel pulled live if not cached), the calculation sheet (the arithmetic for each verdict), the squad radio.
+- **L:** the agent log beside the game; **`/play/log`** on a second screen follows the live shift, step by step: who acted, which data it pulled, and the maths.
+- **Save and Continue:** the game saves after each report and at dawn; after a reload, "Continue" reattaches the same thread and never re-sends a message.
+
+## B2. What changed from the night game (for agents picking this up)
+- New graph `desk` (`app/desk_agent.py`) and code model (`app/desk.py`: card, screen, triage, tag, shift). Routes: `GET /desk/card/{pid}[?checks=&live=1]`, `/desk/screen/{pid}`, `/desk/triage[?scope=city]`; `POST /demo/reset` re-seeds the desk log too.
+- Frontend (`web/src/game/`): `useGame.ts` talks to `desk` (`GAME_GRAPH`), sends the exact shift messages, handles the `tag_building` interrupt and reads `shift_report`. New: `foot/DeskView.tsx` (the desk), `foot/ShiftReport.tsx` (dawn), the day palette in `foot/world.ts` (`ctx.day`). The horde, flares, barricades and the crate hunt are off in the shift.
+- Replay: strict replay keys on the exact messages above; the desk recordings live in `fixtures/replay/` next to the night game's (`app/replay.py` explains record / fill / strict).
+
+---
+
+# Appendix A. Last Stand LA (the night game, kept as the fallback)
+
 
 **A deep-agent game, built on real CoStar data, with real feedback enforcement.**
 
