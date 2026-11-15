@@ -42,7 +42,8 @@ import { createCityMap, type City } from "./cityMap";
 import { createRoofObjects, type RoofSystem } from "./roofObjects";
 import { SuiteSweep, type SweepScore } from "./SuiteSweep";
 import { AgentLogPanel, rememberLogThread } from "./AgentLog";
-import { DeskView, type DeskCase } from "./DeskView";
+import { DeskView, TAG_COLOR, type DeskCase } from "./DeskView";
+import { DESK, type Tag } from "../useGame";
 import { CHECKPOINT_WORDS, clearSave, threadAlive, useSave, writeSave, type Checkpoint, type SaveV1 } from "./save";
 import { InsideMesh3D } from "./InsideMesh3D";
 import { PauseMenu } from "./PauseMenu";
@@ -235,7 +236,8 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
   const downed = useRef(false);
   const scoutAsked = useRef(false);
   const scoutStarted = useRef(false); // "Scout property" sent exactly once per night
-  const nightAsked = useRef(false); // the loop outruns React: send "Wave 1 is coming" exactly once
+  const nightAsked = useRef(false);
+  const tagSeenAt = useRef<number | null>(null); // when the posted tag landed (dawn follows 5 s later) // the loop outruns React: send "Wave 1 is coming" exactly once
   const shockFired = useRef(false);
   const tipSending = useRef(false);
   // the Night Shift: briefing + case #7
@@ -797,6 +799,36 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
         }
         return;
       }
+      if (s === "night" && DESK && !agentOff) {
+        // 5:02 pm: the quake (a game event). Daylight drains to night; the agent screens the building and proposes a tag.
+        ctx.day = Math.max(0, ctx.day - dt / 6);
+        if (!nightAsked.current && !g.isLoading && g.startQuake(hero.pid)) {
+          nightAsked.current = true;
+          fireDebris();
+          ctx.bus.emit("fx:crack", { pid: hero.pid });
+          setBanner({ title: "5:02 pm · Earthquake", sub: "A game event: a strong quake hits downtown. Screen the building and post a tag before dark.", tone: "bad" }, 5500);
+        }
+        if (g.tagProposal && !g.tagDecision && !g.tagResult) {
+          for (const [code, t] of [["Digit1", "green"], ["Digit2", "yellow"], ["Digit3", "red"]] as const) if (k.has(code)) g.decideTag(t);
+          if (k.has("KeyN")) g.decideTag("none");
+        }
+        if (g.tagResult) {
+          if (tagSeenAt.current === null) {
+            tagSeenAt.current = ctx.time;
+            const t = g.tagResult.tag;
+            setBanner({ title: t ? `${t.toUpperCase()} tag posted` : "No tag posted", sub: t === "red" ? `${g.tagResult.label ?? hero.label}: nobody goes in.` : t === "yellow" ? `${g.tagResult.label ?? hero.label}: restricted use.` : t === "green" ? `${g.tagResult.label ?? hero.label}: inspected, open.` : "The building stays open.", tone: t === "red" ? "bad" : "info" }, 4000);
+          }
+          if (ctx.time - tagSeenAt.current > 5) {
+            g.goDawn();
+            debriefAsked.current = true; // "End the shift" goes at dawn
+            const secs = Math.round(ctx.time - startedAt.current);
+            setScore((q) => ({ ...q, secs, health: p.health }));
+            setProg((q) => ({ ...q, survived: true }));
+            setStep("dawn");
+          }
+        }
+        return;
+      }
       if (s === "night") {
         if (!nightAsked.current && g.phase !== "night" && g.phase !== "aftershock" && !g.isLoading) {
           const at = agentOff ? hero.pid : g.startNight(1);
@@ -914,7 +946,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
       }
       if (s === "dawn") {
         ctx.dawn = Math.min(1, ctx.dawn + dt / 3);
-        if (debriefAsked.current && !debriefSent.current && g.runDone && g.say("Debrief the night shift")) debriefSent.current = true;
+        if (debriefAsked.current && !debriefSent.current && g.runDone && g.say(DESK ? "End the shift" : "Debrief the night shift")) debriefSent.current = true;
         if (k.has("Enter")) playAgain();
       }
     };
@@ -1088,7 +1120,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
     if (game.stub || agentOff || !game.threadId || !game.runDone || game.isLoading) return;
     const last = msgText((game.messages[lastHumanIndex(game.messages)] as Msg | undefined)?.content).trim();
     const cp: Checkpoint | null =
-      step === "dawn" && /^Debrief the night shift/.test(last) ? "dawn"
+      step === "dawn" && /^(Debrief the night shift|End the shift)/.test(last) ? "dawn"
         : step === "inside" && tip.sentAt !== null && /^Tip: I'm inside the building/.test(last) ? "walls"
           : step === "approach" && suiteTip.sentAt !== null && game.phase === "dusk" && /^Tip: I'm inside suite/.test(last) ? "suite"
             : null;
@@ -1130,7 +1162,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
     if (resume) return applyResume(ctx, resume);
     if (office) {
       // The Night Shift: the agent briefs the night from the real queue (fresh thread), then case #7 at the office.
-      briefAsked.current = gRef.current.say("Brief the night shift", true);
+      briefAsked.current = gRef.current.say(DESK ? "Start Bob's shift" : "Brief the night shift", true);
       gRef.current.select(office.pid);
       if (!presenter) {
         ctx.input.unlock();
@@ -1239,6 +1271,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
     scoutAsked.current = false;
     scoutStarted.current = false;
     nightAsked.current = false;
+    tagSeenAt.current = null;
     shockFired.current = false;
     tipSending.current = false;
     debrisFired.current = false;
@@ -1332,9 +1365,9 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
           : { id: "case7", kind: "main" as const, text: `${caseTag(case7)}${case7?.suite ? `look inside suite ${case7.suite} at ${office.label}` : `check the office at ${office.label}`}`, done: suiteTip.sentAt !== null }]
       : []),
     { id: "reach", kind: "main", text: `${caseTag(case6)}reach ${heroLabel}`, done: prog.reached },
-    { id: "walls", kind: "main", text: "Look at its walls from inside", done: prog.checked },
-    { id: "night", kind: "main", text: "Survive the night: hold or run", done: prog.survived },
-    { id: "report", kind: "main", text: "File the reports at dawn", done: prog.filed },
+    { id: "walls", kind: "main", text: "Inspect its walls from inside", done: prog.checked },
+    { id: "night", kind: "main", text: "After the 5 pm quake: post a tag (green, yellow or red)", done: prog.survived },
+    { id: "report", kind: "main", text: "End the shift: file the reports", done: prog.filed },
     ...(mhud.survivors.length
       ? [{ id: "survivors", kind: "side" as const, text: "Bring the office's people to safety", done: saved === mhud.survivors.length, progress: `${saved + withYou}/${mhud.survivors.length}` }]
       : []),
@@ -1345,8 +1378,26 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
 
   ];
 
-  const decision =
-    step === "night"
+  type Screen = { pid?: string; label?: string; score?: number; fema_type?: string; p_damage?: number; suggest?: string; borderline?: boolean; why?: string;
+    people?: { day?: number; night?: number; at_stake?: number; low?: number; high?: number } };
+  const screen = DESK ? latestResult<Screen>(game.messages, "screen_building") : null;
+  const tagWords: Record<Tag, string> = { green: "GREEN · inspected", yellow: "YELLOW · restricted", red: "RED · unsafe" };
+  const deskDecision = DESK && step === "night" ? {
+    prompt: game.tagProposal ? `HQ proposes a ${game.tagProposal.tag.toUpperCase()} tag for ${heroLabel}.` : game.isLoading ? "HQ is screening the building after the quake…" : "Waiting for HQ's screening.",
+    proposed: null,
+    why: screen ? [
+      screen.score != null ? `Screening score ${screen.score}${screen.fema_type ? ` (${screen.fema_type})` : ""}` : "",
+      screen.p_damage != null ? `chance of damage ${Math.round(screen.p_damage * 100)}%` : "",
+      screen.people?.at_stake != null ? `${screen.people.at_stake} people at stake${screen.people.low != null && screen.people.high != null ? ` (inside by day ${screen.people.low}–${screen.people.high}, an estimate)` : ""}` : "",
+      screen.borderline ? "borderline: close to a tag threshold" : "",
+    ].filter(Boolean).join(" · ") : null,
+    runLabel: null,
+    sent: game.tagResult ? (game.tagResult.tag ? `${game.tagResult.tag.toUpperCase()} tag posted` : "No tag: the building stays open") : game.tagDecision ? `Posting ${game.tagDecision === "none" ? "no tag" : `a ${game.tagDecision.toUpperCase()} tag`}…` : null,
+    error: game.decideError,
+    choices: (["green", "yellow", "red"] as Tag[]).map((t, i) => ({ key: String(i + 1), label: tagWords[t], color: TAG_COLOR[t], proposed: game.tagProposal?.tag === t, sent: (game.tagResult?.tag ?? game.tagDecision) === t })),
+  } : null;
+  const decision = deskDecision ??
+    (step === "night"
       ? {
           prompt: game.proposal ? `HQ proposes: ${game.proposal.action === "run" ? `run to ${labelOf(game.proposal.to_pid ?? fallbackPid)}` : `hold ${heroLabel}`}.` : game.isLoading ? "HQ is weighing hold or run…" : "HQ didn't call it. Your call.",
           proposed: game.proposal?.action ?? null,
@@ -1355,7 +1406,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
           sent: game.decision ? `Orders sent: ${game.decision.action === "run" ? `run to ${labelOf(game.decision.to_pid)}` : game.decision.action === "hold" ? "hold" : "none, holding"}` : null,
           error: game.decideError,
         }
-      : null;
+      : null);
 
   const insideMode: InsideMode = "look";
   const showInside = (step === "inside" && !!hero) || (step === "suite" && !!office) || (step === "visit" && !!visit);
@@ -1379,7 +1430,13 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
     : game.isLoading ? "Sent. HQ is weighing it." : "HQ logged your report.";
 
   const verifiedN = (tip.sentAt !== null ? 1 : 0) + (suiteTip.sentAt !== null ? 1 : 0);
-  const outcomeLines = [
+  const shift = game.shiftReport;
+  const outcomeLines = DESK ? [
+    ...(shift ? [`${shift.people_safe ?? 0} of ${shift.people_at_stake ?? 0} people kept safe${shift.people_displaced ? ` · ${shift.people_displaced} displaced by the tags` : ""} · ${shift.records_fixed ?? 0} record${shift.records_fixed === 1 ? "" : "s"} fixed`] : [game.isLoading ? "HQ is writing the shift report…" : ""]),
+    ...(shift?.buildings ?? []).map((b) => `${b.label ?? b.pid}: ${b.tag ? `${b.tag.toUpperCase()} tag` : "no tag"} · the aftershock ${b.outcome === "damaged" ? "damaged it" : "left it standing"}${b.roll != null && b.need != null ? ` (roll ${b.roll} vs ${b.need})` : ""}${b.people_safe != null ? ` · ${b.people_safe} safe` : ""}`),
+    ...(shift?.disclaimer ? [shift.disclaimer] : []),
+    ...(sweep.stamped ? [`Suite sweep: ${sweep.right} of ${sweep.stamped} stamps match what the records support.`] : []),
+  ].filter(Boolean) : [
     ...(presenter && case7 && case7Weighed ? [`Case #${case7.n}: HQ worked it from the records while you ran.`] : []),
     ...(Object.keys(staleStamps).length ? [`"Same building?": ${stale.filter((c) => staleStamps[c.pid] === c.answer).length} of ${Object.keys(staleStamps).length} stamps match the records.`] : []),
     ...(Object.keys(solarStamps).length ? [`Solar roofs: ${solar.filter((r) => solarStamps[r.pid] === r.answer).length} of ${Object.keys(solarStamps).length} stamped as the screen says.`] : []),
@@ -1388,6 +1445,11 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
     ...(step === "dawn" && score.downed > 0 ? [`You went down ${score.downed}× (−${score.downed * 100} points). Your squad dragged you clear each time.`] : []),
     ...(game.outcome ? (game.outcome.why ?? "").split("; ").map((x) => x.replace(/\.\s*Game outcome.*$/, "")) : []),
   ];
+  const deskScore = DESK && shift ? (() => {
+    const safe = shift.people_safe ?? 0, stake = Math.max(1, shift.people_at_stake ?? 0), fixed = shift.records_fixed ?? 0;
+    const frac = safe / stake;
+    return { ...score, saved: safe, total: shift.people_at_stake ?? 0, points: safe + fixed * 100, rank: frac >= 0.9 && fixed > 0 ? "S" : frac >= 0.75 ? "A" : frac >= 0.5 ? "B" : "C" };
+  })() : null;
 
   hopCount.current = hops.length;
   return (
@@ -1512,7 +1574,8 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
           messages={game.messages}
           threadId={game.stub || agentOff ? null : game.threadId}
           cases={(brief?.cases ?? []).map((c) => ({ ...c, property_id: String(c.property_id), suite: c.suite ? String(c.suite) : null })) as DeskCase[]}
-          clock="9:00 am"
+          clock={{ office: "9:00 am", suite: "10:40 am", visit: "noon", approach: "1:30 pm", inside: "3:45 pm", night: "5:02 pm" }[step as string] ?? "9:00 am"}
+          tags={game.tagResult?.tag ? { [game.tagResult.pid]: game.tagResult.tag } : {}}
           busy={game.isLoading}
           onClose={() => {
             setDeskOpen(false);
@@ -1545,12 +1608,12 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
       )}
       {step === "dawn" && (
         <DawnView
-          title="Dawn. You made it."
+          title={DESK ? "Dawn. The shift is over." : "Dawn. You made it."}
           lines={outcomeLines}
           messages={game.messages}
           loading={game.isLoading}
           onPlayAgain={playAgain}
-          score={score}
+          score={deskScore ?? score}
           reportFiled={prog.filed}
           onFileReport={() => {
             setProg((q) => ({ ...q, filed: true }));

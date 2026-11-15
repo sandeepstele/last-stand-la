@@ -8,7 +8,30 @@ import { useEffect, useMemo, useState } from "react";
 import { MathTable, useAgentLog, type LogMath, type LogStep } from "./AgentLog";
 import type { City, CityBuilding } from "./cityMap";
 import { SHORT, plain } from "./copy";
-import { radioLines } from "../radio";
+import { parse, kind, radioLines, type Msg } from "../radio";
+
+/** building_card (the desk contract): one building's data, by source, with the conflicts between sources. */
+export type DeskCard = {
+  pid: string; label?: string;
+  sources?: { key: string; source: string; status: "ok" | "missing" | "conflict"; lines?: string[] }[];
+  conflicts?: { field: string; a: { source: string; value: unknown }; b: { source: string; value: unknown } }[];
+  people?: { day?: number; night?: number; at_stake?: number; low?: number; high?: number; basis?: string };
+  screening?: { score?: number; fema_type?: string; suggest?: string };
+};
+type Triage = { buildings?: { pid: string; label?: string; people?: number; p_damage?: number; at_risk?: number; suggest?: string; rank?: number }[]; basis?: string };
+
+/** The newest building_card result per pid in the thread. */
+function streamCards(messages: readonly unknown[]): Map<string, DeskCard> {
+  const out = new Map<string, DeskCard>();
+  for (const raw of messages) {
+    const m = raw as Msg;
+    if (kind(m) !== "tool" || m.name !== "building_card") continue;
+    const c = parse<DeskCard>(m);
+    if (c?.pid) out.set(String(c.pid), c);
+  }
+  return out;
+}
+
 
 export type DeskCase = { n: number; case: string; property_id: string; suite: string | null; label: string; question?: string; stakes?: string };
 export type Tag = "green" | "yellow" | "red";
@@ -65,7 +88,9 @@ function verdictLine(m: LogMath | null): string | null {
 }
 
 /** The district map: every LA kit building as a dot; case buildings ringed; colour = tag, else the agent's progress. */
-function CityPane({ city, cards, tags, selected, onSelect }: { city: City | null; cards: Card[]; tags: Record<string, Tag>; selected: string | null; onSelect(pid: string): void }) {
+function CityPane({ city, cards, tags, triage, selected, onSelect }: { city: City | null; cards: Card[]; tags: Record<string, Tag>; triage: Triage | null; selected: string | null; onSelect(pid: string): void }) {
+  const risk = useMemo(() => new Map((triage?.buildings ?? []).map((b) => [b.pid, b])), [triage]);
+  const maxPeople = useMemo(() => Math.max(1, ...(triage?.buildings ?? []).map((b) => b.people ?? 0)), [triage]);
   const box = useMemo(() => {
     const bs = city?.buildings ?? [];
     if (!bs.length) return null;
@@ -81,6 +106,8 @@ function CityPane({ city, cards, tags, selected, onSelect }: { city: City | null
     const t = tags[b.pid];
     if (t) return TAG_COLOR[t];
     const c = worked.get(b.pid);
+    const r = risk.get(b.pid);
+    if (r?.suggest === "red" || r?.suggest === "yellow" || r?.suggest === "green") return TAG_COLOR[r.suggest as Tag];
     if (c?.math) return "#f5a524";
     if (c) return "#38bdf8";
     return b.case ? "#94a3b8" : "#334155";
@@ -88,13 +115,14 @@ function CityPane({ city, cards, tags, selected, onSelect }: { city: City | null
   return (
     <svg viewBox={`${box.x0 - pad} ${box.z0 - pad} ${box.x1 - box.x0 + 2 * pad} ${box.z1 - box.z0 + 2 * pad}`} style={{ width: "100%", height: "100%", background: "#0b1220" }} preserveAspectRatio="xMidYMid meet" aria-label="LA city map, coloured as the agent works">
       {city.buildings.map((b) => {
-        const hot = !!tags[b.pid] || worked.has(b.pid);
-        const r = unit * (hot ? 5 : b.case ? 2.6 : 1.2);
+        const tri = risk.get(b.pid);
+        const hot = !!tags[b.pid] || worked.has(b.pid) || !!tri;
+        const r = unit * (tags[b.pid] || worked.has(b.pid) ? 5 : tri ? 2 + 4 * Math.sqrt((tri.people ?? 0) / maxPeople) : b.case ? 2.6 : 1.2);
         return (
           <circle key={b.pid} cx={b.x} cy={b.z} r={r} fill={colour(b)} opacity={hot ? 1 : b.case ? 0.8 : 0.5}
             stroke={b.pid === selected ? "#fff" : hot ? "#0b1220" : "none"} strokeWidth={unit * (b.pid === selected ? 1.6 : 0.6)}
             style={{ cursor: hot || b.case ? "pointer" : "default" }} onClick={() => (hot || b.case) && onSelect(b.pid)}>
-            <title>{`${b.pid}${b.case ? ` · ${CASE_WORDS[b.case] ?? b.case}` : ""}`}</title>
+            <title>{`${tri?.label ?? b.pid}${b.case ? ` · ${CASE_WORDS[b.case] ?? b.case}` : ""}${tri ? ` · ${tri.people ?? "?"} people · damage ${Math.round((tri.p_damage ?? 0) * 100)}% · suggests ${tri.suggest ?? "?"}` : ""}`}</title>
           </circle>
         );
       })}
@@ -113,6 +141,28 @@ export function DeskView({ messages, threadId, cases, tags = {}, clock, busy, on
   const cards = useMemo(() => cardsFrom(steps), [steps]);
   const [city, setCity] = useState<City | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
+  const [triage, setTriage] = useState<Triage | null>(null);
+  const [fetched, setFetched] = useState<Record<string, DeskCard>>({});
+  const live = useMemo(() => streamCards(messages), [messages]);
+  const tagCount = Object.keys(tags).length;
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/game/triage").then((r) => (r.ok ? r.json() : null)).then((d: Triage | null) => alive && d && setTriage(d)).catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [tagCount]);
+  const casePids = cases.map((c) => c.property_id).join(",");
+  useEffect(() => {
+    let alive = true;
+    for (const pid of casePids ? casePids.split(",") : []) {
+      fetch(`/api/game/card/${encodeURIComponent(pid)}`).then((r) => (r.ok ? r.json() : null)).then((d: DeskCard | null) => alive && d?.pid && setFetched((m) => ({ ...m, [pid]: d }))).catch(() => {});
+    }
+    return () => {
+      alive = false;
+    };
+  }, [casePids]);
+  const deskCards = useMemo(() => ({ ...fetched, ...Object.fromEntries(live) }) as Record<string, DeskCard>, [fetched, live]);
   useEffect(() => {
     let alive = true;
     fetch("/api/game/city").then((r) => (r.ok ? r.json() : null)).then((d: City | null) => alive && d && setCity(d)).catch(() => {});
@@ -128,7 +178,12 @@ export function DeskView({ messages, threadId, cases, tags = {}, clock, busy, on
   }, [selected, cards, steps]);
   const sheetPid = selected && cards.find((c) => c.pid === selected)?.math ? selected : null;
   const radio = useMemo(() => radioLines(messages).slice(-7), [messages]);
-  const shown = selected ? [...cards].sort((a, b) => (a.pid === selected ? -1 : b.pid === selected ? 1 : 0)) : [...cards].reverse();
+  const all = useMemo(() => {
+    const byPid = new Map(cards.map((c) => [c.pid, c]));
+    for (const pid of Object.keys(deskCards)) if (!byPid.has(pid)) byPid.set(pid, { pid, label: deskCards[pid].label ?? null, lines: [], math: null, busy: false });
+    return [...byPid.values()];
+  }, [cards, deskCards]);
+  const shown = selected ? [...all].sort((a, b) => (a.pid === selected ? -1 : b.pid === selected ? 1 : 0)) : [...all].reverse();
 
   return (
     <div style={{ position: "absolute", inset: 0, zIndex: 50, display: "grid", gridTemplateColumns: "300px 1fr 420px", gridTemplateRows: "auto 1fr 250px", gap: 8, padding: 10, background: "rgba(3,6,12,.82)", color: "#e2e8f0", font: "14px/1.45 system-ui, sans-serif", pointerEvents: "auto" }}>
@@ -168,11 +223,13 @@ export function DeskView({ messages, threadId, cases, tags = {}, clock, busy, on
           {shown.map((c) => (
             <article key={c.pid} onClick={() => setSelected(c.pid)} style={{ border: `1px solid ${c.pid === selected ? "#f5a524" : "#1e293b"}`, padding: 8, background: "#0b1220", cursor: "pointer" }}>
               <div style={{ display: "flex", gap: 6, alignItems: "baseline" }}>
-                <b style={{ flex: 1 }}>{labels.get(c.pid) ?? c.label ?? `Building ${c.pid}`}</b>
+                <b style={{ flex: 1 }}>{labels.get(c.pid) ?? deskCards[c.pid]?.label ?? c.label ?? `Building ${c.pid}`}</b>
+                {deskCards[c.pid]?.screening?.suggest && !tags[c.pid] && <span style={{ border: `1px solid ${TAG_COLOR[deskCards[c.pid].screening!.suggest as Tag] ?? "#475569"}`, color: TAG_COLOR[deskCards[c.pid].screening!.suggest as Tag] ?? "#cbd5e1", padding: "0 6px", fontSize: 12 }}>screens {deskCards[c.pid].screening!.suggest}</span>}
                 {tags[c.pid] && <span style={{ background: TAG_COLOR[tags[c.pid]], color: "#111", padding: "0 6px", fontWeight: 700, fontSize: 12 }}>{tags[c.pid].toUpperCase()}</span>}
                 {c.busy && <span style={{ color: "#38bdf8", fontSize: 12 }}>pulling…</span>}
               </div>
               {verdictLine(c.math) && <div style={{ color: "#f5a524", fontWeight: 600 }}>{verdictLine(c.math)}</div>}
+              {deskCards[c.pid] && <SourceBlock card={deskCards[c.pid]} />}
               <ul style={{ listStyle: "none", margin: "4px 0 0", padding: 0, fontSize: 12.5 }}>
                 {c.lines.slice(-6).map((l) => (
                   <li key={l.n} style={{ padding: "3px 0", borderTop: "1px solid #111827" }}>
@@ -187,7 +244,7 @@ export function DeskView({ messages, threadId, cases, tags = {}, clock, busy, on
       </section>
 
       <section style={{ ...pane, padding: 0, gridColumn: "3", gridRow: "2 / 3", display: "grid", gridTemplateRows: "1fr auto" }} aria-label="City map">
-        <CityPane city={city} cards={cards} tags={tags} selected={selected} onSelect={setSelected} />
+        <CityPane city={city} cards={cards} tags={tags} triage={triage} selected={selected} onSelect={setSelected} />
         <div style={{ display: "flex", gap: 10, padding: "6px 10px", fontSize: 12, color: "#94a3b8", flexWrap: "wrap" }}>
           <span><i style={{ color: "#38bdf8" }}>●</i> being worked</span>
           <span><i style={{ color: "#f5a524" }}>●</i> weighed</span>
@@ -211,6 +268,40 @@ export function DeskView({ messages, threadId, cases, tags = {}, clock, busy, on
         <h3 style={head}>Calculation sheet{sheetPid ? ` · ${labels.get(sheetPid) ?? sheetPid}` : " · latest"}</h3>
         {sheet ? <MathTable m={sheet} big={false} /> : <p style={{ color: "#94a3b8", fontSize: 13 }}>The maths appears when the agent weighs a case.</p>}
       </section>
+    </div>
+  );
+}
+
+const STATUS_COLOR = { ok: "#4cc38a", missing: "#475569", conflict: "#f5a524" } as const;
+
+/** The card's data, source by source; conflicts between sources glow amber; people as an estimated range. */
+function SourceBlock({ card }: { card: DeskCard }) {
+  const ppl = card.people;
+  return (
+    <div style={{ marginTop: 4, fontSize: 12.5 }}>
+      {ppl && (ppl.low != null || ppl.day != null) && (
+        <div style={{ color: "#cbd5e1" }}>
+          Inside by day: {ppl.low != null && ppl.high != null ? `${ppl.low}–${ppl.high}` : ppl.day} <span style={{ color: "#64748b" }}>(an estimate{ppl.basis ? `: ${ppl.basis}` : ""})</span>
+          {ppl.night != null && <> · by night {ppl.night}</>}
+        </div>
+      )}
+      {card.screening?.score != null && (
+        <div style={{ color: "#cbd5e1" }}>Screening score {card.screening.score}{card.screening.fema_type ? ` · ${card.screening.fema_type}` : ""}</div>
+      )}
+      {(card.conflicts ?? []).map((k, i) => (
+        <div key={i} style={{ margin: "4px 0", padding: "4px 6px", border: "1px solid #f5a524", boxShadow: "0 0 10px rgba(245,165,36,.35)", color: "#fde68a" }}>
+          {plain(k.field)}: {k.a.source} says <b>{String(k.a.value)}</b> · {k.b.source} says <b>{String(k.b.value)}</b>
+        </div>
+      ))}
+      <ul style={{ listStyle: "none", margin: "4px 0 0", padding: 0 }}>
+        {(card.sources ?? []).map((src) => (
+          <li key={src.key} style={{ padding: "2px 0", borderTop: "1px solid #111827" }}>
+            <span style={{ color: STATUS_COLOR[src.status] ?? "#94a3b8" }}>●</span> <span style={{ color: "#a5b4fc" }}>{src.source}</span>
+            {src.status === "missing" && <span style={{ color: "#64748b" }}> · not on file</span>}
+            {(src.lines ?? []).slice(0, 2).map((l, i) => <div key={i} style={{ color: "#cbd5e1", paddingLeft: 12 }}>{l}</div>)}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

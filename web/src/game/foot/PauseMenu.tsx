@@ -14,26 +14,23 @@ const CONTROLS: [string, string][] = [
   ["W A S D", "Move"],
   ["Mouse or drag", "Look"],
   ["Shift", "Sprint"],
-  ["Space", "Shove"],
-  ["G", "Throw a flare (draws zombies away)"],
-  ["Hold your light on a zombie", "Stun it"],
-  ["E", "Go through a lit door · nail boards"],
+  ["Tab", "Your desk: inbox, building cards, city map, calculation sheet"],
+  ["E", "Go through a lit door (a site visit)"],
   ["C", "Check a nearby case: a solar roof, or “same building?”"],
   ["W / S inside", "Walk between the real scan spots"],
   ["1 / 2 / 3", "Answer HQ's question inside"],
-  ["H / R", "Hold or run, when HQ asks"],
-  ["Q", "Use a medkit"],
+  ["1 / 2 / 3 after the quake", "Post a GREEN, YELLOW or RED tag (N: no tag)"],
   ["V", "Sound on or off"],
   ["L", "The deep agent's live log"],
   ["P / Esc", "This menu"],
 ];
 
 const FLOW = [
-  "HQ, an AI agent, picks tonight's cases from the real open-case queue.",
-  "Walk into the real buildings and look. Your report is evidence.",
-  "When the horde comes, HQ proposes hold or run. You decide.",
-  "A dice roll, weighted by the evidence and 1994 quake data, decides the walls.",
-  "At dawn, HQ drafts the corrections. You file them for review.",
+  "You're Bob, at LA's building office. The agent, your analyst, puts today's real open cases on your desk.",
+  "Its squads pull each building's data: CoStar record, Vexcel aerials, the Matterport scan, city lists, permits, the 1994 ShakeMap.",
+  "Drive out on site visits and look inside. Your report is evidence (capped: strong, never final).",
+  "At 5:02 pm a quake hits (a game event). The agent screens each building and proposes a tag. You post it.",
+  "At dawn the aftershock tests the tags. Score: people kept safe and records fixed. File the corrections for review.",
 ];
 
 export function PauseMenu({ objectives, threadId = null, onResume, onRestart }: { objectives: Objective[]; threadId?: string | null; onResume(): void; onRestart(): void }) {
@@ -59,7 +56,7 @@ export function PauseMenu({ objectives, threadId = null, onResume, onRestart }: 
       <div className={styles.pauseCard} role="dialog" aria-label="Paused">
         <div className={styles.pauseHead}>
           <h2>Paused</h2>
-          <span>Settle tonight&apos;s cases. Make it to dawn.</span>
+          <span>Work today&apos;s cases. Tag the buildings after the quake.</span>
         </div>
         <div className={styles.tabs}>
           <button type="button" className={styles.tab} data-on={tab === "missions"} onClick={() => setTab("missions")}>Missions</button>

@@ -15,7 +15,10 @@ import { Badges, Keycap, footStyles as styles } from "./ui";
 export type Hint = { key: string; label: string; disabled?: boolean };
 export type Banner = { title: string; sub?: string; tone?: "info" | "warn" | "good" | "bad" };
 export type FeedView = { caption: string; photo: { src: string; caption: string } | null };
+/** The desk shift's tag buttons (replace HOLD/RUN when present). */
+export type TagChoice = { key: string; label: string; color: string; proposed: boolean; sent: boolean };
 export type DecisionView = {
+  choices?: TagChoice[];
   prompt: string; // "HQ proposes: RUN to 755 Spring St."
   why?: string | null; // code's stay-vs-run comparison and suggestion (the proposal itself has no text)
   proposed: "hold" | "run" | null;
@@ -264,8 +267,15 @@ function Decision({ d, busy }: { d: DecisionView; busy: boolean }) {
       </div>
       {d.why && !d.sent && <p className={styles.decSub} style={{ margin: "2px 0 6px" }}>{d.why}</p>}
       <div className={styles.choices}>
-        {order("hold", "H", "Hold")}
-        {order("run", "R", d.runLabel ? `Run to ${d.runLabel}` : "Run (no fallback yet)", !d.runLabel)}
+        {d.choices ? d.choices.map((c) => (
+          <div key={c.key} className={styles.order} data-proposed={c.proposed && !d.sent} data-sent={c.sent} data-faded={!!d.sent && !c.sent}
+            style={{ borderColor: c.proposed || c.sent ? c.color : undefined }}>
+            <Keycap k={c.key} size="lg" tone={c.proposed && !d.sent ? "amber" : undefined} />
+            <span className={styles.orderText} style={{ color: c.color }}>{c.label}</span>
+            {c.proposed && <span className={styles.hqCall}>HQ&apos;s call</span>}
+          </div>
+        )) : order("hold", "H", "Hold")}
+        {!d.choices && order("run", "R", d.runLabel ? `Run to ${d.runLabel}` : "Run (no fallback yet)", !d.runLabel)}
       </div>
       {d.error && <p className={styles.error}>{d.error}</p>}
     </section>

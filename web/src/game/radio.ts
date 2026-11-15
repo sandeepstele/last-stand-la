@@ -139,9 +139,14 @@ export function radioLines(messages: readonly unknown[]): RadioLine[] {
         lines.push({ id, who: "You", text: `reported: ${what}`, tone: "you" });
         return;
       }
+      const quake = raw.match(/^Quake at ([^.]+)\. Tag building /);
       const t = /^Scout property /.test(raw) ? "scout tonight's fortress"
+        : /^Inspect building /.test(raw) ? "inspect the building with me"
         : /^Brief the night shift/.test(raw) ? "brief me on tonight's cases"
+        : /^Start Bob's shift/.test(raw) ? "morning: what's on my desk today?"
         : /^Debrief the night shift/.test(raw) ? "debrief: draft tonight's corrections"
+        : /^End the shift/.test(raw) ? "end of shift: draft the corrections, report the tags"
+        : quake ? `quake at ${quake[1]}! screen it and propose a tag`
         : wave ? `wave ${wave[1]} incoming from the ${SECTOR_NAME[wave[2] as Sector] ?? wave[2]}`
           : firstSentence(raw, 120);
       if (t) lines.push({ id, who: "You", text: t, tone: "you" });
@@ -163,6 +168,9 @@ export function radioLines(messages: readonly unknown[]): RadioLine[] {
           const sub = String(a.subagent_type ?? "scout");
           if (c.id) taskOf.set(c.id, sub);
           squads.push(squad(sub));
+        } else if (c.name === "tag_building") {
+          const tag = String(a.tag ?? "").toUpperCase();
+          if (tag) lines.push({ id: cid, who: "HQ", text: `proposing a ${tag} tag. Your call.`, tone: "warn" });
         } else if (c.name === "commit_plan") {
           const run = a.action === "run";
           const to = a.to_pid ? labels.get(String(a.to_pid)) ?? "the fallback" : "the fallback";
@@ -220,6 +228,26 @@ export function radioLines(messages: readonly unknown[]): RadioLine[] {
       case "record_note":
         lines.push({ id, who: "HQ", text: "tip logged", tone: "hq" });
         break;
+      case "screen_building": {
+        const r = parse<{ label?: string; score?: number; suggest?: string; people?: { at_stake?: number } }>(m);
+        if (r?.suggest) lines.push({ id, who: "Screen", text: `${r.label ?? "the building"}: score ${r.score ?? "?"}, ${r.people?.at_stake ?? "?"} people at stake, suggests ${r.suggest.toUpperCase()}`, tone: "hq" });
+        break;
+      }
+      case "building_card": {
+        const r = parse<{ label?: string; sources?: { status?: string }[]; conflicts?: unknown[] }>(m);
+        if (r?.sources) lines.push({ id, who: "Records", text: `${r.label ?? "card"}: ${r.sources.filter((x) => x.status !== "missing").length} sources in${r.conflicts?.length ? `, ${r.conflicts.length} conflict${r.conflicts.length === 1 ? "" : "s"}` : ""}` });
+        break;
+      }
+      case "tag_building": {
+        const r = parse<{ label?: string; tag?: string | null; people_at_stake?: number }>(m);
+        if (r) lines.push({ id, who: "HQ", text: r.tag ? `${String(r.tag).toUpperCase()} tag posted on ${r.label ?? "the building"}${r.people_at_stake ? ` (${r.people_at_stake} people)` : ""}` : "no tag: the building stays open", tone: r.tag === "red" ? "warn" : "hq" });
+        break;
+      }
+      case "shift_report": {
+        const r = parse<{ people_safe?: number; people_at_stake?: number; records_fixed?: number }>(m);
+        if (r) lines.push({ id, who: "HQ", text: `shift report: ${r.people_safe ?? 0} of ${r.people_at_stake ?? 0} people kept safe, ${r.records_fixed ?? 0} records fixed`, tone: "good" });
+        break;
+      }
       case "read_file": {
         // The briefing reads the night log (HQ's memory across nights); its newest lesson is said aloud.
         const lessons = text(m.content).match(/Lesson:\s*([^\n]+)/g);

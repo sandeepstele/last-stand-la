@@ -18,6 +18,18 @@ import type {
 
 const API_URL = process.env.NEXT_PUBLIC_LANGGRAPH_URL ?? "http://127.0.0.1:2024";
 const FALLBACK_RESOLVE_MS = 20_000;
+/** The desk shift's graph ("desk"); NEXT_PUBLIC_GAME_GRAPH=laststand brings back the night game. */
+export const GAME_GRAPH = process.env.NEXT_PUBLIC_GAME_GRAPH ?? "desk";
+export const DESK = GAME_GRAPH === "desk";
+
+export type Tag = "green" | "yellow" | "red";
+/** tag_building's result: the posted tag, what the agent suggested, and the people it protects. */
+export type TagResult = { pid: string; label?: string; tag: Tag | null; suggested?: Tag; agreed?: boolean; people_at_stake?: number; why?: string };
+export type ShiftBuilding = { pid: string; label?: string; tag?: Tag | null; outcome?: "held" | "damaged"; roll?: number; need?: number; people_at_stake?: number; people_safe?: number; people_displaced?: number };
+export type ShiftReport = {
+  buildings?: ShiftBuilding[]; people_safe?: number; people_at_stake?: number; people_displaced?: number; records_fixed?: number;
+  records?: unknown[]; disclaimer?: string;
+};
 
 export type Phase = "dusk" | "scout" | "night" | "aftershock" | "dawn";
 export type DossierState = Dossier | "loading" | "error";
@@ -35,7 +47,7 @@ function errText(e: unknown): string | null {
 function useLiveAgent(): AgentView {
   // Continue a saved night: a controlled thread id makes the stream reload that thread's history (null = uncontrolled).
   const [resumeId, setResumeId] = useState<string | null>(null);
-  const stream = useStream({ assistantId: "laststand", apiUrl: API_URL, threadId: resumeId });
+  const stream = useStream({ assistantId: GAME_GRAPH, apiUrl: API_URL, threadId: resumeId });
   // After "play again" the old thread's messages are hidden until the next run creates a new thread.
   const [stale, setStale] = useState<string | null>(null);
   const hidden = !!stale && stream.threadId === stale;
@@ -63,7 +75,7 @@ function useLiveAgent(): AgentView {
 
 // The game agent's evidence tool is `run_check` (it states why it chose the check); everything on the page reads
 // `check_evidence`. Present one name, keep every other field (incl. selection_reason).
-const TOOL_ALIAS: Record<string, string> = { run_check: "check_evidence" };
+const TOOL_ALIAS: Record<string, string> = { run_check: "check_evidence", inbox: "night_cases" };
 function normalizeTools(ms: unknown[]): unknown[] {
   return ms.map((raw) => {
     const m = raw as Msg & { tool_calls?: { name?: string }[] };
@@ -165,6 +177,16 @@ export function useGame(stub: boolean) {
     ? { pid: String(req.args?.pid ?? fortress ?? ""), action: req.args?.action === "run" ? "run" : "hold", to_pid: req.args?.to_pid ? String(req.args.to_pid) : undefined }
     : null), [phase, outcome, req, fortress]);
 
+  // ---- the desk shift: the quake's tag HITL (tag_building) and the dawn shift report
+  const tagProposal = useMemo<{ pid: string; tag: Tag } | null>(() => {
+    if (phase !== "night" || req?.name !== "tag_building") return null;
+    const t = String(req.args?.tag ?? "");
+    return t === "green" || t === "yellow" || t === "red" ? { pid: String(req.args?.pid ?? fortress ?? ""), tag: t } : null;
+  }, [phase, req, fortress]);
+  const tagResult = useMemo(() => latestResult<TagResult>(nightMsgs, "tag_building"), [nightMsgs]);
+  const shiftReport = useMemo(() => latestResult<ShiftReport>(messages, "shift_report"), [messages]);
+  const [tagDecision, setTagDecision] = useState<Tag | "none" | null>(null);
+
   const shownPhase: Phase = phase === "night" && outcome ? "aftershock" : phase;
 
   // ------------------------------------------------------------ actions
@@ -178,7 +200,7 @@ export function useGame(stub: boolean) {
     if (!selected || agent.isLoading) return;
     setFortress(selected);
     setPhase("scout");
-    agent.submit(`Scout property ${selected}`, fresh).catch(() => {});
+    agent.submit(DESK ? `Inspect building ${selected}` : `Scout property ${selected}`, fresh).catch(() => {});
   }, [selected, agent]);
 
   /** Send an exact message to the laststand graph (on foot: "Brief the night shift", the suite check, suite tips). */
@@ -260,6 +282,35 @@ export function useGame(stub: boolean) {
 
   const goDawn = useCallback(() => setPhase("dawn"), []);
 
+  /** 5:02 pm: the quake (a game event). The agent screens the building and proposes a tag; Bob decides (tag_building HITL). */
+  const startQuake = useCallback((pid: string): boolean => {
+    if (agent.isLoading) return false;
+    setFortress(pid);
+    setNightFrom(messages.length);
+    setTagDecision(null);
+    setDecideError(null);
+    answered.current = null;
+    setPhase("night");
+    agent.submit(`Quake at 5:02 pm. Tag building ${pid}`, false).catch(() => {});
+    return true;
+  }, [agent, messages.length]);
+
+  /** Post the tag: approve the agent's proposal, change it, or reject (no tag: the building stays open). */
+  const decideTag = useCallback((choice: Tag | "none") => {
+    if (!tagProposal || tagResult || answered.current === agent.interruptKey) return;
+    answered.current = agent.interruptKey;
+    const d: HitlDecision = choice === "none" ? { type: "reject" }
+      : choice === tagProposal.tag ? { type: "approve" }
+      : { type: "edit", edited_action: { name: "tag_building", args: { pid: tagProposal.pid, tag: choice } } };
+    setTagDecision(choice);
+    setDecideError(null);
+    agent.respond(d).catch((e: unknown) => {
+      answered.current = null;
+      setTagDecision(null);
+      setDecideError(`The tag didn't go through (${errText(e)}). Try again.`);
+    });
+  }, [tagProposal, tagResult, agent]);
+
   /** Continue a saved night: reattach its thread and put the state machine where the save left it. Sends nothing. */
   const restore = useCallback((r: { threadId: string; phase: Phase; fortress: string | null; selected: string | null }) => {
     agent.resume?.(r.threadId);
@@ -283,6 +334,7 @@ export function useGame(stub: boolean) {
     setPhase("dusk");
     setFortress(null);
     setSelected(null);
+    setTagDecision(null);
     setNightFrom(null);
     setDecision(null);
     setDecideError(null);
@@ -335,6 +387,7 @@ export function useGame(stub: boolean) {
     horde, fallback, proposal, decision, decideError, outcome, scoutDone, runDone, say, dossiers, refreshDossier, loadDossier,
     conflictMaterials,
     select, startScout, startNight, decide, goDawn, sendTip, reset, restore,
+    tagProposal, tagResult, tagDecision, shiftReport, startQuake, decideTag,
   };
 }
 
