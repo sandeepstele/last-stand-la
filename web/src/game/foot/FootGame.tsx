@@ -230,7 +230,8 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
   const cctvPhotoOn = useRef(false);
   useEffect(() => {
     cctvPhotoOn.current = !!cctvPhoto;
-  }, [cctvPhoto]);
+    dronePhotoOn.current = !!dronePhoto;
+  }, [cctvPhoto, dronePhoto]);
   const [feedCaps, setFeedCaps] = useState({ drone: "DRONE", cctv: "CCTV" });
   const routeTo = useRef<Pt | null>(null);
   const downed = useRef(false);
@@ -300,8 +301,12 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
   const [hopHeading, setHopHeading] = useState(0);
   const hopCount = useRef(0);
   const visitFrom = useRef<Step>("approach");
-  const [nearPhoto, setNearPhoto] = useState<{ src: string; caption: string } | null>(null);
-  const nearPhotoOn = useRef(false);
+  // Near a building with real Vexcel imagery on file: the DRONE slot shows its real aerial (top-down when we have one) and
+  // the camera slot an oblique, until Bob walks away; then both go back to the live game renders.
+  type FeedPhoto = { src: string; caption: string };
+  const [nearPhoto, setNearPhoto] = useState<{ drone: FeedPhoto | null; cctv: FeedPhoto | null }>({ drone: null, cctv: null });
+  const nearPhotoOn = useRef({ drone: false, cctv: false });
+  const dronePhotoOn = useRef(false);
   const nearPid = useRef<string | null>(null);
   const nearAt = useRef(0);
   const debriefAsked = useRef(false);
@@ -993,9 +998,15 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
           nearAt.current = ctx.time;
           const ds = best ? gRef.current.dossiers[best.pid] : undefined;
           if (best && !ds) gRef.current.loadDossier(best.pid);
-          const img = ds && ds !== "loading" && ds !== "error" ? ds.images.drone?.[0] : undefined;
-          const next = best && img ? { src: evidenceUrl(img), caption: `Nearby aerial: ${best.label}` } : null;
-          nearPhotoOn.current = !!next;
+          const imgs = ds && ds !== "loading" && ds !== "error" ? ds.images.drone ?? [] : [];
+          const top = imgs.find((x) => /ortho|top|nadir/i.test(x)) ?? imgs[0];
+          const oblique = imgs.find((x) => x !== top && /obliq/i.test(x)) ?? imgs.find((x) => x !== top);
+          const img = top;
+          const next = {
+            drone: best && top ? { src: evidenceUrl(top), caption: `Vexcel aerial · ${best.label}` } : null,
+            cctv: best && oblique ? { src: evidenceUrl(oblique), caption: `Vexcel oblique · ${best.label}` } : null,
+          };
+          nearPhotoOn.current = { drone: !!next.drone, cctv: !!next.cctv };
           setNearPhoto(next);
           if (best && !img) nearPid.current = null; // retry once its dossier arrives
         }
@@ -1027,7 +1038,8 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
       const f = feedsRef.current;
       if (f) {
         const nightish = st === "night" || st === "hold" || st === "escape";
-        f.setOverride("cctv", cctvPhotoOn.current || nearPhotoOn.current || (nightish && window.innerWidth < 1366));
+        f.setOverride("cctv", cctvPhotoOn.current || nearPhotoOn.current.cctv || (nightish && window.innerWidth < 1366));
+        f.setOverride("drone", dronePhotoOn.current || nearPhotoOn.current.drone);
       }
       if (f) setFeedCaps((c) => (c.drone === f.caption("drone") && c.cctv === f.caption("cctv") ? c : { drone: f.caption("drone"), cctv: f.caption("cctv") }));
     };
@@ -1274,6 +1286,8 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
     setDronePhoto(null);
     setCctvPhoto(null);
     feedsRef.current?.setOverride("drone", false);
+    setNearPhoto({ drone: null, cctv: null });
+    nearPhotoOn.current = { drone: false, cctv: false };
     feedsRef.current?.setOverride("cctv", false);
     gRef.current.reset();
     scoutAsked.current = false;
@@ -1489,7 +1503,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
           compass={{ yawDeg: hud.yawDeg, waveSector: !DESK && (step === "night" || step === "escape" || step === "hold") ? game.wave?.sector ?? null : null, target: hud.target }}
           threat={hud.threat}
           threatDir={hud.threatDir}
-          feeds={{ drone: { caption: feedCaps.drone, photo: dronePhoto }, cctv: { caption: feedCaps.cctv, photo: cctvPhoto ?? nearPhoto } }}
+          feeds={{ drone: { caption: feedCaps.drone, photo: dronePhoto ?? nearPhoto.drone }, cctv: { caption: feedCaps.cctv, photo: cctvPhoto ?? nearPhoto.cctv } }}
           badges={{ stub: game.stub, replay }}
           disclaimer={DISCLAIMER}
           attribution={district.attribution ?? null}
