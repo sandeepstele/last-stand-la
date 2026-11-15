@@ -9,6 +9,7 @@ import { useAgentLog, type LogMath, type LogStep } from "./AgentLog";
 import type { City, CityBuilding } from "./cityMap";
 import { SHORT, cap, plain } from "./copy";
 import { parse, kind, radioLines, type Msg } from "../radio";
+import { Thumbs } from "./FeedbackUI";
 
 /** building_card (the desk contract): one building's data, by source, with the conflicts between sources. */
 export type DeskCard = {
@@ -322,14 +323,17 @@ export function DeskView({ messages, threadId, cases, tags = {}, precalls = {}, 
                     <span style={{ color: AMBER, fontWeight: 600 }}>{v.label} {v.what}</span>
                   </div>
                 )}
-                {card ? <SourceBlock card={card} slot={precall} /> : precall}
+                {card ? <SourceBlock card={card} slot={precall} threadId={threadId} label={nameOf(c.pid, c)} /> : precall}
                 {c.lines.length > 0 && (
                   <div style={{ marginTop: 8 }}>
                     <div style={{ color: FAINT, fontSize: 11, letterSpacing: ".08em", textTransform: "uppercase" }}>Squad reports</div>
                     <ul style={{ listStyle: "none", margin: "2px 0 0", padding: 0, fontSize: 12.5 }}>
                       {c.lines.slice(-4).map((l) => (
                         <li key={l.n} style={{ padding: "3px 0", borderTop: `1px solid ${HAIR}` }}>
-                          <span style={{ color: "#a5b4fc" }}>{l.source || l.actor}</span>
+                          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                            <span style={{ color: "#a5b4fc" }}>{l.source || l.actor}</span>
+                            <Thumbs kind="finding" threadId={threadId} pid={c.pid} label={nameOf(c.pid, c)} item={`${l.source || l.actor}: ${l.text}`} style={{ marginLeft: "auto" }} />
+                          </div>
                           <div title={l.text} style={{ color: MUTED, ...clamp(2) }}>{l.text}</div>
                         </li>
                       ))}
@@ -464,7 +468,7 @@ const STATUS_COLOR = { ok: "#4cc38a", missing: "#64748b", conflict: AMBER } as c
 const STATUS_WORD = { ok: "", missing: "not on file", conflict: "disagrees" } as const;
 
 /** The card's data, source by source; conflicts between sources glow amber; people as an estimated range. */
-function SourceBlock({ card, slot }: { card: DeskCard; slot?: React.ReactNode }) {
+function SourceBlock({ card, slot, threadId, label }: { card: DeskCard; slot?: React.ReactNode; threadId: string | null; label: string }) {
   const [openSrc, setOpenSrc] = useState<string | null>(null); // a clicked source shows every line it brought
   const ppl = card.people;
   return (
@@ -492,6 +496,7 @@ function SourceBlock({ card, slot }: { card: DeskCard; slot?: React.ReactNode })
               <div style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
                 <span style={{ color: "#c7d2fe", fontWeight: 600 }}>{src.source}</span>
                 {STATUS_WORD[src.status] && <span style={{ marginLeft: "auto", color: STATUS_COLOR[src.status], fontSize: 12 }}>{STATUS_WORD[src.status]}</span>}
+                <Thumbs kind="source" threadId={threadId} pid={card.pid} label={label} item={`${src.source} (${src.status}): ${(src.lines ?? []).join(" · ")}`} style={{ marginLeft: STATUS_WORD[src.status] ? 0 : "auto", alignSelf: "center" }} />
               </div>
               {(src.lines ?? []).slice(0, openSrc === src.key ? undefined : 2).map((l, i) => <div key={i} style={{ color: MUTED, fontSize: 12.5 }}>{l}</div>)}
               {openSrc === src.key && <div style={{ color: FAINT, fontSize: 11.5 }}>Source: {src.source}{src.status === "conflict" ? " · disagrees with another source on this card" : src.status === "missing" ? " · not on file for this building" : ""}</div>}

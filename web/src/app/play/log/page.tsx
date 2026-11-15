@@ -5,6 +5,7 @@
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { AgentLogView, LOG_THREAD_KEY, useAgentLog } from "@/game/foot/AgentLog";
+import { FeedbackExport } from "@/game/foot/FeedbackUI";
 
 export default function LogPage() {
   return (
@@ -42,9 +43,12 @@ function Log() {
     <main style={{ minHeight: "100vh", background: "#05070d", color: "#e2e8f0", padding: "28px 36px", boxSizing: "border-box" }}>
       <header style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 12, marginBottom: 16 }}>
         <h1 style={{ margin: 0, font: "700 30px/1.1 system-ui, sans-serif" }}>The deep agent, step by step</h1>
-        <span style={{ color: "#94a3b8", font: "16px system-ui, sans-serif" }}>
-          {steps.length} steps · the model chooses, code computes every number · {pinned ? "pinned run" : "following the live night"}
-        </span>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
+          <span style={{ color: "#94a3b8", font: "16px system-ui, sans-serif" }}>
+            {steps.length} steps · the model chooses, code computes every number · {pinned ? "pinned run" : "following the live night"}
+          </span>
+          <FeedbackExport big align="end" />
+        </div>
       </header>
       {thread ? <AgentLogView steps={steps} error={error} big /> : <p style={{ font: "18px system-ui", color: "#94a3b8" }}>Start a night in the game (same browser) and its log appears here.</p>}
     </main>

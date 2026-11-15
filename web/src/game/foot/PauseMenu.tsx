@@ -6,6 +6,7 @@ import { useState } from "react";
 import type { Objective } from "./FootHud";
 import { AgentLogView, useAgentLog } from "./AgentLog";
 import { cap, plain } from "./copy";
+import { FeedbackExport } from "./FeedbackUI";
 import { footStyles as styles } from "./ui";
 
 type Tab = "how" | "missions" | "log";
@@ -69,6 +70,9 @@ export function PauseMenu({ objectives, threadId = null, onResume, onRestart }: 
               Every step HQ took tonight: who acted, which data it pulled, and the arithmetic behind each verdict. The model chooses; code computes every number.{" "}
               {threadId && <a href={`/play/log?thread=${encodeURIComponent(threadId)}`} target="_blank" rel="noreferrer" style={{ color: "#f5a524" }}>Open on a second screen ↗</a>}
             </p>
+            <div style={{ margin: "0 0 10px" }}>
+              <FeedbackExport />
+            </div>
             <AgentLogView steps={log.steps} error={log.error} follow={false} />
           </div>
         ) : tab === "missions" ? (
