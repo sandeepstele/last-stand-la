@@ -15,6 +15,8 @@ export type AgentView = {
   interruptKey: unknown;
   error: string | null;
   threadId: string | null;
+  /** Reattach a saved thread (its history reloads; nothing is re-sent). Live agent only. */
+  resume?(threadId: string): void;
   submit(text: string, fresh: boolean): Promise<void>;
   respond(decision: HitlDecision): Promise<void>;
   reset(): void;

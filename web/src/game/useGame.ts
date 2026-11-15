@@ -33,7 +33,9 @@ function errText(e: unknown): string | null {
 
 /** The live laststand agent, behind the same small surface as the stub. */
 function useLiveAgent(): AgentView {
-  const stream = useStream({ assistantId: "laststand", apiUrl: API_URL });
+  // Continue a saved night: a controlled thread id makes the stream reload that thread's history (null = uncontrolled).
+  const [resumeId, setResumeId] = useState<string | null>(null);
+  const stream = useStream({ assistantId: "laststand", apiUrl: API_URL, threadId: resumeId });
   // After "play again" the old thread's messages are hidden until the next run creates a new thread.
   const [stale, setStale] = useState<string | null>(null);
   const hidden = !!stale && stream.threadId === stale;
@@ -52,6 +54,10 @@ function useLiveAgent(): AgentView {
     error: hidden ? null : errText(stream.error),
     threadId: hidden ? null : stream.threadId,
     submit, respond, reset,
+    resume: (id: string) => {
+      setStale(null);
+      setResumeId(id);
+    },
   };
 }
 
@@ -254,6 +260,15 @@ export function useGame(stub: boolean) {
 
   const goDawn = useCallback(() => setPhase("dawn"), []);
 
+  /** Continue a saved night: reattach its thread and put the state machine where the save left it. Sends nothing. */
+  const restore = useCallback((r: { threadId: string; phase: Phase; fortress: string | null; selected: string | null }) => {
+    agent.resume?.(r.threadId);
+    setPhase(r.phase);
+    setFortress(r.fortress);
+    setSelected(r.selected);
+    if (r.selected) loadDossier(r.selected);
+  }, [agent, loadDossier]);
+
   const sendTip = useCallback((tip: string) => {
     const t = tip.trim();
     if (!t || agent.isLoading) return;
@@ -319,7 +334,7 @@ export function useGame(stub: boolean) {
     messages, isLoading: agent.isLoading, agentError: agent.error, threadId: agent.threadId,
     horde, fallback, proposal, decision, decideError, outcome, scoutDone, runDone, say, dossiers, refreshDossier, loadDossier,
     conflictMaterials,
-    select, startScout, startNight, decide, goDawn, sendTip, reset,
+    select, startScout, startNight, decide, goDawn, sendTip, reset, restore,
   };
 }
 

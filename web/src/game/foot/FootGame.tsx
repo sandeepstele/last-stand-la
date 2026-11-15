@@ -26,7 +26,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import type { Game } from "../useGame";
 import { evidenceUrl } from "../Pano";
-import { SECTOR_NAME, checksFor, kind, latestResult, parse, radioLines, type Msg } from "../radio";
+import { SECTOR_NAME, checksFor, kind, lastHumanIndex, latestResult, parse, radioLines, text as msgText, type Msg } from "../radio";
 import { DISCLAIMER, type Building, type Fallback } from "../types";
 import { boundsOf, buildColliders, createBus, dirOf, makeCollide, reachPoint, DOOR_R, SCOUT_R, SECTOR_DEG, type FootCtx, type Pt, type SupplySpot, type SurvivorSpot, type SurvivorState, type System } from "./engine";
 import { createInput, type Input } from "./input";
@@ -42,6 +42,7 @@ import { createCityMap, type City } from "./cityMap";
 import { createRoofObjects, type RoofSystem } from "./roofObjects";
 import { SuiteSweep, type SweepScore } from "./SuiteSweep";
 import { AgentLogPanel, rememberLogThread } from "./AgentLog";
+import { CHECKPOINT_WORDS, clearSave, threadAlive, useSave, writeSave, type Checkpoint, type SaveV1 } from "./save";
 import { InsideMesh3D } from "./InsideMesh3D";
 import { PauseMenu } from "./PauseMenu";
 import { SolarSurvey, type SolarRoof } from "./SolarSurvey";
@@ -315,6 +316,8 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
   const [mhud, setMhud] = useState({ flares: 0, boards: 0, medkits: 0, found: 0, crates: 0, survivors: [] as { name: string; state: SurvivorState }[], barricade: null as null | { hp: number; max: number }, timer: null as null | { label: string; secs: number; urgent: boolean } });
   const cratesTotal = useRef(0);
   const [score, setScore] = useState({ saved: 0, total: 0, found: 0, health: 100, secs: 0, points: 0, rank: "C", downed: 0 });
+  const save = useSave();
+  const [saveNote, setSaveNote] = useState<string | null>(null); // shown on the intro when a saved night can't continue
 
   // ------------------------------------------------------------------ engine: created once per district
   useEffect(() => {
@@ -1069,10 +1072,27 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
     }
   }, [game.messages, hero, office, case7]);
 
+  // Save at quiet checkpoints (a finished run, nothing in flight). Continue reattaches the thread; nothing is re-sent.
+  useEffect(() => {
+    if (game.stub || agentOff || !game.threadId || !game.runDone || game.isLoading) return;
+    const last = msgText((game.messages[lastHumanIndex(game.messages)] as Msg | undefined)?.content).trim();
+    const cp: Checkpoint | null =
+      step === "dawn" && /^Debrief the night shift/.test(last) ? "dawn"
+        : step === "inside" && tip.sentAt !== null && /^Tip: I'm inside the building/.test(last) ? "walls"
+          : step === "approach" && suiteTip.sentAt !== null && game.phase === "dusk" && /^Tip: I'm inside suite/.test(last) ? "suite"
+            : null;
+    if (!cp) return;
+    writeSave({
+      v: 1, threadId: game.threadId, checkpoint: cp, at: Date.now(), suiteChoice: suiteTip.chosen, tipChoice: tip.chosen, prog,
+      staleStamps, solarStamps, sweep, ...(cp === "dawn" ? { score } : {}),
+    });
+  }, [game.stub, agentOff, game.threadId, game.runDone, game.isLoading, game.messages, game.phase, step, tip, suiteTip, prog, staleStamps, solarStamps, sweep, score]);
+
   // ------------------------------------------------------------------ actions
-  function begin() {
+  function begin(resume?: SaveV1) {
     const ctx = ctxRef.current;
     if (!ctx || !hero) return;
+    if (!resume) clearSave(); // a new night: the old save's thread is no longer the one being played
     ctx.camera.far = 4000; // street level again (the city map stays as the skyline beyond the play area)
     ctx.camera.updateProjectionMatrix();
     ctx.cameraOwner = "player";
@@ -1096,6 +1116,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
     }
     nightFallen.current = false;
     startedAt.current = ctx.time;
+    if (resume) return applyResume(ctx, resume);
     if (office) {
       // The Night Shift: the agent briefs the night from the real queue (fresh thread), then case #7 at the office.
       briefAsked.current = gRef.current.say("Brief the night shift", true);
@@ -1108,6 +1129,68 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
     gRef.current.select(hero.pid); // the fortress card loads while you walk
     setStep("approach");
     setBanner({ title: `Reach ${hero.label}`, sub: "The records disagree about its walls. Find out before dark.", tone: "info" }, 5000);
+  }
+
+  /** Continue: reattach the saved thread and put the player where the checkpoint left them. Never re-sends a message. */
+  function applyResume(ctx: FootCtx, sv: SaveV1) {
+    if (!hero) return;
+    const p = ctx.player;
+    const heroDoor = doorOf(ctx, hero)!;
+    briefAsked.current = true;
+    suiteAsked.current = true;
+    suiteSending.current = true;
+    officeSpawned.current = true;
+    setSuiteTip({ chosen: sv.suiteChoice, sentAt: sv.suiteChoice != null ? 0 : null });
+    setProg(sv.prog);
+    setStaleStamps(sv.staleStamps as Record<string, StaleCase["answer"]>);
+    setSolarStamps(sv.solarStamps as Record<string, SolarRoof["answer"]>);
+    setSweep(sv.sweep);
+    ctx.bus.emit("world:beacon", { pid: hero.pid });
+    if (sv.checkpoint === "suite") {
+      gRef.current.restore({ threadId: sv.threadId, phase: "dusk", fortress: null, selected: hero.pid });
+      if (office) {
+        const od = doorOf(ctx, office)!;
+        const f = dirOf(office.door?.facing ?? 180);
+        [p.x, p.z] = ctx.collide(od[0] + f[0] * 2.5, od[1] + f[1] * 2.5, 0.5);
+        p.yaw = ((office.door?.facing ?? 180) * Math.PI) / 180;
+      }
+      setStep("approach");
+      setBanner({ title: "Night continued", sub: `Your suite report is in. Reach ${hero.label}.`, tone: "info" }, 4500);
+      return;
+    }
+    scoutAsked.current = true;
+    scoutStarted.current = true;
+    tipSending.current = true;
+    setTip({ chosen: sv.tipChoice, sentAt: sv.tipChoice != null ? 0 : null });
+    if (sv.checkpoint === "walls") {
+      gRef.current.restore({ threadId: sv.threadId, phase: "scout", fortress: hero.pid, selected: hero.pid });
+      ctx.bus.emit("mission:shelter", { pid: hero.pid, x: heroDoor[0], z: heroDoor[1] });
+      setHop(0);
+      p.frozen = true;
+      p.hidden = true;
+      ctx.input.unlock();
+      setStep("inside");
+      setBanner({ title: "Night continued", sub: `Inside ${hero.label}, your report is in. [E] step outside when you're ready.`, tone: "info" }, 4500);
+      return;
+    }
+    // dawn: the drafts are on the thread; show them again.
+    gRef.current.restore({ threadId: sv.threadId, phase: "dawn", fortress: hero.pid, selected: hero.pid });
+    nightAsked.current = true;
+    debriefAsked.current = true;
+    debriefSent.current = true;
+    if (sv.score) setScore(sv.score as typeof score);
+    ctx.bus.emit("horde:clear", {});
+    ctx.dawn = 1;
+    setStep("dawn");
+  }
+
+  async function continueNight(sv: SaveV1) {
+    if (!(await threadAlive(sv.threadId))) {
+      clearSave();
+      setSaveNote("That saved night is gone (the agent server restarted since). Press Enter for a new night.");
+      return;
+    }
+    begin(sv);
   }
 
   const resetting = useRef(false);
@@ -1414,7 +1497,17 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
           Pillars of light: <b>{city.cases.toLocaleString("en-US")} buildings with open cases</b>, of {city.buildings.toLocaleString("en-US")} in CoStar&apos;s LA records
         </div>
       )}
-      {step === "intro" && <IntroOverlay heroLabel={heroLabel} ready={!!district} stub={game.stub} replay={replay} attribution={district.attribution ?? null} onStart={begin} />}
+      {step === "intro" && <IntroOverlay heroLabel={heroLabel} ready={!!district} stub={game.stub} replay={replay} attribution={district.attribution ?? null} onStart={() => begin()} />}
+      {step === "intro" && !save && saveNote && (
+        <div style={{ position: "absolute", left: "50%", bottom: 28, transform: "translateX(-50%)", zIndex: 46, background: "rgba(5,7,13,.88)", border: "1px solid #f5a524", padding: "8px 12px", color: "#fde68a", font: "14px system-ui, sans-serif" }}>{saveNote}</div>
+      )}
+      {step === "intro" && save && !game.stub && !agentOff && (
+        <div style={{ position: "absolute", left: "50%", bottom: 28, transform: "translateX(-50%)", zIndex: 46, display: "flex", gap: 10, alignItems: "center", background: "rgba(5,7,13,.88)", border: "1px solid #334155", padding: "8px 12px", color: "#e2e8f0", font: "14px system-ui, sans-serif" }}>
+          <span>Saved night ({CHECKPOINT_WORDS[save.checkpoint]}, {new Date(save.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })})</span>
+          <button type="button" onClick={() => void continueNight(save)} style={{ padding: "6px 12px", border: "none", background: "#f5a524", color: "#111", fontWeight: 700, cursor: "pointer" }}>Continue</button>
+          <button type="button" onClick={clearSave} style={{ padding: "6px 10px", border: "1px solid #475569", background: "transparent", color: "#cbd5e1", cursor: "pointer" }}>Discard</button>
+        </div>
+      )}
       {step === "dawn" && (
         <DawnView
           title="Dawn. You made it."
