@@ -303,12 +303,15 @@ async def demo_reset(request: Request) -> JSONResponse:
     # the auditor's standing orders and skills (scripts/seed_store.py), if this server's Store doesn't have them yet:
     # the bridge's recorded replay depends on them
     seed = __import__("pathlib").Path(__file__).resolve().parent.parent / "seed"
+
+    def seed_files() -> list:  # file listing and reads off the event loop (langgraph dev rejects blocking I/O there)
+        paths = [(("memories",), "/AGENTS.md", seed / "memories" / "AGENTS.md")] + \
+            [(("skills",), f"/{d.name}/SKILL.md", d / "SKILL.md") for d in sorted((seed / "skills").glob("*"))]
+        return [(ns, key, p.read_text()) for ns, key, p in paths if p.is_file()]
     seeded = 0
-    files = [(("memories",), "/AGENTS.md", seed / "memories" / "AGENTS.md")] + \
-        [(("skills",), f"/{d.name}/SKILL.md", d / "SKILL.md") for d in sorted((seed / "skills").glob("*")) if (d / "SKILL.md").is_file()]
-    for ns, key, path in files:
-        if path.is_file() and not await store.aget(ns, key):
-            await store.aput(ns, key, create_file_data(await asyncio.to_thread(path.read_text)))
+    for ns, key, text in await asyncio.to_thread(seed_files):
+        if not await store.aget(ns, key):
+            await store.aput(ns, key, create_file_data(text))
             seeded += 1
     return JSONResponse({"ok": True, "cleared": cleared, "night_log": "seeded", "auditor_seed_files_added": seeded})
 
