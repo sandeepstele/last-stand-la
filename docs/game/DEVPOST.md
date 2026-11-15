@@ -32,7 +32,7 @@ Building records go stale quietly. CoStar's record of a downtown tower says maso
 - City retrofit orders, permits and the 1994 Northridge ShakeMap set the stakes.
 
 **3. Real feedback enforcement.**
-- **What you report inside counts as evidence.** Together with HQ's read of the 3D scan, it moves the odds (66% → 73% in the current recording), but your report is **capped at 0.35**: strong testimony, never final.
+- **What you report inside counts as evidence.** Together with HQ's read of the 3D scan, it moves the odds (66% → 73%), but your report is **capped at 0.35**: strong testimony, never final.
 - **It decides your survival tonight.** On the demo night a "concrete" report makes the walls hold (they just beat a roll of 75); "brick" lets the horde in.
 - **It reaches the real record.** At dawn the agent drafts a correction **citing your words**, and "File" opens the real auditor case with your report in it.
 - **Code sets every number,** what the agent sees is capped at 0.2 with a second look, and **no record changes without human approval**.
@@ -94,7 +94,7 @@ langchain, deepagents, langgraph, python, gemini, vertex-ai, next.js, react, thr
 
 # The 2-minute video shot list
 
-Record on the production build (`npm run build && npm start`) against strict replay. Run `demo_reset` and `seed_store` first, use `?demo=1`, and press F to skip walks.
+Record on the production build (`npm run build && npm start`) against strict replay. Run `demo_reset` first, use `?demo=1`, and press F to skip walks.
 
 | # | Time | Shot | Voice-over |
 |---|---|---|---|

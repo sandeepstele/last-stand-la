@@ -12,8 +12,8 @@ Run `?demo=1` on strict replay, reset first. Press [F] to skip walks. **Never** 
 | 0:10 | **Real CoStar data** | The dive into tonight's district; the HQ panel lists case #6 and #7 of CoStar's queue | "Every building and every case is real, from CoStar's kit: 156 open cases in LA where the records disagree." |
 | 0:20 | **Deep agent** | Enter. The agent's own plan; four squads light up; "HQ looked at the aerial" (the real image); "why HQ chose this check" | "The commander is a LangChain deep agent. It plans, sends four sub-agents in parallel, picks its own evidence and tells you why." |
 | 0:40 | **Real CoStar data** | F to 737 Broadway; E: the building's own 3D tour; W to walk | "CoStar says masonry, the city says concrete. Nobody's been inside. Now I am: this is the building's real scan." |
-| 0:55 | **Feedback enforcement** | Press 1, Concrete. "Your report moved the odds" (say the % on screen; it changes with each recording) | "My report, plus HQ's read of the 3D scan, moved the odds. My report is capped at 0.35: strong, never final. Code enforces that, not the model." |
-| 1:05 | **Feedback enforcement** | Step out; HQ proposes HOLD or RUN; press H; hold the door; the walls hold (77 vs 75 in the current recording) | "The agent proposes, and it waits for me. I held, and the walls held because of what I saw. Brick, and they'd have broken in." |
+| 0:55 | **Feedback enforcement** | Press 1, Concrete. "Your report moved the odds": 66% → **73%** in the final recording (brick → 56%, can't tell → 67%) | "My report, plus HQ's read of the 3D scan, moved the odds. My report is capped at 0.35: strong, never final. Code enforces that, not the model." |
+| 1:05 | **Feedback enforcement** | Step out; HQ proposes **RUN** (the stay-vs-run line under it: code favours RUN on the scores); press H anyway; hold the door; the walls hold, **77 vs 75** | "The agent proposes, and it waits for me. I overrode it and held, and the walls held because of what I saw. Brick (72) or can't tell (74), and they'd have broken in." |
 | 1:25 | **Feedback enforcement** | Dawn: the agent drafts the correction citing my words; File opens the auditor case with my report in it | "And it reaches the real record: a draft correction citing my words. A human approves it." |
 | 1:45 | — | The auditor queue (328 cases, LA and Houston) | "Same agent, all night, every case. Deep agent, real CoStar data, real feedback enforcement." |
 
@@ -48,7 +48,7 @@ Your report from inside changes the real case. That's "Inside and Out". Case #7 
 
 **Acceptance:**
 - `?demo=1` on strict replay, with F at approach and escape.
-- Enter → the auditor case file in ≤ 1:20 (re-measure with the dawn critic on; budget 2:00 total).
+- Enter → the auditor case file in about 1:01 on the strict `?demo=1` path with F (measured 9:35 pm, final recording, critic on): scout done at 11 s, dawn drafts at 46 s. Dawn and the auditor show the same % (same checks).
 - 3 clean runs.
 - The HQ panel shows an active agent task at every beat except the escape.
 - The ≤ 2-minute video follows the same cut.
@@ -85,8 +85,8 @@ Your report from inside changes the real case. That's "Inside and Out". Case #7 
    - **Never put `RADAR_REPLAY` in `.env`:** under `langgraph dev`, `.env` overrides the shell, so the server would be stuck in replay.
    - **Verify or re-record:** `scripts/game_nights.py` (see CONTRACT.md).
 2. **Web:** `cd web && npm run build && npm start` (production; port 3000). Open `http://127.0.0.1:3000/play?mode=foot` once to warm it up.
-3. **Between judges:** `uv run python scripts/demo_reset.py && uv run python scripts/seed_store.py` (the reset clears the notes and restores the night log; the seed puts back the store the auditor bridge reads). Then press Enter on the dawn screen.
-   - **Never reload the page mid-session without running both first.** Only Play again (Enter at dawn) resets by itself; a reload, a crash or a second tab starts a night on the previous night's notes, and strict replay then misses (scout, walls tip, wave result, debrief).
+3. **Between judges:** press Enter on the dawn screen (Play again resets the night, restores the night log and re-seeds the auditor). From a terminal: `uv run python scripts/demo_reset.py`. The server also resets tonight's cases at each "Brief the night shift".
+   - A reload or a crash is safe now (the night-start reset is on the server), but a second tab starting a new night clears the first tab's case notes.
    - **One browser tab** on the game during judging. Close every other tab on :3000 / :3110.
 4. **Fallback ladder:**
    1. Live mode, if replay misbehaves (`RADAR_REPLAY` unset; timings in CONTRACT.md).

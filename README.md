@@ -182,7 +182,7 @@ cd web && npm install && npm run dev            # http://127.0.0.1:3000/play?mod
 **Demo:**
 - Start the server with `RADAR_REPLAY=game RADAR_REPLAY_STRICT=1` (never put `RADAR_REPLAY` in `.env`).
 - Use `npm run build && npm start`.
-- Run `uv run python scripts/demo_reset.py && uv run python scripts/seed_store.py` between judges, and never reload the page without it (only Play again resets by itself). One browser tab on the game.
+- Between judges, press Enter at dawn (Play again resets and re-seeds) or run `uv run python scripts/demo_reset.py`. The server also resets tonight's cases at each briefing. One browser tab on the game.
 - In git worktrees, run `next dev --webpack`.
 
 ---
