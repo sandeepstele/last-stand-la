@@ -121,7 +121,7 @@ export type Events = {
   /** director -> mission: place crates and trapped survivors (once per night). */
   "mission:setup": { supplies: SupplySpot[]; survivors: SurvivorSpot[] };
   /** director -> mission: spawn these survivors right away in "following" state (the office on record, found still there). */
-  "mission:survivors": { survivors: SurvivorSpot[] };
+  "mission:survivors": { survivors: SurvivorSpot[]; state?: "trapped" | "following" }; // default "following"; "trapped" = HELP beacon, pick up within 2.5 m
   /** director -> mission: following survivors go into the building at (x, z) and become safe. */
   "mission:shelter": { pid: string; x: number; z: number };
   /** director -> mission: sheltered survivors come back out at (x, z) and follow the player again (RUN or breach). */

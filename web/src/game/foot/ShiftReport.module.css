@@ -33,6 +33,8 @@
 @keyframes breathe { 50% { opacity: 0.55; } }
 
 .headline { flex: none; display: flex; flex-direction: column; gap: 8px; }
+.rescue { margin: 0; padding: 6px 10px; font: 600 15px/1.35 var(--ui); color: var(--ink); border-left: 3px solid #22c55e; background: rgba(34, 197, 94, 0.08); }
+.rescue[data-bad="true"] { border-left-color: #ff6b63; background: rgba(255, 107, 99, 0.08); }
 .big { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
 .big strong { font: 700 52px/0.95 var(--ui); color: #fff; font-variant-numeric: tabular-nums; }
 .big span { font: 500 20px/1.2 var(--ui); color: var(--ink); }

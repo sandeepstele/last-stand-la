@@ -891,7 +891,8 @@ export function createMission(ctx: FootCtx): System {
     bus.on("mission:setup", (e) => setup(e.supplies ?? [], e.survivors ?? [])),
     bus.on("mission:reset", () => clearAll()),
     // Night Shift: the office on record steps out of the building with the player, already following.
-    bus.on("mission:survivors", (e) => spawnSurvivors(e.survivors ?? [], "following")),
+    // Desk aftershock: the people trapped in the cracked building wait at its door (HELP beacon) until Bob reaches them.
+    bus.on("mission:survivors", (e) => spawnSurvivors(e.survivors ?? [], e.state ?? "following")),
     bus.on("mission:shelter", (e) => shelter(e.x, e.z)),
     bus.on("mission:evacuate", (e) => evacuate(e.x, e.z)),
     bus.on("mission:defend", (e) => defend(e.x, e.z, e.facing)),

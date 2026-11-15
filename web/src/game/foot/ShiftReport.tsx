@@ -126,10 +126,17 @@ export type ShiftReportProps = {
   report: Report | null | undefined;
   precalls?: Record<string, Tag>;
   loading: boolean;
-  score?: { points: number; rank: string } | null; // computed by the game from this report
+  score?: { points: number; rank: string; rescued?: number } | null; // computed by the game from this report
+  /** Game-side lines shown under the headline (the simulated aftershock rescue). Never part of people_safe. */
+  notes?: string[];
 };
 
-export function ShiftReportView({ report, precalls = {}, loading, score }: ShiftReportProps) {
+export function ShiftReportView({ report, precalls = {}, loading, score, notes = [] }: ShiftReportProps) {
+  const noteEls = notes.map((l) => (
+    <p key={l} className={s.rescue} data-bad={/^(Bob was caught|Rescue \(simulated\): 0 )/.test(l)}>
+      {l}
+    </p>
+  ));
   const disclaimer = report?.disclaimer || FALLBACK_DISCLAIMER;
   if (!report) {
     return (
@@ -141,6 +148,7 @@ export function ShiftReportView({ report, precalls = {}, loading, score }: Shift
         <p className={s.writing}>
           {loading ? "HQ is writing the shift report…" : "No shift report came back from HQ."}
         </p>
+        {noteEls}
         <p className={s.disclaimer}>{disclaimer}</p>
       </section>
     );
@@ -195,6 +203,7 @@ export function ShiftReportView({ report, precalls = {}, loading, score }: Shift
           )}
         </dl>
         {report.rule && <p className={s.rule}>{report.rule}</p>}
+        {noteEls}
       </div>
 
       <ol className={s.rows}>
@@ -233,7 +242,8 @@ export function ShiftReportView({ report, precalls = {}, loading, score }: Shift
             </span>
             <span className={s.from}>
               from {n(report.people_safe)} people kept safe, {n(report.records_fixed)} record{report.records_fixed === 1 ? "" : "s"} fixed
-              {graded.length > 0 ? `, ${calledIt} called from outside` : ""} · tags right {n(report.tags_right)} of {n(report.tags ?? rows.length)}
+              {graded.length > 0 ? `, ${calledIt} called from outside` : ""}
+              {score.rescued ? `, ${score.rescued} brought out before the aftershock (+${score.rescued * 100}, simulated)` : ""} · tags right {n(report.tags_right)} of {n(report.tags ?? rows.length)}
             </span>
           </div>
         )}
