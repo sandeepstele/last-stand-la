@@ -46,8 +46,14 @@ narrative. If evidence is missing, contradictory, or weak, set follows=false. Re
 one check and why under 25 words. You cannot change a probability or propose a stronger verdict."""
 
 
+DEFAULT_ON = {"RADAR_CRITIC", "RADAR_NIGHT_LOG"}  # the dawn critic and the night log are part of the game; set 0 to turn off
+
+
 def _flag(name: str) -> bool:
-    return os.environ.get(name, "").strip().lower() in ("1", "true", "yes", "on")
+    raw = os.environ.get(name)
+    if raw is None or not raw.strip():
+        return name in DEFAULT_ON
+    return raw.strip().lower() in ("1", "true", "yes", "on")
 
 
 def _thread_id(runtime: ToolRuntime) -> str | None:
@@ -468,9 +474,13 @@ def _enabled_subagents(m) -> list[dict]:
         return specs
     timeout = float(os.environ.get("RADAR_MODEL_TIMEOUT_S", "8")) or 8.0
     attempts = 1
-    critic_name = os.environ.get("RADAR_CRITIC_MODEL", "gemini-4-argon")
-    critic = make_model(critic_name, "low", timeout=timeout, attempts=attempts)
-    fallback = make_model("gemini-3.8-flash", "low", timeout=timeout, attempts=1)
+    # a different model from the 3.8 Flash commander (self-preference bias), and fast: gemini-4-argon stalled 5-6 min
+    critic_name = os.environ.get("RADAR_CRITIC_MODEL", "gemini-3.5-flash-lite")
+    if critic_name.startswith("gemini") and not os.environ.get("GOOGLE_API_KEY"):
+        critic, fallback = m.spec, m.orch  # another provider configured (tests use a dummy key): reuse its models
+    else:
+        critic = make_model(critic_name, "low", timeout=timeout, attempts=attempts)
+        fallback = make_model("gemini-3.8-flash", "low", timeout=timeout, attempts=1)
     specs.append({"name": "critic", "description": "Reviews whether one case's code-built evidence supports its verdict.",
                   "system_prompt": CRITIC_PROMPT, "tools": [case_file], "model": critic,
                   "response_format": CriticOut, "middleware": [_errors(), ModelFallbackMiddleware(fallback)]})

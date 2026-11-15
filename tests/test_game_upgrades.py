@@ -43,12 +43,16 @@ def test_critic_result_matches_the_exact_case_marker(monkeypatch):
     assert game._critic_result(runtime, "2", None) is None
 
 
-def test_optional_tools_are_not_registered_by_default(monkeypatch):
+def test_upgrades_are_on_by_default_and_can_be_switched_off(monkeypatch):
     game = _game_module(monkeypatch)
     monkeypatch.delenv("RADAR_CRITIC", raising=False)
     monkeypatch.delenv("RADAR_NIGHT_LOG", raising=False)
-    names = {tool.name for tool in game._enabled_tools()}
-    assert "case_file" not in names and "log_night" not in names
+    assert "log_night" in {tool.name for tool in game._enabled_tools()}  # on by default (the critic is a subagent)
+    assert "critic" in {s["name"] for s in game._enabled_subagents(game.MODELS)}
+    monkeypatch.setenv("RADAR_CRITIC", "0")
+    monkeypatch.setenv("RADAR_NIGHT_LOG", "0")
+    assert "log_night" not in {tool.name for tool in game._enabled_tools()}
+    assert "critic" not in {s["name"] for s in game._enabled_subagents(game.MODELS)}
     assert "case_file" not in {tool.name for tool in game.GAME_TOOLS}
 
 
