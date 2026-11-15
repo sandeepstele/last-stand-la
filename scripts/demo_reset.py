@@ -24,10 +24,10 @@ from dotenv import load_dotenv
 from langgraph_sdk import get_sync_client
 
 ROOT = Path(__file__).resolve().parent.parent
-LAST_STAND_LOG_SEED = """## Night 2026-11-13
-- walls 737 Broadway; checks=compliance_filings; lead_move=compliance_filings; verdict=leaning; reviewer=not reviewed
-Lesson: City filings moved the odds; check the facade before choosing the next lead.
-"""
+import sys  # noqa: E402
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from app.night_log import LAST_STAND_LOG_SEED  # noqa: E402  (one seed for the script and Play again)
 
 
 def reset_night_log(store, dry_run: bool = False) -> int:

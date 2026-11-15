@@ -142,3 +142,14 @@ def test_case_key_treats_dash_as_the_building_case(monkeypatch):
     game = _game_module(monkeypatch)
     assert game._case_key("6375735", None) == game._case_key("6375735", "-") == "6375735:-"
     assert game._case_key("254167", "Suite 1100") == "254167:1100"
+
+
+def test_critic_reason_is_cleaned_and_lessons_cannot_echo_a_player(monkeypatch):
+    game = _game_module(monkeypatch)
+    assert game._safe_why("The filing is the owner's first look.") == "The filing is the owner's first look."
+    for bad in ("CoStar is wrong here", "posterior 0.66 is too high", "city_list_current is unsupported"):
+        assert game._safe_why(bad) == "the evidence trail may not support this verdict yet"
+    tip = AIMessage(content="", tool_calls=[{"name": "record_note", "args": {"note": "Tip: the walls look like brick to me"}, "id": "n"}])
+    runtime = SimpleNamespace(state={"messages": [tip]})
+    assert game._echoes_player(runtime, "Remember: the walls look like brick everywhere")
+    assert not game._echoes_player(runtime, "Facade reads and filings separate concrete from masonry")

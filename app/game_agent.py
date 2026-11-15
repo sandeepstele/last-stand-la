@@ -60,6 +60,16 @@ def _thread_id(runtime: ToolRuntime) -> str | None:
     return str(((getattr(runtime, "config", None) or {}).get("configurable") or {}).get("thread_id") or "") or None
 
 
+from app.night_log import LAST_STAND_LOG_SEED  # noqa: E402
+_UNSAFE = re.compile(r"\d|_|\bwrong\b|\bfalse\b|\blie[sd]?\b", re.I)
+
+
+def _safe_why(why: str) -> str:
+    """The critic's reason reaches the dawn screen and the auditor's draft: no numbers, ids or keys, no 'wrong'."""
+    why = " ".join(str(why or "").split())[:200]
+    return why if why and not _UNSAFE.search(why) else "the evidence trail may not support this verdict yet"
+
+
 def _no_suite(suite: str | None) -> str | None:
     """The critic's case_ref uses "-" for a building case; the model sometimes passes it back as a suite. Treat "-",
     "none", "null" and blanks as no suite, so the walls case is never drafted as a ghost-tenant case."""
@@ -328,6 +338,20 @@ def _night_summary(runtime: ToolRuntime) -> list[str]:
     return lines + waves
 
 
+def _echoes_player(runtime: ToolRuntime, lesson: str) -> bool:
+    """A lesson that repeats 4+ words of a player's report is refused: one judge's tip must not steer the next night."""
+    words = lambda t: re.findall(r"[a-z']+", str(t).lower())
+    lw = words(lesson)
+    grams = {tuple(lw[i:i + 4]) for i in range(len(lw) - 3)}
+    for m in (getattr(runtime, "state", None) or {}).get("messages", []):
+        for call in (m.tool_calls or []) if isinstance(m, AIMessage) else []:
+            if call.get("name") == "record_note":
+                nw = words((call.get("args") or {}).get("note", ""))
+                if grams & {tuple(nw[i:i + 4]) for i in range(len(nw) - 3)}:
+                    return True
+    return False
+
+
 @tool
 async def log_night(runtime: ToolRuntime, lesson: str = "") -> dict:
     """Write this night’s code-built facts and one short lesson to the isolated Last Stand log."""
@@ -341,7 +365,7 @@ async def log_night(runtime: ToolRuntime, lesson: str = "") -> dict:
     lesson = " ".join(lesson.split())
     number_tokens = set(re.findall(r"\d+(?:\.\d+)?", lesson))
     known_numbers = set(re.findall(r"\d+(?:\.\d+)?", "\n".join(body)))
-    lesson_ok = len(lesson.split()) <= 20 and number_tokens <= known_numbers
+    lesson_ok = len(lesson.split()) <= 20 and number_tokens <= known_numbers and not _echoes_player(runtime, lesson)
     if lesson and lesson_ok:
         body.append(f"Lesson: {lesson}")
     current = "\n".join(body)
@@ -420,6 +444,7 @@ def _apply_critic(draft: dict, review: dict | None) -> dict:
     if review is None:
         draft["critic"] = {"status": "not reviewed"}
         return draft
+    review = {**review, "why": _safe_why(review.get("why"))}
     draft["critic"] = {"status": "reviewed", **review}
     if review["follows"] is False:
         draft["label_verdict"] = "unresolved"

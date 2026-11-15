@@ -287,14 +287,20 @@ async def demo_reset(request: Request) -> JSONResponse:
     if body.get("confirm") != "reset":
         return JSONResponse({"error": 'send {"confirm": "reset"}'}, status_code=400)
     store, cleared = _store(request), {}
-    for prefix in (("notes",), ("corrections",), ("outbox",)):
+    for prefix in (("notes",), ("corrections",), ("outbox",), ("laststand_cases",), ("laststand_log",)):
         n = 0
         while items := await store.asearch(prefix, limit=100):
             for it in items:
                 await store.adelete(it.namespace, it.key)
                 n += 1
         cleared["/".join(prefix)] = n
-    return JSONResponse({"ok": True, "cleared": cleared})
+    from deepagents.backends.utils import create_file_data
+
+    from app.night_log import LAST_STAND_LOG_SEED
+
+    # every night starts from the same fixed "previous night", so the briefing reads the recorded memory
+    await store.aput(("laststand_log",), "/latest.md", create_file_data(LAST_STAND_LOG_SEED))
+    return JSONResponse({"ok": True, "cleared": cleared, "night_log": "seeded"})
 
 
 app = Starlette(
