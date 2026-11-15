@@ -67,7 +67,7 @@ class ShiftStart(NightStart):
         last_h = max((i for i, m in enumerate(msgs) if isinstance(m, HumanMessage)), default=-1)
         if last_h < 0 or any(isinstance(m, AIMessage) for m in msgs[last_h + 1:]):
             return False
-        return _text(msgs[last_h]).strip().lower().rstrip(".") == START
+        return desk.parse_day(_text(msgs[last_h])) is not None  # "Start Bob's shift" (day 1) or "..., day k"
 
     async def abefore_agent(self, state, runtime):
         store = getattr(runtime, "store", None)
@@ -76,7 +76,7 @@ class ShiftStart(NightStart):
         from app import replay
         from app.tools import _note_key
 
-        for pid, suite in fortress.NIGHT_PIN:
+        for pid, suite in fortress.NIGHT_PIN | desk.day_pins():
             for it in await store.asearch(("notes", _note_key(pid, suite)), limit=100):
                 await store.adelete(it.namespace, it.key)
         for it in await store.asearch(("laststand_cases",), limit=200):
@@ -187,6 +187,14 @@ class TagDisclaimer(AgentMiddleware):
 # ------------------------------------------------------------------ desk tools (numbers in code: app/desk.py)
 
 
+def _day(runtime: ToolRuntime) -> int:
+    """The day this thread is working: from its "Start Bob's shift[, day k]" message (day 1 if none)."""
+    for m in (getattr(runtime, "state", None) or {}).get("messages", []):
+        if isinstance(m, HumanMessage) and (d := desk.parse_day(_text(m))):
+            return d
+    return 1
+
+
 def _thread_checks(runtime: ToolRuntime, pid: str) -> list[str]:
     return _wave_and_checks(runtime, pid)[1]
 
@@ -221,10 +229,13 @@ async def open_case(property_id: str, runtime: ToolRuntime, suite: str | None = 
 
 
 @tool
-async def inbox() -> dict:
+async def inbox(runtime: ToolRuntime) -> dict:
     """Today's desk inbox: how many open record cases the queue holds, how many lie in Bob's district, and today's
     cases with their stakes (real queue cases; hedged questions, no company names)."""
-    return await asyncio.to_thread(fortress.night_cases)
+    day = _day(runtime)
+    if day == 1:  # the recorded stage shift: exactly as before
+        return await asyncio.to_thread(fortress.night_cases)
+    return await asyncio.to_thread(desk.day_inbox, day)
 
 
 @tool
@@ -307,7 +318,7 @@ async def shift_report(runtime: ToolRuntime) -> dict:
     """Dawn: the aftershock hits (seeded, in code) and tests every tag Bob confirmed today. Returns, per building, what
     happened and the people kept safe, plus the records fixed (drafts a reviewer agreed with). Call it after the drafts."""
     tags = _tags(runtime)
-    return await asyncio.to_thread(desk.shift_report, tags, {}, _drafts(runtime))
+    return await asyncio.to_thread(desk.shift_report, tags, {}, _drafts(runtime), _day(runtime))
 
 
 async def _log_text(runtime: ToolRuntime) -> str:
@@ -331,11 +342,16 @@ def _shift_facts(runtime: ToolRuntime) -> list[str]:
             for r in d.get("buildings") or []:
                 sug = (tagged.get(str(r["pid"])) or {}).get("suggested") or "unknown"
                 b = lambda v: str(bool(v)).lower()
+                if r.get("right_tag") is None:  # days 2+: no aftershock, graded by the screening
+                    lines.append(f"- {r['label']}: agent_suggested={sug}; bob_tag={r['tag']}; agreed={b(sug == r['tag'])}; "
+                                 f"aftershock=none; expected_exposed={r.get('people_exposed')}; people_at_stake={r['people_at_stake']}")
+                    continue
                 lines.append(f"- {r['label']}: agent_suggested={sug}; bob_tag={r['tag']}; agreed={b(sug == r['tag'])}; "
                              f"damage={r.get('damage')}; right_tag={r.get('right_tag')}; bob_right={b(r.get('tag_right'))}; "
                              f"agent_right={b(sug == r.get('right_tag'))}; people_safe={r['people_safe']}")
-            lines.append(f"- score: people_safe={d.get('people_safe')}/{d.get('people_at_stake')}; "
-                         f"records_fixed={d.get('records_fixed')}")
+            lines.append(f"- score: people_safe={d.get('people_safe')}/{d.get('people_at_stake')}"
+                         + ("" if d.get("aftershock", True) else " (expected; no aftershock)")
+                         + f"; records_fixed={d.get('records_fixed')}")
     return lines
 
 
@@ -347,7 +363,8 @@ async def log_shift(runtime: ToolRuntime, lesson: str = "") -> dict:
     facts = _shift_facts(runtime)
     previous = await _log_text(runtime)
     old = [p.strip() for p in re.split(r"(?m)(?=^## Shift )", previous) if p.strip()]
-    body = [f"## Shift {date.today().isoformat()}", *(facts or ["- no shift report available"])]
+    day = _day(runtime)
+    body = [f"## Shift {date.today().isoformat()}" + (f" (day {day})" if day > 1 else ""), *(facts or ["- no shift report available"])]
     lesson = " ".join(lesson.split())
     nums, known = set(re.findall(r"\d+(?:\.\d+)?", lesson)), set(re.findall(r"\d+(?:\.\d+)?", "\n".join(body)))
     ok = len(lesson.split()) <= 20 and nums <= known and not _echoes_player(runtime, lesson)

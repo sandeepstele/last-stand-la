@@ -434,13 +434,13 @@ def _exposure(tag: str, state: str) -> tuple[float, float]:
     return exposed, displaced
 
 
-def aftershock(pid: str) -> dict[str, Any]:
+def aftershock(pid: str, day: int = 1) -> dict[str, Any]:
     """What the dawn aftershock reveals for one building: a seeded draw from the building's own damage odds (its
     records only: the HAZUS damage states for each material it may be, weighted by the records). What Bob checked
     changes his tag, never the building. Same building, same dawn."""
     s = screen(pid)
     mixed = {k: sum(r["odds"] * r["damage"][k] for r in s["by_material"]) for k in STATES}
-    roll = random.Random(f"{SEED}:aftershock:{pid}").random()
+    roll = random.Random(f"{SEED}:aftershock:{pid}" if day == 1 else f"{SEED}:day{day}:aftershock:{pid}").random()
     acc, state = 0.0, STATES[-1]
     for k in STATES:
         acc += mixed[k]
@@ -450,17 +450,56 @@ def aftershock(pid: str) -> dict[str, Any]:
     return {"screen": s, "state": state, "roll": round(roll, 3), "odds": {k: round(v, 3) for k, v in mixed.items()}}
 
 
-def shift_report(tags: list[dict], evidence_by_pid: dict[str, tuple[list[str], list[dict]]], drafts: list[dict]) -> dict[str, Any]:
+def _desk_day_report(tags: list[dict], drafts: list[dict], day: int) -> dict[str, Any]:
+    """Days 2+ have no aftershock: each tag is graded by the code's own screening. Expected people exposed and
+    displaced for Bob's tag (on the building's records-only damage odds), next to every other tag's, and whether Bob's
+    tag matches the code's suggestion. Nothing is rolled."""
+    rows = []
+    for t in tags:
+        pid = str(t["pid"])
+        a = aftershock(pid)  # only its odds are used here; its roll is ignored on these days
+        s = a["screen"]
+        n = s["people"]["at_stake"]
+        expected = {tag: {"exposed": round(n * sum(a["odds"][k] * _exposure(tag, k)[0] for k in STATES)),
+                          "displaced": round(n * sum(a["odds"][k] * _exposure(tag, k)[1] for k in STATES))}
+                    for tag in ("green", "yellow", "red")}
+        sug = t.get("suggested") or s["suggest"]
+        mine = expected[t["tag"]]
+        rows.append({"pid": pid, "label": s["label"], "tag": t["tag"], "suggested": sug, "agreed": t["tag"] == sug,
+                     "damage": None, "outcome": "no aftershock today", "right_tag": None, "tag_right": None,
+                     "people_at_stake": n, "people_safe": n - mine["exposed"], "people_exposed": mine["exposed"],
+                     "people_displaced": mine["displaced"], "people_hurt": 0, "expected": expected,
+                     "why": f"no aftershock today: graded by the screening. On this building's own odds a {t['tag']} tag "
+                            f"leaves about {mine['exposed']} exposed and {mine['displaced']} displaced; the code suggested {sug}"})
+    fixed = [d for d in drafts if (d.get("critic") or {}).get("status") == "reviewed" and (d["critic"].get("follows") is True)
+             and str(d.get("text", "")).startswith("DRAFT")]
+    return {"day": day, "aftershock": False, "buildings": rows,
+            "people_safe": sum(r["people_safe"] for r in rows), "people_at_stake": sum(r["people_at_stake"] for r in rows),
+            "people_displaced": sum(r["people_displaced"] for r in rows), "people_hurt": 0,
+            "tags_matching_screening": sum(r["agreed"] for r in rows), "tags_right": None, "tags": len(rows),
+            "records_fixed": len(fixed),
+            "records": [{"label": d.get("label"), "verdict": d.get("label_verdict"),
+                         "critic": (d.get("critic") or {}).get("status")} for d in drafts],
+            "rule": "No aftershock on this day: people safe, exposed and displaced are EXPECTED values for Bob's tag on the "
+                    "building's records-only damage odds (HAZUS at its 1994 shaking); the tag is compared with the code's "
+                    "suggestion.",
+            "disclaimer": f"{DISCLAIMER}."}
+
+
+def shift_report(tags: list[dict], evidence_by_pid: dict[str, tuple[list[str], list[dict]]], drafts: list[dict],
+                 day: int = 1) -> dict[str, Any]:
     """Dawn: the aftershock reveals each tagged building's damage (seeded, from the building's own odds) and tests the
     tag against the ATC-20 posting that damage calls for (none/slight green, moderate yellow, extensive/complete red).
     People exposed to serious damage: all of them under green, a limited-entry share under yellow, none under red; they
     are hurt in the game at HAZUS indoor rates. Displaced for nothing: all under red, a share under yellow, when the
     damage is none or slight. Each row also carries the expected outcome of every tag (decision quality, not luck).
     Records fixed: correction drafts the reviewer agreed with."""
+    if day > 1:
+        return _desk_day_report(tags, drafts, day)
     rows, safe, stake, displaced, hurt, right = [], 0, 0, 0, 0.0, 0
     for t in tags:
         pid = str(t["pid"])
-        a = aftershock(pid)
+        a = aftershock(pid, day)
         s, state = a["screen"], a["state"]
         n = s["people"]["at_stake"]
         cls = s["by_material"][0]["hazus_class"]
@@ -499,3 +538,76 @@ def shift_report(tags: list[dict], evidence_by_pid: dict[str, tuple[list[str], l
                     f"{round(YELLOW_DISPLACED * 100)}% when the damage is minor (game shares). People hurt use HAZUS indoor "
                     "casualty rates (game). 'expected' gives every tag's average outcome on the building's own odds.",
             "disclaimer": f"{DISCLAIMER}."}
+
+
+# ---------------------------------------------------------------- Bob's days (one real hero building and suite each)
+# Each later day is another in-district building with a real CoStar-vs-city material disagreement, a door (Bob can walk
+# in), Matterport scans, and an office suite case with a door. Day 1 is the recorded stage shift, unchanged.
+DAYS = [
+    {"day": 1, "hero_pid": "6375735", "office_pid": "254167", "suite": "1100"},
+    {"day": 2, "hero_pid": "7762448", "office_pid": "249218", "suite": "404"},
+    {"day": 3, "hero_pid": "256445", "office_pid": "254167", "suite": "1400"},
+    {"day": 4, "hero_pid": "7376255", "office_pid": "249218", "suite": "401402"},
+]
+_DAY_RE = __import__("re").compile(r"^start bob's shift(?:[,:]?\s*day\s*(\d+))?\.?$", __import__("re").I)
+
+
+def parse_day(text: str) -> int | None:
+    """"Start Bob's shift" is day 1; "Start Bob's shift, day 3" (or ": day 3") is day 3; anything else is None."""
+    m = _DAY_RE.match(" ".join(str(text or "").split()))
+    if not m:
+        return None
+    d = int(m.group(1) or 1)
+    return d if 1 <= d <= len(DAYS) else None
+
+
+def day_pins() -> set[tuple[str, str | None]]:
+    return {(d["hero_pid"], None) for d in DAYS} | {(d["office_pid"], d["suite"]) for d in DAYS}
+
+
+def days() -> dict[str, Any]:
+    out = []
+    for d in DAYS:
+        hero = fortress.building(d["hero_pid"]) or {}
+        office = fortress.building(d["office_pid"]) or {}
+        s = screen(d["hero_pid"])
+        rec = costar.get(d["hero_pid"])
+        out.append({**d, "hero_label": hero.get("label"), "office_label": office.get("label"),
+                    "hero_door": hero.get("door"), "office_door": office.get("door"),
+                    "disagreement": f"CoStar records {fortress._material(rec)}; the city's retrofit list says concrete",
+                    "people_at_stake": s["people"]["at_stake"], "records_only_suggest": s["suggest"]})
+    return {"n": len(DAYS), "days": out}
+
+
+def day_inbox(day: int) -> dict[str, Any]:
+    """Day k's inbox: the same shape as Last Stand's night_cases, for that day's office suite and hero building."""
+    from app import cases, evidence
+
+    d = DAYS[day - 1]
+    pins = {(d["hero_pid"], None), (d["office_pid"], d["suite"])}
+    ordered = cases.ordered()
+    g = fortress.GROUND
+    inside = 0
+    picked = []
+    for n, c in enumerate(ordered, 1):
+        b = fortress.building(c["property_id"])
+        if b and g["x0"] - fortress.PLAY_PAD_M <= b["x"] <= g["x1"] + fortress.PLAY_PAD_M and \
+                g["z0"] - fortress.PLAY_PAD_M <= b["z"] <= g["z1"] + fortress.PLAY_PAD_M:
+            inside += 1
+        key = (str(c["property_id"]), c.get("suite") if c["case"] == "ghost_tenant" else None)
+        if b and key in pins and c["case"] in ("ghost_tenant", "material_conflict"):
+            picked.append((n, c, b))
+            pins.discard(key)
+    today = []
+    for n, c, b in picked:
+        suite = c.get("suite") if c["case"] == "ghost_tenant" else None
+        case = next((k for k in evidence.open_case(c["property_id"], suite).get("cases") or [] if k["case"] == c["case"]), None)
+        if c["case"] == "ghost_tenant":
+            label = f"suite {suite}, {b['label']}"
+            stakes = f"{(c.get('label') or '').split(': ', 1)[-1] or 'a tenant'} on record; the suite is listed for lease"
+        else:
+            label = b["label"]
+            stakes = f"an unfinished city concrete retrofit order; CoStar records {(c.get('material') or 'another material').lower()}"
+        today.append({"n": n, "case": c["case"], "property_id": c["property_id"], "suite": suite, "label": label,
+                      "question": case["question"] if case else None, "stakes": stakes})
+    return {"day": day, "of": len(DAYS), "total": len(ordered), "in_area": inside, "cases": today}

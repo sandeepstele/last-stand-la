@@ -66,13 +66,21 @@ def _decision(proposed: dict, want: str) -> dict:
     return {"type": "edit", "edited_action": {"name": "tag_building", "args": {"pid": HERO, "tag": want}}}
 
 
-async def shift(c, tip: str, want: str, suite_tip: str | None, stage: bool = False) -> None:
-    print(f"shift: {'STAGE ' if stage else ''}suite {'(from data)' if stage else suite_tip} / walls {tip} / tag {want}")
+async def shift(c, tip: str, want: str, suite_tip: str | None, stage: bool = False, day: int = 1) -> None:
+    global HERO
+    from app.desk import DAYS
+
+    d = DAYS[day - 1]
+    HERO = d["hero_pid"]
+    start = START if day == 1 else f"{START}, day {day}"
+    suite_q = SUITE_Q if day == 1 else f"Check suite {d['suite']} at building {d['office_pid']}: is the tenant on record still there?"
+    suite_tips = SUITE_TIPS if day == 1 else {k: v.replace("suite 1100", f"suite {d['suite']}") for k, v in SUITE_TIPS.items()}
+    print(f"shift: day {day} {'STAGE ' if stage else ''}suite {'(from data)' if stage else suite_tip} / walls {tip} / tag {want}")
     tid = (await c.threads.create())["thread_id"]
-    steps = [("start", START), ("suite case", SUITE_Q)] + ([("suite tip", SUITE_TIPS[suite_tip])] if suite_tip and not stage else [])
-    for label, text in steps + [("inspect", INSPECT), ("walls tip", TIPS[tip])]:
+    steps = [("start", start), ("suite case", suite_q)] + ([("suite tip", suite_tips[suite_tip])] if suite_tip and not stage else [])
+    for label, text in steps + [("inspect", f"Inspect building {HERO}"), ("walls tip", TIPS[tip])]:
         await _run(c, tid, label, input={"messages": [{"role": "user", "content": text}]})
-    intr = await _run(c, tid, "quake", input={"messages": [{"role": "user", "content": QUAKE}]})
+    intr = await _run(c, tid, "quake", input={"messages": [{"role": "user", "content": f"Quake at 5:02 pm. Tag building {HERO}"}]})
     if not intr:
         print("  !! no tag interrupt")
         return
@@ -91,14 +99,19 @@ async def main() -> None:
     p.add_argument("--suites", nargs="+", choices=list(SUITE_TIPS), default=None,
                    help="suite tips to cycle across shifts (default: cycle all three)")
     p.add_argument("--stage", action="store_true", help="the ?demo=1 cut: the suite case is worked from data (no suite tip)")
+    p.add_argument("--days", nargs="+", type=int, default=[1], help="days to play in order on fresh threads, WITHOUT a "
+                   "reset between them (a career: each day's briefing reads the previous day's log); day 1 resets first")
     a = p.parse_args()
     c = get_client(url=a.url)
     print("server:", json.dumps({k: v for k, v in (await c.http.get("/healthz")).items() if k == "replay"}))
     cycle = a.suites or list(SUITE_TIPS)
     plan = [(t, w) for t in a.tips for w in a.tags]
     for i, (tip, want) in enumerate(plan):
-        subprocess.run([sys.executable, str(ROOT / "scripts" / "demo_reset.py"), "--url", a.url], check=True, capture_output=True)
-        await shift(c, tip, want, None if a.stage else cycle[i % len(cycle)], stage=a.stage)
+        for day in a.days:
+            if day == a.days[0]:
+                subprocess.run([sys.executable, str(ROOT / "scripts" / "demo_reset.py"), "--url", a.url], check=True,
+                               capture_output=True)
+            await shift(c, tip, want, None if a.stage else cycle[i % len(cycle)], stage=a.stage, day=day)
 
 
 if __name__ == "__main__":

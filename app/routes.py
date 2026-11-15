@@ -312,6 +312,13 @@ async def desk_screen(request: Request) -> JSONResponse:
     return JSONResponse(await asyncio.to_thread(desk.screen, pid, checks, notes))
 
 
+async def desk_days(request: Request) -> JSONResponse:
+    # GET /desk/days: Bob's days, each with its hero building (walls case) and office suite (tenant case)
+    from app import desk
+
+    return JSONResponse(await asyncio.to_thread(desk.days))
+
+
 async def desk_triage(request: Request) -> JSONResponse:
     # GET /desk/triage?scope=city: buildings ranked by people at risk in the aftershock (the map layer); district by
     # default, or every LA building in the kit
@@ -406,6 +413,7 @@ app = Starlette(
         Route("/desk/card/{pid}", desk_card, methods=["GET"]),
         Route("/desk/screen/{pid}", desk_screen, methods=["GET"]),
         Route("/desk/triage", desk_triage, methods=["GET"]),
+        Route("/desk/days", desk_days, methods=["GET"]),
         Route("/cases/queue", cases_queue, methods=["GET"]),
         Route("/cases/decision", cases_decision, methods=["POST"]),
         Route("/cases/inbox", cases_inbox, methods=["GET"]),

@@ -112,3 +112,11 @@ def test_shift_facts_record_agent_vs_bob(monkeypatch):
     facts = da._shift_facts(SimpleNamespace(state={"messages": [tag, rep]}))
     assert facts[0] == ("- X St: agent_suggested=yellow; bob_tag=red; agreed=false; damage=extensive; right_tag=red; "
                         "bob_right=true; agent_right=false; people_safe=9")
+
+
+def test_days_parse_and_day_one_unchanged():
+    assert desk.parse_day("Start Bob's shift") == 1 and desk.parse_day("Start Bob's shift, day 3") == 3
+    assert desk.parse_day("Start Bob's shift: day 2.") == 2 and desk.parse_day("Brief the night shift") is None
+    assert desk.parse_day(f"Start Bob's shift, day {len(desk.DAYS) + 1}") is None
+    assert desk.DAYS[0] == {"day": 1, "hero_pid": "6375735", "office_pid": "254167", "suite": "1100"}
+    assert len({d["hero_pid"] for d in desk.DAYS}) == len(desk.DAYS)  # a different hero every day
