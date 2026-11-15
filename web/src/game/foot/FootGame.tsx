@@ -1634,6 +1634,8 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
           loading={game.isLoading}
           onPlayAgain={playAgain}
           score={deskScore ?? score}
+          report={game.shiftReport}
+          precalls={precalls}
           reportFiled={prog.filed}
           onFileReport={() => {
             setProg((q) => ({ ...q, filed: true }));

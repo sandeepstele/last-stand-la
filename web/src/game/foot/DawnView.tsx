@@ -1,5 +1,6 @@
 "use client";
 // Keep the props type.
+// Desk shift (DESK): the SHIFT REPORT (ShiftReport.tsx) beside the drafts and "File the reports". Night game: below.
 // Dawn: what the night settled (the cases worked, from the drafts themselves), HQ's drafts, the final objective (file
 // the reports), the score, how the night was decided and the REAL case file. Every number here comes from props or
 // from the agent's tool results.
@@ -8,9 +9,12 @@ import { useMemo } from "react";
 import { CaseFile } from "@/components/Cases";
 import { kind, latestResult, type Msg } from "../radio";
 import { DISCLAIMER } from "../types";
+import { DESK, type ShiftReport, type Tag } from "../useGame";
 import { placeName, plain } from "./copy";
 import { draftsModel } from "./hqModel";
 import { HqDrafts } from "./hqDrafts";
+import { ShiftReportView } from "./ShiftReport";
+import d from "./ShiftReport.module.css";
 import { Keycap, footStyles as styles } from "./ui";
 
 export type DawnProps = {
@@ -24,6 +28,9 @@ export type DawnProps = {
   /** Final objective: "File the report" = the draft correction goes to a human researcher for review (local; nothing is sent). */
   reportFiled: boolean;
   onFileReport(): void;
+  // ---- the desk shift (DESK): the server's shift_report (null until it arrives) and Bob's calls from outside
+  report?: ShiftReport | null;
+  precalls?: Record<string, Tag>;
 };
 
 const clock = (secs: number) => {
@@ -35,7 +42,93 @@ const clock = (secs: number) => {
 const toneOf = (l: string) =>
   /^(Records checked tonight|\d+ (open )?cases? (checked|worked) tonight)/i.test(l) ? "records" : /^Case #\d+/.test(l) ? "hq" : /went down/i.test(l) ? "down" : undefined;
 
-export function DawnView({ title, lines, messages, loading, onPlayAgain, score, reportFiled, onFileReport }: DawnProps) {
+export function DawnView(props: DawnProps) {
+  return DESK ? <DeskDawn {...props} /> : <NightDawn {...props} />;
+}
+
+/** The desk shift's dawn: the shift report on the left; tonight's cases, HQ's drafts and "File the reports" on the right. */
+function DeskDawn({ title, lines, messages, loading, onPlayAgain, score, reportFiled, onFileReport, report, precalls }: DawnProps) {
+  const hasCase = messages.some((m) => kind(m as Msg) === "tool" && (m as Msg).name === "open_case");
+  const drafts = useMemo(() => draftsModel(messages, loading).drafts, [messages, loading]);
+  const queue = useMemo(() => latestResult<{ total?: number }>(messages, "night_cases")?.total ?? null, [messages]);
+  // The shift report covers the tags, people, records and calls; only the side jobs' lines (e.g. the suite sweep) add to it.
+  const extra = lines.filter((l) => /^Suite sweep/i.test(l));
+  return (
+    <div className={`${styles.root} ${styles.dawn}`} role="dialog" aria-label={title} style={{ overflow: "hidden" }}>
+      <div className={styles.sun} />
+      <div className={d.deskDawn}>
+        <header className={d.deskHead}>
+          <div className={styles.dawnKicker}>Sunrise, downtown Los Angeles</div>
+          <h1>{title}</h1>
+        </header>
+        <div className={d.cols}>
+          <ShiftReportView report={report} precalls={precalls} loading={loading} score={report ? score : null} />
+          <div className={d.colR}>
+            <div className={d.scrollR}>
+              {drafts.length > 0 && (
+                <section className={d.cases}>
+                  <h2>
+                    {drafts.length} case{drafts.length === 1 ? "" : "s"} worked tonight
+                    {queue != null && <small>of {queue.toLocaleString("en-US")} open in the queue</small>}
+                  </h2>
+                  <ul>
+                    {drafts.map((x) => (
+                      <li key={x.id}>
+                        {x.n != null ? `Case #${x.n} · ` : ""}
+                        {placeName(plain(x.where))}
+                        <span>{x.yourReport ? "your report + HQ" : "HQ, from the records"}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+              {loading && !drafts.length && (
+                <p className={styles.drafting}>
+                  HQ is drafting tonight&apos;s corrections
+                  <span className={styles.thinking}>
+                    <i />
+                    <i />
+                    <i />
+                  </span>
+                </p>
+              )}
+              <HqDrafts messages={messages} busy={loading} />
+              {extra.map((l) => (
+                <p key={l} className={d.extra}>
+                  {plain(l)}
+                </p>
+              ))}
+              {hasCase && (
+                <details className={styles.caseFile}>
+                  <summary>
+                    The full case file <span>What HQ checked, how it weighed your report, and the draft it leaves for a person</span>
+                  </summary>
+                  <div className={styles.caseWrap}>
+                    <CaseFile messages={messages} loading={loading} />
+                  </div>
+                </details>
+              )}
+            </div>
+            <section className={d.dock}>
+              <p>&ldquo;File the reports&rdquo; opens the auditor, where a person reviews each draft. Nothing is sent automatically.</p>
+              <div className={d.dockBtns}>
+                <button type="button" className={styles.fileBtn} disabled={reportFiled} onClick={onFileReport}>
+                  {reportFiled ? "Filed for review" : "File the reports"}
+                </button>
+                <button type="button" className={styles.again} onClick={onPlayAgain}>
+                  Play again <Keycap k="Enter" />
+                </button>
+              </div>
+            </section>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** The night game's dawn (NEXT_PUBLIC_GAME_GRAPH=laststand): unchanged. */
+function NightDawn({ title, lines, messages, loading, onPlayAgain, score, reportFiled, onFileReport }: DawnProps) {
   const hasCase = messages.some((m) => kind(m as Msg) === "tool" && (m as Msg).name === "open_case");
   // The headline counts what is shown below it: the cases HQ drafted tonight (and who worked each).
   const drafts = useMemo(() => draftsModel(messages, loading).drafts, [messages, loading]);
