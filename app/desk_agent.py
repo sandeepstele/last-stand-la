@@ -166,6 +166,55 @@ class DeskRetryBlank(RetryBlank):
         return latest_verdict(msgs) or self.fallback
 
 
+def _last_shift(log_text: str) -> dict | None:
+    """The first building line of the newest "## Shift" block in a read_file result (line numbers stripped)."""
+    lines = [re.sub(r"^\s*\d+\t", "", x) for x in str(log_text or "").splitlines()]
+    blocks, cur = [], None
+    for x in lines:
+        if x.startswith("## Shift"):
+            cur = []
+            blocks.append(cur)
+        elif cur is not None and x.startswith("- ") and not x.startswith("- score"):
+            cur.append(x)
+    if not blocks or not blocks[-1]:
+        return None
+    line = blocks[-1][0]
+    get = lambda k: (re.search(rf"\b{k}=([a-z]+)", line) or [None, None])[1]
+    return {"label": line[2:].split(":", 1)[0].strip(), "suggested": get("agent_suggested"), "tag": get("bob_tag"),
+            "agreed": get("agreed"), "no_aftershock": "aftershock=none" in line}
+
+
+class DayOpener(AgentMiddleware):
+    """Days 2+ only: when the last shift had no aftershock, the briefing's first line is built in code from the log, so
+    the agent never claims an aftershock that didn't happen (the prompt's one example is the Day 1 aftershock case)."""
+
+    @staticmethod
+    def _fix(request, result):
+        msgs = getattr(request, "messages", []) or []
+        last_h = max((i for i, m in enumerate(msgs) if isinstance(m, HumanMessage)), default=-1)
+        if last_h < 0 or (desk.parse_day(_text(msgs[last_h])) or 1) < 2:
+            return result
+        ai = _last_ai(result)
+        if ai is None or ai.tool_calls or not _text(ai).strip():
+            return result
+        log = next((_text(m) for m in reversed(msgs[last_h + 1:]) if isinstance(m, ToolMessage) and m.name == "read_file"), "")
+        s = _last_shift(log)
+        if not s or not s["no_aftershock"] or not s["tag"]:
+            return result
+        first = (f"Last shift Bob changed my {s['suggested']} to {s['tag']} at {s['label']}; there was no aftershock that day, "
+                 f"so the code's screening graded it." if s["agreed"] == "false" else
+                 f"Last shift Bob kept my {s['tag']} at {s['label']}; there was no aftershock that day, so the code's "
+                 f"screening graded it.")
+        rest = _text(ai).split("\n", 1)
+        return _replace(result, first + ("\n" + rest[1] if len(rest) > 1 else ""))
+
+    def wrap_model_call(self, request, handler):
+        return self._fix(request, handler(request))
+
+    async def awrap_model_call(self, request, handler):
+        return self._fix(request, await handler(request))
+
+
 class TagDisclaimer(AgentMiddleware):
     """A spoken tag or shift outcome always carries the disclaimer: added in code if the model dropped it."""
 
@@ -346,8 +395,9 @@ def _shift_facts(runtime: ToolRuntime) -> list[str]:
                 sug = (tagged.get(str(r["pid"])) or {}).get("suggested") or "unknown"
                 b = lambda v: str(bool(v)).lower()
                 if r.get("right_tag") is None:  # days 2+: no aftershock, graded by the screening
-                    lines.append(f"- {r['label']}: agent_suggested={sug}; bob_tag={r['tag']}; agreed={b(sug == r['tag'])}; "
-                                 f"aftershock=none; expected_exposed={r.get('people_exposed')}; people_at_stake={r['people_at_stake']}")
+                    lines.append(f"- {r['label']}: no aftershock that day (graded by the code's screening); "
+                                 f"agent_suggested={sug}; bob_tag={r['tag']}; agreed={b(sug == r['tag'])}; aftershock=none; "
+                                 f"people_at_stake={r['people_at_stake']}")
                     continue
                 lines.append(f"- {r['label']}: agent_suggested={sug}; bob_tag={r['tag']}; agreed={b(sug == r['tag'])}; "
                              f"damage={r.get('damage')}; right_tag={r.get('right_tag')}; bob_right={b(r.get('tag_right'))}; "
@@ -501,7 +551,7 @@ def build(store=None, checkpointer=None, m=None):
         model=m.orch,
         tools=DESK_TOOLS,
         system_prompt=DESK_PROMPT,
-        middleware=[ShiftStart(), todos, _errors(), TagDisclaimer(), DeskRetryBlank("The line dropped. Say again?"), ForceTag(),
+        middleware=[ShiftStart(), todos, _errors(), DayOpener(), TagDisclaimer(), DeskRetryBlank("The line dropped. Say again?"), ForceTag(),
                     ModelFallbackMiddleware(*m.orch_fallbacks)],
         subagents=_subagents(m),
         backend=backend,

@@ -120,3 +120,20 @@ def test_days_parse_and_day_one_unchanged():
     assert desk.parse_day(f"Start Bob's shift, day {len(desk.DAYS) + 1}") is None
     assert desk.DAYS[0] == {"day": 1, "hero_pid": "6375735", "office_pid": "254167", "suite": "1100"}
     assert len({d["hero_pid"] for d in desk.DAYS}) == len(desk.DAYS)  # a different hero every day
+
+
+def test_day_opener_never_claims_a_missing_aftershock(monkeypatch):
+    da = _desk_agent(monkeypatch)
+    from types import SimpleNamespace
+
+    from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+    log = ("     1\t## Shift 2026-11-15 (day 2)\n     2\t- 730 Los Angeles St: no aftershock that day (graded by the code's "
+           "screening); agent_suggested=yellow; bob_tag=red; agreed=false; aftershock=none; people_at_stake=201\n")
+    msgs = [HumanMessage("Start Bob's shift, day 3"), ToolMessage(content=log, name="read_file", tool_call_id="r")]
+    out = da.DayOpener._fix(SimpleNamespace(messages=msgs),
+                            AIMessage(content="Last shift Bob changed my yellow to red, and the aftershock showed red was right.\nQueue: 328"))
+    assert out.content.startswith("Last shift Bob changed my yellow to red at 730 Los Angeles St; there was no aftershock")
+    assert out.content.endswith("Queue: 328")
+    day1 = [HumanMessage("Start Bob's shift"), msgs[1]]
+    keep = AIMessage(content="Last shift Bob changed my yellow to red at 601 Broadway, and the aftershock showed red was right.")
+    assert da.DayOpener._fix(SimpleNamespace(messages=day1), keep) is keep
