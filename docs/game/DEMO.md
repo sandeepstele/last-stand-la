@@ -18,13 +18,22 @@ One pitch for the judging table and the video voice-over (the shots are in VIDEO
 
 **The memory line on stage:** The first shift after a reset opens from a seeded previous shift (601 Broadway); after that, each shift opens with what Bob actually corrected last time. So the opening line in the pitch is the seeded one; say "what it learned last shift", not "from me today".
 
-**After the pitch: the next days (at the table, not in the 2-minute cut).** At dawn, **Next day** (Enter) keeps the history; **New game** resets it. Day 2's first radio line names the correction the judge just made on Day 1, which is the best live proof of the memory. After Day N, the **career summary** totals the people kept safe, the tags that were right (x of y) and the Agent vs Bob record. **Before the next judge, use New game (or `demo_reset`), never Next day**, so every judge starts on Day 1 from the seeded line.
+**After the pitch: the next days (at the table, not in the 2-minute cut).** At dawn, **Next day (k of 4)** (Enter) keeps the history; **New game** resets it. Day 2's first radio line names the correction the judge just made on Day 1, which is the best live proof of the memory. **Days 2 to 4 have no aftershock** (no clock, no rescue): dawn shows the expected outcome of Bob's tag on the building's own odds, and whether it matches the code's suggestion. After Day 4, the **career summary** totals:
+- tags right (Day 1 against the aftershock, Days 2 to 4 against the screening);
+- people kept safe (Day 1 actual, Days 2 to 4 expected, labelled);
+- records fixed;
+- the Agent vs Bob record.
 
-| Day | Building | Case |
-|---|---|---|
-| 1 | 737 Broadway, plus suite 1100 at 122 7th St | Masonry or concrete; a suite on record as occupied that may be empty |
-| 2 | **[fb: building]** | **[fb: what the records disagree on]** |
-| 3 | **[fb: building]** | **[fb: what the records disagree on]** |
+**Before the next judge, use New game (or `demo_reset`), never Next day**, so every judge starts on Day 1 from the seeded line.
+
+| Day | Building (office suite) | Records disagree on | People | Dawn |
+|---|---|---|---|---|
+| 1 | 737 Broadway (suite 1100, 122 7th St) | Masonry vs concrete | 251 | Simulated aftershock |
+| 2 | 621 Spring St (suite 404, 724 Spring St) | Steel vs concrete | 106 | Expected outcome |
+| 3 | 730 Los Angeles St (suite 1400, 122 7th St) | Masonry vs concrete | 201 | Expected outcome |
+| 4 | 620 Main St (a suite at 724 Spring St) | Masonry vs concrete | 40 | Expected outcome |
+
+If a judge plays Day 2, a good line: "red on 621 Spring when the code says yellow keeps everyone out of harm but displaces about 26 people. That's the trade-off a real officer makes."
 
 **Read the numbers off the screen** (66%, 73%, 251, 25, YELLOW → RED). If the recording differs, say what the screen shows. If Bob doesn't get Maya and Luis out, the aftershock still hits at 0:45 (dawn waits up to 75 s after the quake); say "I didn't make it to them" and move on.
 
@@ -44,7 +53,7 @@ One pitch for the judging table and the video voice-over (the shots are in VIDEO
 - **"Why does better evidence still end in red?"** "Settling masonry versus concrete matters less than the building's age and the shaking. The evidence made the record more accurate, and the odds still said 'old building, strong shaking.'"
 - **"Isn't yellow always safest?"** "Not any more. Yellow allows limited entry, so 10% are exposed if the damage is serious, and 25% are displaced if it's minor. Both are labelled game shares."
 - **"Is the agent learning, is this RLHF?"** "It learns in context: my override and how it turned out go into its shift log, and the next shift opens with that lesson. (On stage we start from a reset, so the first shift opens from a seeded previous shift; play a second shift and it opens with your real correction.) Every decision and every thumbs up or down is also saved as preference pairs in the format RLHF and DPO use. We didn't train any weights tonight; we collect the data."
-- **"Is there more than one day?"** "Yes. Each day is a different real building in the district, and the agent carries its log forward, so it opens Day 2 with your Day 1 call. After the last day you get a career summary: people kept safe, tags right, and you versus the agent. Same honesty: it's in-context memory; no weights change." Offer to press Next day.
+- **"Is there more than one day?"** "Yes, four. Each day is a different real building in the district, and the agent carries its log forward, so it opens Day 2 with your Day 1 call. The aftershock is Day 1 only; on later days the code grades your tag on the building's own odds. After Day 4 you get a career summary: people kept safe, tags right, and you versus the agent. Same honesty: it's in-context memory; no weights change." Offer to press Next day.
 - **"Is it live?"** "The stage run is a recorded replay of the real agent, so it's repeatable. The data, tools and images are live." Offer one live building card from the map.
 - **"What about the whole city?"** "All 1,581 LA buildings in the kit, screened from records alone: 918 green, 446 yellow, 217 red suggestions. Those are odds for a commercial sample, not a prediction."
 - **"What's different from other projects?"** "Most entries use code for the numbers and a person to approve. We found none that models earthquakes, and none where the cost of a wrong call plays out on a clock. A past Claude Code hackathon winner put AI at the permit counter before a building is built; Bob puts it at the counter after the quake, and lets you overrule it."
