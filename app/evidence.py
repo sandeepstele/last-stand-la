@@ -14,8 +14,10 @@ Deltas are judgment calls, stated in each check's `why`, and kept small for weak
 from __future__ import annotations
 
 import json
+import os
 from datetime import date
 from functools import lru_cache
+from pathlib import Path
 from statistics import median
 from typing import Any, Callable
 
@@ -532,14 +534,28 @@ CHECKS: dict[str, Callable[..., dict[str, Any]]] = {
 NOT_APPLICABLE = {"no images", "no data", "nothing to compare", "nothing to look at"}  # a check's inputs were missing
 
 
-@lru_cache(maxsize=1)
+FROZEN_STATS = Path(__file__).resolve().parent.parent / "fixtures" / "public" / "check_stats.json"
+
+
 def check_stats() -> dict[str, dict[str, dict[str, Any]]]:
-    """Measure check movement over the local queue using cached inputs only.
+    """Measure check movement over the local queue using cached inputs only, or read the frozen snapshot.
 
     A check's move is the largest absolute evidence delta it returned for a hypothesis.
     Vision, Vexcel and Matterport helpers refuse cache misses while this runs, so warming
-    the stats can never trigger external requests.
+    the stats can never trigger external requests. When fixtures/public/check_stats.json exists (scripts/freeze_stats.py
+    writes it), it is returned instead: new cached reads made while people play must not shift the hints, or every
+    recorded replay key that includes them would drift.
     """
+    if FROZEN_STATS.exists() and os.environ.get("RADAR_STATS_LIVE") != "1":
+        return json.loads(FROZEN_STATS.read_text())
+    return _measure_check_stats()
+
+
+check_stats.cache_clear = lambda: _measure_check_stats.cache_clear()  # type: ignore[attr-defined]
+
+
+@lru_cache(maxsize=1)
+def _measure_check_stats() -> dict[str, dict[str, dict[str, Any]]]:
     from app import cases as case_queue, layers, vision
 
     totals: dict[str, dict[str, dict[str, Any]]] = {}
