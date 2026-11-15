@@ -43,6 +43,7 @@ import { createCityMap, type City } from "./cityMap";
 import { createRoofObjects, type RoofSystem } from "./roofObjects";
 import { SuiteSweep, type SweepScore } from "./SuiteSweep";
 import { AgentLogPanel, rememberLogThread } from "./AgentLog";
+import { recordTagDecision } from "./feedback";
 import { DeskView, TAG_COLOR, type DeskCase } from "./DeskView";
 import { DESK, type Tag } from "../useGame";
 import { CHECKPOINT_WORDS, clearSave, threadAlive, useSave, writeSave, type Checkpoint, type SaveV1 } from "./save";
@@ -406,6 +407,14 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
   useEffect(() => {
     deskOpenRef.current = deskOpen;
   }, [deskOpen]);
+  // Human feedback: each posted placard is a preference record (agent's proposal vs Bob's tag), graded at dawn by the
+  // simulated aftershock's right tag. Kept in this browser for the JSONL export; nothing is trained.
+  useEffect(() => {
+    const r = game.tagResult;
+    if (!DESK || !r?.pid || !game.threadId) return;
+    const b = game.shiftReport?.buildings?.find((x) => String(x.pid) === String(r.pid)) as { right_tag?: string } | undefined;
+    recordTagDecision({ thread_id: game.threadId, pid: String(r.pid), label: r.label ?? String(r.pid), agent_tag: r.suggested ?? null, bob_tag: r.tag ?? "none", right_tag: b?.right_tag ?? null });
+  }, [game.tagResult, game.shiftReport, game.threadId]);
   // The second screen (/play/log) follows whichever night this tab is playing.
   useEffect(() => {
     if (!game.stub && !agentOff) rememberLogThread(game.threadId);
