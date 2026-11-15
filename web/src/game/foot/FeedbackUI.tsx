@@ -29,8 +29,8 @@ export function Thumbs({ kind, threadId, pid, label, item, style }: {
   };
   return (
     <span style={{ display: "inline-flex", gap: 3, flex: "none", alignItems: "center", ...style }} onClick={(e) => e.stopPropagation()}>
-      {btn("up", "👍", "Useful: tell the agent this was right")}
-      {btn("down", "👎", "Wrong: tell the agent this was off")}
+      {btn("up", "👍", "Useful: saved as feedback (exported as preference data)")}
+      {btn("down", "👎", "Wrong: saved as feedback (exported as preference data)")}
     </span>
   );
 }

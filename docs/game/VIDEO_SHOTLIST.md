@@ -4,7 +4,8 @@ For whoever records the submission video (about 1 am). The voice-over is the pit
 
 ## Before you record
 1. **Server:** the agent server on :2024 in replay (stage recordings). Ask the backend session for "SLOT FREE" first: one client only while recording.
-2. **Reset:** `uv run python scripts/demo_reset.py` (or Play again on the dawn screen). Every take starts from a reset.
+2. **Reset:** `uv run python scripts/demo_reset.py` (or Play again on the dawn screen). Every take starts from a reset. The first shift after a reset opens from a seeded previous shift (601 Broadway); after that, each shift opens with what Bob actually corrected last time.
+   **Also clear the browser's rehearsal record** so dawn's "track record" and the feedback count start at zero: on the dawn screen click "Reset record" (Agent vs Bob) and "Clear" (the feedback export in the pause menu's Agent log tab), or run `localStorage.removeItem("laststand.track.v1"); localStorage.removeItem("laststand.feedback.v1")` in the browser console.
 3. **Window A (the game):** `http://127.0.0.1:3112/play?mode=foot&demo=1`, 1920×1080, browser zoom 100%, sound on (V toggles it). For the cleanest frame rate use the production build instead: `cd web && npm run build && npm start`, then `http://127.0.0.1:3000/play?mode=foot&demo=1`.
 4. **Window B (the agent log):** `/play/log` on the same host, in the same browser so it follows the live shift.
 5. **Lower third for the whole video:** "Simulated post-quake placards. Game outcomes, not engineering assessments."

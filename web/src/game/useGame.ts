@@ -191,7 +191,13 @@ export function useGame(stub: boolean) {
     const t = String(req.args?.tag ?? "");
     return t === "green" || t === "yellow" || t === "red" ? { pid: String(req.args?.pid ?? fortress ?? ""), tag: t } : null;
   }, [phase, req, fortress]);
-  const tagResult = useMemo(() => latestResult<TagResult>(nightMsgs, "tag_building"), [nightMsgs]);
+  const tagResult = useMemo<TagResult | null>(() => {
+    const r = latestResult<TagResult>(nightMsgs, "tag_building");
+    if (r) return r;
+    // A reject ("N": no tag) answers with plain text, not JSON: it still ends the tag step, as "no tag".
+    const any = [...nightMsgs].reverse().find((raw) => kind(raw as Msg) === "tool" && (raw as Msg).name === "tag_building");
+    return any ? { pid: String(fortress ?? ""), tag: null } : null;
+  }, [nightMsgs, fortress]);
   const shiftReport = useMemo(() => latestResult<ShiftReport>(messages, "shift_report"), [messages]);
   const [tagDecision, setTagDecision] = useState<Tag | "none" | null>(null);
 

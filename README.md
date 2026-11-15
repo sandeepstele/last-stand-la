@@ -10,7 +10,7 @@ You're **Bob**, a building officer at the city of LA, on retrofit-deadline day. 
 | **Real CoStar data** | All 1,581 LA buildings in CoStar's kit, screened in code on the city map; CoStar's real open-case queue (328 cases; 156 in LA). Each building card lists every source on its own line (CoStar record, Vexcel aerial, Matterport 3D scan, LA retrofit lists, permits, the 1994 Northridge ShakeMap) and glows where two sources disagree |
 | **Real feedback enforcement** | What Bob reports from a site visit is weighed as evidence: strong, **capped at 0.35**, never final. At 737 Broadway the report moves the walls from 66% to 73% concrete (with the 3D-scan read), which moves the screening, the proposed tag and the people at stake. At dawn the agent drafts a correction **citing Bob's words**, the critic reviews it, and "File" opens the real auditor case. Code sets every number; nothing changes a record without human approval |
 
-**The human-feedback loop:** Bob's report is capped evidence; his approve/override is graded by the aftershock; the override and its outcome go into the shift log the agent reads the next morning (its first line names the correction); every decision and every 👍/👎 is saved as preference data in the RLHF/DPO format (JSONL export). **No weights are trained;** the agent learns in context.
+**The human-feedback loop:** Bob's report is capped evidence; his approve/override is graded by the aftershock; the override and its outcome go into the shift log, and the next shift's first line names the correction (the first shift after a reset opens from a seeded previous shift (601 Broadway); after that, each shift opens with what Bob actually corrected last time.); every decision and every 👍/👎 is saved as preference data in the RLHF/DPO format (JSONL export). **No weights are trained;** the agent learns in context.
 
 **Track:** Entertainment. **Also:** CoStar "Inside and Out", LangChain "Best use of deepagents". Built at HackPrinceton Fall 2026.
 
@@ -182,7 +182,7 @@ The same agent, as **Retrofit Radar**, works the whole queue:
 - an overnight sweep opens cases where CoStar disagrees with the city, the aerials or a suite tour: 273 ghost tenants, 37 material conflicts, 18 stale entries;
 - it investigates each case, choosing evidence (including before/after aerials and car counts);
 - it drafts corrections for a person to approve;
-- it learns from texted corrections (iMessage via Photon).
+- it reads corrections texted to it (iMessage via Photon) and weighs them as notes; nothing is trained.
 
 The game's dawn deep link `/?check=<pid>&from=laststand` opens the case with your report in it.
 

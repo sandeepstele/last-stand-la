@@ -92,10 +92,10 @@ export function AgentScoreboard({ messages, report }: { messages: readonly unkno
         return (
           <div key={r.pid} style={{ padding: "4px 0" }}>
             <div>
-              {r.label}: the agent proposed {chip(r.agent)} · Bob posted {chip(r.bob)}{override ? " (override)" : ""} · the aftershock says {chip(r.right)}
+              {r.label}: the agent proposed {chip(r.agent)} · Bob posted {chip(r.bob)}{override ? " (override)" : ""}{r.right ? <> · the aftershock says {chip(r.right)}</> : null}
             </div>
             <div style={{ color: "#a8a293" }}>
-              {verdict}.{r.right && (override || r.agent !== r.right) ? " The outcome goes into the agent's shift log; it reads it at the start of the next shift." : ""}
+              {verdict}.{r.right && (override || r.agent !== r.right) ? " The outcome goes into the agent's shift log, and the next shift opens with it (unless you reset: a reset starts from a seeded previous shift)." : ""}
             </div>
           </div>
         );
@@ -103,7 +103,8 @@ export function AgentScoreboard({ messages, report }: { messages: readonly unkno
       {flat.length > 0 && (
         <div style={{ marginTop: 6, color: "#a8a293", fontSize: 13 }}>
           Track record in this browser ({record.length} shift{record.length === 1 ? "" : "s"}): the agent&apos;s proposals right {agentRight} of {flat.length}
-          {overrides.length ? ` · Bob's overrides right ${overridesRight} of ${overrides.length}` : ""}. Simulated outcomes; nothing is trained, the agent learns from its log.
+          {overrides.length ? ` · Bob's overrides right ${overridesRight} of ${overrides.length}` : ""}. Simulated outcomes; nothing is trained, the agent learns from its log.{" "}
+          <button type="button" onClick={() => { try { localStorage.removeItem(KEY); window.dispatchEvent(new Event(EVT)); } catch {} }} style={{ background: "none", border: "none", padding: 0, color: "#a8a293", textDecoration: "underline", cursor: "pointer", font: "inherit" }}>Reset record</button>
         </div>
       )}
     </section>

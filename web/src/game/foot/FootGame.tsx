@@ -904,7 +904,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
       }
       if (s === "office" && office) {
         const od = doorOf(ctx, office)!;
-        if (!briefAsked.current && !g.isLoading) briefAsked.current = g.say("Brief the night shift", true);
+        if (!briefAsked.current && !g.isLoading) briefAsked.current = g.say(DESK ? "Start Bob's shift" : "Brief the night shift", true);
         const c7 = case7Ref.current;
         // The briefing came back without a case here: straight to the fortress.
         if (g.runDone && briefAsked.current && !c7 && since > 2) {
@@ -1671,7 +1671,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
   const screen = DESK ? latestResult<Screen>(game.messages, "screen_building") : null;
   const tagWords: Record<Tag, string> = { green: "GREEN", yellow: "YELLOW", red: "RED" };
   const deskDecision = DESK && step === "night" ? {
-    prompt: game.tagProposal ? `HQ proposes a ${game.tagProposal.tag.toUpperCase()} tag for ${heroLabel} (simulated)${screen?.suggest ? `; code suggests ${screen.suggest.toUpperCase()}` : ""}.` : game.isLoading ? "HQ is screening the building after the simulated quake…" : "Waiting for HQ's screening.",
+    prompt: game.tagProposal ? `HQ proposes a ${game.tagProposal.tag.toUpperCase()} tag for ${heroLabel} (simulated)${screen?.suggest ? `; code suggests ${screen.suggest.toUpperCase()}` : ""}.` : game.isLoading ? "HQ is screening the building after the simulated quake…" : game.agentError ? "HQ hit an error after the quake. Press P → Restart night for a fresh shift." : "Waiting for HQ's screening.",
     proposed: null,
     why: screen ? [
       screen.score != null ? `Screening score ${screen.score}${screen.fema_type ? ` (${screen.fema_type})` : ""}` : "",

@@ -63,7 +63,7 @@ Each row also shows the tag's **expected** outcome over the building's odds, so 
 1. **Evidence:** Bob's site report is weighed as evidence, capped at 0.35.
 2. **Decision:** Bob approves or overrides each placard (a human-in-the-loop interrupt), and the aftershock grades both of them.
 3. **Review:** a second model (the critic) reviews every correction draft, and a person approves any record change.
-4. **Memory:** the override and its outcome go into the shift log the agent reads the next morning. This is in-context learning from human corrections.
+4. **Memory:** the override and its outcome go into the shift log, and the next shift opens with it. This is in-context learning from human corrections. The first shift after a reset opens from a seeded previous shift (601 Broadway); after that, each shift opens with what Bob actually corrected last time.
 
 Every placard decision, and every 👍/👎 Bob gives a finding, a source or a draft, is also saved as **preference data in the format used for RLHF/DPO** (chosen/rejected pairs plus ratings), downloadable as JSONL. **No model weights were trained tonight;** the data is collected, not used.
 
