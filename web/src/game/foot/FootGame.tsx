@@ -44,6 +44,7 @@ import { SuiteSweep, type SweepScore } from "./SuiteSweep";
 import { InsideMesh3D } from "./InsideMesh3D";
 import { PauseMenu } from "./PauseMenu";
 import { SolarSurvey, type SolarRoof } from "./SolarSurvey";
+import { StaleCheck, type StaleCase } from "./StaleCheck";
 import { HqPanel } from "./HqPanel";
 import { HqMoments } from "./hqMoments";
 import { mulberry32 } from "../prng";
@@ -254,10 +255,19 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
   const [solarOpen, setSolarOpen] = useState<string | null>(null);
   const [solarStamps, setSolarStamps] = useState<Record<string, SolarRoof["answer"]>>({});
   const [nearSolar, setNearSolar] = useState<string | null>(null);
+  // "Same building?" (stale entry): the walkable case(s) open with [C] at the building; the rest are listed in the menu.
+  const [stale, setStale] = useState<StaleCase[]>([]);
+  const staleRef = useRef<StaleCase[]>([]);
+  useEffect(() => {
+    staleRef.current = stale;
+  }, [stale]);
+  const [staleOpen, setStaleOpen] = useState<string | null>(null);
+  const [staleStamps, setStaleStamps] = useState<Record<string, StaleCase["answer"]>>({});
+  const [nearStale, setNearStale] = useState<string | null>(null);
   const solarRightRef = useRef(0);
   useEffect(() => {
-    solarRightRef.current = solar.filter((r) => solarStamps[r.pid] === r.answer).length;
-  }, [solar, solarStamps]);
+    solarRightRef.current = solar.filter((r) => solarStamps[r.pid] === r.answer).length + stale.filter((c) => staleStamps[c.pid] === c.answer).length;
+  }, [solar, solarStamps, stale, staleStamps]);
   // Pause (P / Esc / the button): the sim freezes; agent runs in flight keep streaming.
   const [paused, setPausedState] = useState(false);
   const pausedRef = useRef(false);
@@ -567,9 +577,20 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
         if (s === "hold") stepAt.current = ctx.time - DEFEND_MIN_S;
       }
       if ((s === "office" || s === "approach") && k.has("KeyC")) {
+        // The nearer of a stale-entry case and a screened roof.
+        const ns = staleRef.current.find((c) => Math.hypot(c.x - p.x, c.z - p.z) < 40);
         const near = solarRef.current.find((r) => Math.hypot(r.x - p.x, r.z - p.z) < 38);
-        setSolarOpen((v) => (v ? null : near?.pid ?? null));
-        if (near) ctx.input.unlock();
+        const dS = ns ? Math.hypot(ns.x - p.x, ns.z - p.z) : Infinity, dR = near ? Math.hypot(near.x - p.x, near.z - p.z) : Infinity;
+        if (solarOpen || staleOpen) {
+          setSolarOpen(null);
+          setStaleOpen(null);
+        } else if (ns && dS <= dR) {
+          setStaleOpen(ns.pid);
+          ctx.input.unlock();
+        } else if (near) {
+          setSolarOpen(near.pid);
+          ctx.input.unlock();
+        }
       }
       if (s === "visit") {
         if (k.has("KeyE") && visit) {
@@ -887,6 +908,8 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
         const free = st0 === "office" || st0 === "approach";
         const near = free ? solarRef.current.find((r) => Math.hypot(r.x - p.x, r.z - p.z) < 38) ?? null : null;
         setNearSolar((v) => (v === (near?.pid ?? null) ? v : near?.pid ?? null));
+        const ns = free ? staleRef.current.find((c) => Math.hypot(c.x - p.x, c.z - p.z) < 40) ?? null : null;
+        setNearStale((v) => (v === (ns?.pid ?? null) ? v : ns?.pid ?? null));
       }
       const visitDoor = (st0 === "office" || st0 === "approach") && hero
         ? ctx.district.buildings.find((b) => b.door && b.pid !== hero.pid && (st0 !== "office" || b.pid !== office?.pid) && dist(here, [b.door.x, b.door.z]) < DOOR_R) ?? null
@@ -1052,6 +1075,9 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
     downedCount.current = 0;
     for (const sv of plan.survivors) ctx.bus.emit("horde:pack", { x: sv.x, z: sv.z, count: 4 });
     nightfallAt.current = ctx.time + NIGHTFALL_S;
+    if (!ctx.stub && !staleRef.current.length) {
+      fetch("/api/game/stale").then((r) => (r.ok ? r.json() : null)).then((d: { cases?: StaleCase[] } | null) => d?.cases && setStale(d.cases)).catch(() => {});
+    }
     if (!ctx.stub && !solarRef.current.length) {
       fetch("/api/game/solar").then((r) => (r.ok ? r.json() : null)).then((d: { roofs?: SolarRoof[] } | null) => d?.roofs && setSolar(d.roofs)).catch(() => {});
     }
@@ -1115,6 +1141,8 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
     setSuiteTip({ chosen: null, sentAt: null });
     setSweep({ stamped: 0, right: 0 });
     setSolarStamps({});
+    setStaleStamps({});
+    setStaleOpen(null);
     setSolarOpen(null);
     setProg({ reached: false, checked: false, survived: false, filed: false });
     ctx.bus.emit("mission:reset", {});
@@ -1155,6 +1183,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
   const hints: Hint[] = [];
   // Movement and the full controls live in the pause menu; the HUD only shows what matters right now (menu hint last).
   if (step === "approach" && hud.nearDoor) hints.push({ key: "E", label: `go inside ${heroLabel}` });
+  if ((step === "office" || step === "approach") && nearStale && !staleOpen) hints.push({ key: "C", label: "is it the same building?" });
   if ((step === "office" || step === "approach") && nearSolar && !solarOpen) hints.push({ key: "C", label: `survey the roof for solar` });
   if ((step === "office" || step === "approach") && nearVisit) hints.push({ key: "E", label: `look inside ${nearVisit}` });
   if (step === "office" && hud.nearDoor && office) hints.push({ key: "E", label: `go up to suite ${case7?.suite ?? ""} at ${office.label}` });
@@ -1198,6 +1227,8 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
       ? [{ id: "survivors", kind: "side" as const, text: "Bring the office on record to safety", done: saved === mhud.survivors.length, progress: `${saved + withYou}/${mhud.survivors.length}` }]
       : []),
     ...(sweep.stamped ? [{ id: "sweep", kind: "side" as const, text: "Sweep the suites on record (records only)", done: false, progress: `${sweep.right} right of ${sweep.stamped}` }] : []),
+    ...(stale.some((c) => c.x > -500 && c.x < 140 && c.z > -300 && c.z < 200) ? [{ id: "stale", kind: "side" as const, text: "Same building? Check the city's list", done: stale.some((c) => staleStamps[c.pid]), progress: `${Object.keys(staleStamps).length} checked` }] : []),
+    ...(stale.length ? [{ id: "stale-more", kind: "side" as const, text: `${stale.length} stale-entry cases across LA (see the auditor)`, done: false }] : []),
     ...(solar.length ? [{ id: "solar", kind: "side" as const, text: "Survey roofs for solar (a screen, not a design)", done: Object.keys(solarStamps).length >= solar.length, progress: `${Object.keys(solarStamps).length}/${solar.length}` }] : []),
     { id: "crates", kind: "side", text: "Scavenge boards for the barricade", done: mhud.crates > 0 && mhud.found >= mhud.crates, progress: `${mhud.found}/${mhud.crates}` },
   ];
@@ -1237,6 +1268,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
   const verifiedN = (tip.sentAt !== null ? 1 : 0) + (suiteTip.sentAt !== null ? 1 : 0);
   const outcomeLines = [
     ...(presenter && case7 && case7Weighed ? [`Case #${case7.n} was worked by HQ from the records while you ran: the lease, the listing and the suite's own tour.`] : []),
+    ...(Object.keys(staleStamps).length ? [`Same building?: ${stale.filter((c) => staleStamps[c.pid] === c.answer).length} of ${Object.keys(staleStamps).length} stamps match the records.`] : []),
     ...(Object.keys(solarStamps).length ? [`Solar survey: ${solar.filter((r) => solarStamps[r.pid] === r.answer).length} of ${Object.keys(solarStamps).length} roofs stamped as the screen says.`] : []),
     ...(sweep.stamped ? [`Suite sweep: ${sweep.right} of ${sweep.stamped} stamps match what the records support.`] : []),
     ...(verifiedN ? [`Records checked tonight: ${verifiedN} open case${verifiedN === 1 ? "" : "s"} from CoStar's queue${queueTotal ? ` of ${queueTotal}` : ""}. Your reports are evidence in them now.`] : []),
@@ -1341,6 +1373,10 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
           ❚❚
         </button>
       )}
+      {staleOpen && (step === "office" || step === "approach") && (() => {
+        const c = stale.find((x) => x.pid === staleOpen);
+        return c ? <StaleCheck c={c} stamped={staleStamps[c.pid] ?? null} onStamp={(a) => setStaleStamps((m) => ({ ...m, [c.pid]: a }))} onClose={() => setStaleOpen(null)} /> : null;
+      })()}
       {solarOpen && (step === "office" || step === "approach") && (() => {
         const r = solar.find((x) => x.pid === solarOpen);
         return r ? <SolarSurvey roof={r} stamped={solarStamps[r.pid] ?? null} onStamp={(a) => setSolarStamps((m) => ({ ...m, [r.pid]: a }))} onClose={() => setSolarOpen(null)} /> : null;

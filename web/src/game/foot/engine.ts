@@ -255,7 +255,8 @@ export function buildColliders(d: District): { colliders: Collider[]; colliderOf
 export function boundsOf(d: District, focus: Pt[]): FootCtx["bounds"] {
   // The mosaic is drawn at its exact rectangle (world), but the walkable area extends past it: the hero's street only
   // connects to the rest of the grid outside the mosaic (Builder C's flood fill), so pad it.
-  if (d.ground) return { x0: d.ground.x0 - 80, z0: d.ground.z0 - 80, x1: d.ground.x1 + 80, z1: d.ground.z1 + 80 };
+  // South edge reaches z ~200: the nearest stale-entry case (217 8th St) stands just past the mosaic there.
+  if (d.ground) return { x0: d.ground.x0 - 80, z0: d.ground.z0 - 80, x1: d.ground.x1 + 80, z1: Math.max(d.ground.z1 + 80, 200) };
   let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
   for (const [x, z] of focus) {
     x0 = Math.min(x0, x);

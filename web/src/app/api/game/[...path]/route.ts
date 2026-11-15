@@ -15,6 +15,7 @@ function target(method: string, path: string[]): string | null {
   if (method === "GET" && seg.length === 1 && seg[0] === "district") return "game/district";
   if (method === "GET" && seg.length === 1 && seg[0] === "city") return "game/city";
   if (method === "GET" && seg.length === 1 && seg[0] === "solar") return "game/solar";
+  if (method === "GET" && seg.length === 1 && seg[0] === "stale") return "game/stale";
   if (method === "GET" && seg.length === 2 && seg[0] === "mesh" && PID.test(seg[1])) return `game/mesh/${encodeURIComponent(seg[1])}`;
   if (method === "GET" && seg.length === 2 && seg[0] === "suites" && PID.test(seg[1])) return `game/suites/${encodeURIComponent(seg[1])}`;
   if (method === "GET" && seg.length === 2 && seg[0] === "dossier" && PID.test(seg[1])) return `game/dossier/${encodeURIComponent(seg[1])}`;
