@@ -1,95 +1,155 @@
-# Devpost draft + video shot list: Bob's Shift
+# Devpost: Bob's Desk
 
-Rewritten Sat Nov 14, ~11:30 pm, after the pivot from the night game. **Track: Entertainment.** Specials to consider: CoStar "Inside and Out", LangChain "Best use of deepagents". Items marked **[TEAM]** need a human.
+Merged Sun Nov 15, ~1:15 am, from the 10:30 pm drafts (DEVPOST_DRAFT.md) and the build on `desk` a4279e2 (merged into `game`). One document; the video shot list is in VIDEO_SHOTLIST.md and the spoken pitch in DEMO.md. Not posted. Items marked **[TEAM]** need a human decision.
+
+**Track:** Entertainment. **Special tracks (if allowed):** CoStar "Inside and Out: AI for the Built World"; LangChain "Best use of deepagents".
 
 ---
 
 ## Title
-**Bob's Shift** [TEAM: confirm the name]
+**Bob's Desk** [TEAM: or "Bob's Shift" as in the older draft; pick one and use it everywhere]
 
 ## Tagline
-**A deep-agent game on real CoStar data, where your feedback is enforced.**
+**One shift at the LA building office. A deep agent does the work, you correct it, and the aftershock grades you both.**
 
-## Short description
-You're Bob, a building officer at the city of LA on retrofit-deadline day. Real open cases from CoStar's queue land on your desk. Your analyst is a LangChain deep agent: its squads pull every building's data, code weighs the evidence, and you go see for yourself. At 5:02 pm a simulated quake hits; the agent screens each building and proposes a placard, and you post it. At dawn a simulated aftershock tests your tags: people kept safe, records fixed.
-
-## Inspiration
-Building records go stale quietly. CoStar's record of a downtown tower says masonry; the city's earthquake-retrofit list says concrete. Nobody has gone to look. AI can work a queue of 328 such cases (156 in LA), but its weak spot is human eyes on the building, and the person who has to make the call. So we made that person the player: a city building officer, with an AI analyst whose numbers are all computed in code.
-
-## What it does
-**1. A deep-agent game.** Bob's analyst is a LangChain **deepagents** agent you can watch work:
-- it plans the shift from CoStar's real queue;
-- it sends four squads in parallel (records, aerial, interior, city);
-- it chooses its evidence and says why, and **looks at the aerial photo itself**;
-- after the quake it screens the building and **proposes a placard, then pauses for Bob's call** (a human-in-the-loop interrupt);
-- at dawn it drafts corrections, and **a second agent (the critic) reviews each one**.
-- Judges can follow every step: the desk's calculation sheet, the **L** log beside the game, and `/play/log` on a second screen.
-
-**2. Real CoStar data.**
-- **Bob's desk** shows a live card per building, one line per source (CoStar record, Vexcel aerial, Matterport scan, LA retrofit lists, permits, the 1994 Northridge ShakeMap), with the fields where **two sources disagree glowing amber**.
-- **The city map screens all 1,581 LA buildings** in CoStar's kit, in code, ranked by people at risk; click any one for its card (Vexcel pulled live if not cached).
-- Site visits walk into the buildings' own **Matterport 3D tours**.
-
-**3. Real feedback enforcement.**
-- **What Bob reports on a site visit is evidence:** with the 3D-scan read it moves 737 Broadway from 66% to 73% concrete, **capped at 0.35**, never final.
-- **It changes the decision:** the walls odds feed the screening score, the chance of serious damage, the people at stake and the tag the code suggests.
-- **It reaches the real record:** the dawn draft cites Bob's words, the critic reviews it, and "File" opens the real auditor case with his report in it.
-- **Code sets every number**; no record changes without human approval.
-
-**The numbers behind a placard** (all code, cited): a FEMA P-154-style rapid screening score per material, weighted by today's odds; people inside from IBC occupant loads and HAZUS time-of-day shares (shown as an estimated range); ATC-20-style placards (green = safe to occupy, yellow = limited entry, red = unsafe). **Placards, the quake and the aftershock are simulated: game outcome, not an engineering assessment.**
-
-## How we built it
-- **The deep agent:** LangChain **deepagents** on LangGraph (graph `desk`): planning, four parallel sub-agents, case tools (open a case, choose checks with code-computed statistics, weigh the evidence), the desk tools (`building_card`, `screen_building`, `triage`, `tag_building` as an interrupt, `shift_report`), a critic sub-agent, and a small shift log it reads the next morning.
-- **Rule: the agent makes the calls, code does the maths, Bob decides.** The proposed tag is pinned in code to the screening's suggestion; vision effects are capped at 0.2 with a second look; a person's report at 0.35.
-- **Models:** Gemini on Vertex AI. A strict replay mode records model answers so the stage demo is repeatable; data, tools and images stay live.
-- **The game:** Next.js, React and three.js; a Vexcel aerial mosaic for the ground; about 190 real building outlines with heights (OpenStreetMap, LA County); a day-to-night sky; Matterport tours and an untextured 3D scan inside; a save/continue that reattaches the agent's thread.
-- **Data:** the CoStar hackathon kit (records, tenants, listings), Vexcel (aerials, obliques), Matterport (3D tours), LA open data (seismic-retrofit orders, permits), USGS ShakeMap.
-
-## Challenges
-- **We pivoted at 9 pm** from a zombie night game to Bob's office, because we wanted a real mission the agent has to calculate, not a horde. The engine, the agent tools and the data carried over; the horde didn't.
-- **Making the AI the main character:** its cards, maths and proposals are on screen, not in a chat box.
-- **Honesty under game pressure:** records "disagree", never "wrong"; "unfinished" retrofit ≠ non-compliant; every placard labelled simulated; no colour before the quake (the agent can't pre-judge a building from records alone).
-- **Making yellow cost something:** an early version made yellow a free win; limited entry now exposes people under serious damage, and dawn shows what each tag would have done on average.
-- **A live demo with an AI:** strict replay, exact message contracts, one client at a time, and a reset between judges.
-
-## Accomplishments
-- A player's report from inside a real building becomes **capped evidence in a real case**, changes the placard decision, and lands in a reviewed draft correction.
-- The same agent runs as both the game's analyst and a working records auditor (328 open cases).
-
-## What we learned
-**[TEAM: 2–3 honest sentences.]**
-
-## What's next
-- More case types on the desk (stale city-list entries with before/after aerials; ghost tenants across a whole building).
-- A calibration set so evidence weights are learned, not hand-set.
-- Multi-building shifts after the quake: triage order as a puzzle.
-
-## Built with
-langchain, deepagents, langgraph, python, gemini, vertex-ai, next.js, react, three.js, costar, vexcel, matterport, openstreetmap, usgs, la-open-data
-
-## Honesty notes (keep on Devpost)
-- Licensed CoStar, Vexcel and Matterport data is not in the repo; it is matched locally.
-- The quake, placards and aftershock are simulated game events; the screening uses published methods (FEMA P-154, ATC-20, HAZUS occupancy) but is not an engineering assessment.
-- **[TEAM: confirm with CoStar whether real addresses may appear in screenshots and the video.]**
+## Short description (Devpost "elevator pitch", ≤ 200 characters)
+Play a city building officer for one shift on real LA buildings: settle record conflicts by day, tag buildings after a simulated quake, and see at dawn who your tags kept safe.
 
 ---
 
-# The 2-minute video shot list
+## Inspiration
+After the 1994 Northridge earthquake, inspectors evaluated 66,546 buildings and posted each one green, yellow or red. A rapid evaluation typically takes 10 to 30 minutes, mostly from the outside. A placard is a judgment made under pressure, from records that are often out of date. In 2011 a building in Christchurch that three officials had passed after an earlier quake collapsed and killed 115 people.
 
-Record on the production build (`npm run build && npm start`) against strict replay. Reset first, use `?demo=1`, F to skip walks, Tab for the desk.
+We wanted a game where that judgment is the whole game. The paperwork is real: open record cases from the CoStar hackathon kit, the city's own retrofit lists, the 1994 shaking at each building. The arithmetic is published: FEMA's rapid screening score, HAZUS damage and casualty rates. An AI analyst does the legwork. The decision stays with you, and the aftershock grades it.
 
-| # | Time | Shot | Voice-over |
+## What it does
+You are **Bob**, a building officer in downtown Los Angeles, for one shift.
+
+**Morning: the agent remembers.** The analyst opens the shift with what it learned last time, from its own shift log: *"Last shift Bob changed my yellow to red at 601 Broadway, and the aftershock showed red was right."*
+
+**Day: the desk.** Bob's inbox holds real open cases from the CoStar queue, where two sources disagree about the same building. His analyst is a LangChain deep agent. It plans the shift, sends **four squads in parallel** (records, aerial, interior, city), and builds a **card per building** with one line per source:
+- the CoStar record;
+- the Vexcel aerial (the agent looks at the image itself);
+- the Matterport 3D scan;
+- the LA retrofit lists and permits;
+- the LA County Assessor parcel;
+- the LA County building survey's roof height;
+- the LA City business registry;
+- the USGS 1994 Northridge ShakeMap.
+
+Fields where two sources disagree glow amber. Across the 62-building district the cards raise **56 disagreements** (floor area 20, height 15, material 11, year built 10). Bob works a suite case, then inspects **737 Broadway**, where the records disagree about what the building is made of.
+
+**The walk-in.** Bob steps into the building's own 3D tour and reports what he sees. His report is evidence, not a verdict: code caps it at 0.35, and the agent weighs it with its own read of the scan.
+- **On the records alone,** 737 Broadway is probably masonry (55%), and the code suggests **RED**.
+- **After Bob reports concrete,** the odds move to concrete 73%, and the suggestion drops to **YELLOW**.
+
+**5 pm: a simulated quake.** The clock hits 5:02 pm and the screen shakes. The streets react: pedestrians run into the open, cars stop with hazards flashing. A **simulated aftershock clock** starts (45 s on stage), and **two people are trapped** at 737 Broadway's door: Bob can lead them to a marked assembly point before it hits, at his own risk. The agent screens the building and proposes a placard, and the proposal is pinned in code to the screening's suggestion. Then it **stops and waits for Bob** (a human-in-the-loop interrupt): approve, or change the tag. At 5 pm the people count uses the HAZUS commute share, because offices are emptying and homes are filling.
+
+**Dawn: the aftershock grades the tags.** A seeded aftershock draws each tagged building's damage from that building's own odds. What Bob checked changes his tag, never the building. For 737 Broadway the draw is **complete damage**, and the report shows what every tag would have done:
+
+| Bob's tag | People kept safe | Exposed | Hurt (HAZUS indoor rates) |
 |---|---|---|---|
-| 1 | 0:00–0:10 | Intro dive over all of LA; title "BOB'S SHIFT" | "I'm Bob. LA building office, retrofit-deadline day. Real buildings, from CoStar's data." |
-| 2 | 0:10–0:28 | The desk: the inbox fills; cards fill line by line, each naming its source; the masonry-vs-concrete amber box; the city map | "My analyst is a deep agent. Four squads pull every building's data, and code weighs it. Here the records disagree." |
-| 3 | 0:28–0:45 | Site visit: 737 Broadway's own 3D tour; press 1, concrete; the calc sheet 66% → 73% | "So I go look. My report is evidence: capped, never final." |
-| 4 | 0:45–1:00 | Step out: "Simulated quake at 5:02 pm"; day to night; HQ proposes YELLOW, "code suggests YELLOW" | "A simulated quake. The agent screens the building and proposes a placard, and waits for me." |
-| 5 | 1:00–1:10 | Press 3: RED | "251 people inside, the records still disagree. Red." |
-| 6 | 1:10–1:30 | Dawn shift report: complete damage, RED was right, 251 of 251 safe, the "on average" row; the critic's review on the drafts | "The aftershock tests my tags. Every number is code, and a second agent checked the drafts." |
-| 7 | 1:30–1:45 | File → the auditor case with my report | "Same agent, as CoStar's auditor. Nothing changes a record without a human." |
-| 8 | 1:45–2:00 | `/play/log` step list scrolling; title card | "Every step on the record. Bob's Shift." |
+| **Red** (unsafe) | **251 of 251** | 0 | 0 |
+| Yellow (limited entry) | 226 | 25 | 5 |
+| Green (safe to occupy) | 0 | 251 | 54 |
 
-**Capture tips:** 1920×1080 at 60 fps; V mutes in-game sound; hide the cursor; never show `?stub=1` or `agent=off`. **[TEAM: no street addresses unless CoStar OKs it.]**
+**Agent vs Bob.** Dawn shows what the agent proposed, what Bob posted, and what the aftershock says was right: *"the agent proposed YELLOW · Bob posted RED (override) · the aftershock says RED: Bob was right; the agent was wrong."* That outcome goes into the agent's shift log, and a running track record shows how often each was right. The rescue gets its own line: *"Rescue (simulated): N of 2 brought out before the aftershock."*
+
+Each row also shows the tag's **expected** outcome over the building's odds, so a good call that meets bad luck still reads as a good call. The shift score is **people kept safe plus records fixed**. A record fix counts only when a second model, the critic, agrees the evidence supports the correction draft.
+
+**The whole city, in code.** The map screens **all 1,581 LA buildings** in the kit from their records alone: **918 green, 446 yellow and 217 red** suggestions. Click any one for its card.
+
+**A human-feedback loop you can watch.** The agent is the main character, and people correct it at four levels:
+1. **Evidence:** Bob's site report is weighed as evidence, capped at 0.35.
+2. **Decision:** Bob approves or overrides each placard (a human-in-the-loop interrupt), and the aftershock grades both of them.
+3. **Review:** a second model (the critic) reviews every correction draft, and a person approves any record change.
+4. **Memory:** the override and its outcome go into the shift log the agent reads the next morning. This is in-context learning from human corrections.
+
+Every placard decision, and every 👍/👎 Bob gives a finding, a source or a draft, is also saved as **preference data in the format used for RLHF/DPO** (chosen/rejected pairs plus ratings), downloadable as JSONL. **No model weights were trained tonight;** the data is collected, not used.
+
+**One engine, two doors.** The agent that plays Bob's analyst is also a working records auditor. "File" at dawn opens the real case, with Bob's report cited in the draft correction. Nothing changes a record without a person approving it.
+
+> **Simulated post-quake placards. Game outcomes, not engineering assessments.**
+
+## The maths behind a placard
+Code computes every number; the model never sets one. Each step is a published method, and the game-specific choices are labelled on screen.
+
+1. **Rapid screening:** a FEMA P-154 Level 1 score (Very High seismicity table) for each material the evidence still allows, weighted by today's odds.
+2. **Shaking:** the building's 1994 Northridge intensity from the USGS ShakeMap, converted to ground acceleration with the Worden et al. (2012) California relation.
+3. **Damage odds:** HAZUS fragility curves for the building's class and code era.
+4. **People inside:**
+   - Residential: units × 2.64 people per LA household (Census).
+   - Commercial: CoStar employee counts where the record has them; otherwise CoStar's occupied square feet ÷ the IBC 2021 occupant load; otherwise an assumed share of the code's design load (labelled).
+   - Each count is scaled by the HAZUS 6.1 share of people present: day, night, or commute at 5 pm.
+5. **Tags:** ATC-20 posting categories (green, yellow, red). The red threshold is a game choice. Yellow triggers at half of it, ATC-138's "inspection required" rule.
+6. **Casualties:** HAZUS indoor casualty rates by damage state. A complete-damage draw is split by the class's chance of collapse.
+
+## How we built it
+- **The deep agent:** LangChain **deepagents** on LangGraph. One graph (`desk`) runs the shift as messages: start the shift, open a case, inspect a building, take a tip, tag after the quake, end the shift.
+  - **Planning:** its own todo list from the real case queue.
+  - **Sub-agents:** four specialists run in parallel (records, aerial, interior, city), plus a **critic** sub-agent on a second model that reviews every correction draft.
+  - **Tools:** `building_card`, `screen_building`, `triage`, `tag_building` (an interrupt with approve / edit / reject), `shift_report`, and `log_shift`. `log_shift` writes a short memory of the shift that the agent reads the next morning.
+  - **The rule:** the agent decides what to check and what to propose; code computes every number; Bob decides.
+    - The proposed tag is pinned to the screening's suggestion.
+    - The agent's own image reads are capped at 0.2 and need a second look.
+    - A person's report is capped at 0.35.
+  - **Human feedback:** `log_shift` stores, per tagged building, the agent's suggestion, Bob's tag and the right tag; the next shift's briefing reads it, so the agent's first line names the correction. The frontend keeps an Agent vs Bob track record and exports preference pairs (JSONL).
+- **Models:** Gemini on Vertex AI. A strict replay mode records model answers so the judged demo is repeatable; the data, tools and images stay live.
+- **The game:** Next.js, React and three.js. The ground is a Vexcel aerial mosaic, with real building outlines and heights. The day turns to night, and you walk into Matterport tours. Traffic and pedestrians run on lanes derived from the building grid and react to the quake. Near a building with real Vexcel imagery, the drone and camera views switch to the real photos. The aftershock clock and the rescue reuse the engine's survivor and debris systems. A side panel and a second screen (`/play/log`) show every step the agent takes, for judges.
+- **Data:**
+  - The CoStar hackathon kit: records, tenancies, listings, open cases.
+  - Vexcel aerials and Matterport 3D tours.
+  - LA open data: soft-story and non-ductile concrete retrofit lists, permits.
+  - The USGS ShakeMap.
+  - Three public sources added tonight, each from one district-wide download matched locally (no per-address lookups, no names):
+    - the LA County Assessor parcels (61 of 62 district buildings matched);
+    - the LA County building survey's roof heights (59 of 62);
+    - the LA City business registry (56 of 62; counts and industries only).
+
+## Challenges we ran into
+- **We pivoted at 9 pm.** The first version was a zombie night game on the same data. We kept the engine, the agent and the data, and dropped the horde, because a building officer's real decision is a better game than a fight.
+- **Making yellow cost something.** In an early version yellow kept everyone safe in every outcome, so tagging everything yellow won. Now yellow allows limited entry: 10% of occupants are exposed if the damage is serious, and 25% are displaced if it is minor (game shares, labelled).
+- **Not rewarding luck.** One seeded roll can punish a careful call. Every dawn row now shows each tag's expected outcome next to what happened. The aftershock draws from the building's own odds, so gathering evidence changes Bob's tag, not the building.
+- **Honesty under game pressure.**
+  - Records "disagree"; we never say a record or an owner is wrong.
+  - An unfinished retrofit is not called non-compliant.
+  - Before the quake, a card shows a score, never a placard colour.
+  - Every placard is labelled simulated.
+- **A live demo with an AI.** Strict replay, exact message contracts, one client at a time, and a reset between judges.
+
+## Prior art, and how Bob's Desk differs
+Bob's numbers come from open engineering work: HAZUS fragility, casualty and time-of-day tables from NHERI SimCenter's damage-and-loss library ([DamageAndLossModelLibrary](https://github.com/NHERI-SimCenter/DamageAndLossModelLibrary), the data behind [pelicun](https://github.com/NHERI-SimCenter/pelicun)), and ATC-138's "inspection at half the red-tag threshold" rule ([PBEE-Recovery](https://github.com/OpenPBEE/PBEE-Recovery)). Field tools already exist for the inspector's side: [Cairn](https://github.com/nikhilpravinpise/Cairn) is an offline FEMA P-154 triage app, and [EQanalytics](https://github.com/AntonMu/EQanalytics) flags soft stories from street imagery. A past Claude Code hackathon winner put AI at the permit counter before a building is built. None of them is a game, and none puts a person's placard call on a clock against a real building's records. Of the roughly 35 public CoStar-track repos we read this weekend, none models earthquakes. Most share our pattern (code computes, agents gather, a person approves); Bob makes that pattern the gameplay. We copied no code from any of them, only published data and rules.
+
+## Accomplishments we're proud of
+- What a player reports from inside a real building becomes capped evidence in a real case. It changes the placard decision and lands in a reviewed correction draft.
+- Of the roughly 35 public CoStar-track projects we read this weekend, none models earthquakes, and almost none is a game with a clock and a score.
+- Every number on screen is computed in code, with its published source or its game assumption labelled beside it.
+
+## What we learned
+**[TEAM: 2–3 honest sentences in your own voice.]** Candidates:
+- Better records don't make a building safer. Bob's report moved 737 Broadway from "probably masonry" to "probably concrete", yet an old building in strong shaking still warranted red.
+- The data's best story was occupancy over time, not material. HAZUS says an office holds 1% of its daytime people at night, while an apartment block is full.
+- Code computing every number is now common in this track. What sets a project apart is how visible the calculation is and what is at stake when it is wrong.
+
+## What's next
+- An ATC-20 Rapid Evaluation grid at night (six conditions, rules in code) with an "exterior only / exterior and interior" choice.
+- A detailed-evaluation budget: about one building in five, matching Cal OES's 80:20 Rapid-to-Detailed guidance.
+- Day-desk retrofit-ordinance cases: a missing termination certificate, an appeal past 60 days, a permit stuck at "Ready to Issue".
+- Seeded cases where the agent is confidently wrong, and others where overriding it is the mistake.
+- Using the collected preference pairs: with enough shifts, fine-tune or DPO-train the analyst's proposals (tonight they are only collected).
+- A calibration set so evidence weights are learned rather than hand-set.
+
+## Built with
+langchain, deepagents, langgraph, python, gemini, vertex-ai, next.js, react, three.js, costar, vexcel, matterport, usgs, la-open-data, la-county-gis
+
+## Honesty notes (keep on the Devpost page)
+- Licensed CoStar, Vexcel and Matterport data is not in the repository; it is matched locally.
+- The quake, the placards, the aftershock clock, the trapped occupants and the aftershock are simulated game events. The NPC traffic and pedestrians are decoration.
+- "Human feedback" here means in-context learning from Bob's overrides (the shift log) and collected preference data. No model was fine-tuned or RL-trained. The screening uses published methods (FEMA P-154, HAZUS, ATC-20, ATC-138, IBC) but is not an engineering assessment.
+- The P-154 probability is a ranking signal at a code-level design earthquake, not a forecast of 1994 shaking.
+- The 1,581-building screen comes from records only. Its share of red (about 14%) is a forecast of damage odds for a commercial-real-estate sample, not comparable to the roughly 6% posted red after Northridge.
+- Game choices are labelled as such: the red threshold, yellow's entry and displacement shares, the assumed occupancy share when no count exists, and the fragility dispersion.
+- **[TEAM: confirm with CoStar whether real addresses (737 Broadway) may appear in screenshots and the video.]**
 
 ---
 
