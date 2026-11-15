@@ -39,7 +39,7 @@ If a judge plays Day 2, a good line: "red on 621 Spring when the code says yello
 
 **Simulated:** say "simulated quake" and "game outcome" at least once each. The video's lower third carries "Simulated post-quake placards. Game outcomes, not engineering assessments."
 
-**Ops:** one client at a time on the agent server (a second tab or a script starting a shift clears the first one's notes). A reload mid-shift shows "Saved shift … Enter continues it". New game (or Play again) between judges, not Next day. **[fb: confirm whether the later days run on strict replay or live; if live, say so before pressing Next day.]** The night game (Last Stand LA) is the fallback: `NEXT_PUBLIC_GAME_GRAPH=laststand`; its script is below.
+**Ops:** one client at a time on the agent server (a second tab or a script starting a shift clears the first one's notes). A reload mid-shift shows "Saved shift … Enter continues it". New game (or Play again) between judges, not Next day. **Replay by day:** Day 1 is the strict, recorded stage. Days 2 to 4 run in **fill** mode: the first play of a day calls the live model (about 15 s per inspect step) and records it, so later plays of the same path replay fast. Before pressing Next day for a judge, say "this day is live, so the agent takes a few seconds per step". Better still, play Days 2 to 4 once before judging so their usual paths are already recorded. The night game (Last Stand LA) is the fallback: `NEXT_PUBLIC_GAME_GRAPH=laststand`; its script is below.
 
 ## If a judge asks
 
