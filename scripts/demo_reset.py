@@ -65,7 +65,15 @@ def main() -> None:
                 break
         cleared["/".join(prefix)] = n
     cleared["laststand_log"] = reset_night_log(client.store, a.dry_run)
-    for graph, label in (("radar_worker", "paused worker threads"), ("laststand", "paused game threads")):
+    if not a.dry_run:  # Bob's Desk: the fixed previous shift (app/desk.py)
+        from deepagents.backends.utils import create_file_data
+
+        from app.desk import LOG_SEED as DESK_LOG_SEED
+
+        for it in client.store.search_items(["desk_log"], limit=100)["items"]:
+            client.store.delete_item(it["namespace"], it["key"])
+        client.store.put_item(["desk_log"], "/latest.md", create_file_data(DESK_LOG_SEED))
+    for graph, label in (("radar_worker", "paused worker threads"), ("laststand", "paused game threads"), ("desk", "paused desk threads")):
         paused = [] if a.keep_paused else client.threads.search(metadata={"graph_id": graph}, status="interrupted", limit=100)
         for t in paused:
             if not a.dry_run:

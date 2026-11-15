@@ -284,20 +284,22 @@ async def _desk_evidence(request: Request, pid: str) -> tuple[list[str], list[di
 
 
 async def _desk_pid(request: Request) -> str | None:
-    from app import fortress
+    from app import desk
 
     pid = request.path_params["pid"]
-    return pid if PID.match(pid) and await asyncio.to_thread(fortress.building, pid) else None
+    return pid if PID.match(pid) and await asyncio.to_thread(desk.in_la, pid) else None  # any LA kit building
 
 
 async def desk_card(request: Request) -> JSONResponse:
-    # GET /desk/card/{pid}?checks=a,b: Bob's live building card, one line per data source (code only)
+    # GET /desk/card/{pid}?checks=a,b&live=1: Bob's building card for any LA kit building, one line per data source
+    # (code only); live=1 pulls Vexcel from its API when the building has no cached aerial yet
     from app import desk
 
     if not (pid := await _desk_pid(request)):
-        return JSONResponse({"error": "not a building in the district"}, status_code=404)
+        return JSONResponse({"error": "not an LA building in the kit"}, status_code=404)
     checks, notes = await _desk_evidence(request, pid)
-    return JSONResponse(await asyncio.to_thread(desk.card, pid, checks, notes))
+    live = request.query_params.get("live") == "1"
+    return JSONResponse(await asyncio.to_thread(desk.card, pid, checks, notes, live))
 
 
 async def desk_screen(request: Request) -> JSONResponse:
@@ -305,16 +307,17 @@ async def desk_screen(request: Request) -> JSONResponse:
     from app import desk
 
     if not (pid := await _desk_pid(request)):
-        return JSONResponse({"error": "not a building in the district"}, status_code=404)
+        return JSONResponse({"error": "not an LA building in the kit"}, status_code=404)
     checks, notes = await _desk_evidence(request, pid)
     return JSONResponse(await asyncio.to_thread(desk.screen, pid, checks, notes))
 
 
 async def desk_triage(request: Request) -> JSONResponse:
-    # GET /desk/triage: every district building ranked by people at risk in the aftershock (the map layer)
+    # GET /desk/triage?scope=city: buildings ranked by people at risk in the aftershock (the map layer); district by
+    # default, or every LA building in the kit
     from app import desk
 
-    return JSONResponse(await asyncio.to_thread(desk.triage))
+    return JSONResponse(await asyncio.to_thread(desk.triage, request.query_params.get("scope") or "district"))
 
 
 async def game_resolve(request: Request) -> JSONResponse:

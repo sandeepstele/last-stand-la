@@ -236,13 +236,29 @@ def screen(pid: str, checks: list[str] | tuple[str, ...] = (), notes: list[dict]
                     f"under the cut-off or a city order is open, else green (game thresholds). {DISCLAIMER}."}
 
 
-def card(pid: str, checks: list[str] | tuple[str, ...] = (), notes: list[dict] | None = None) -> dict[str, Any]:
-    """Bob's building card: what each data source says, where they disagree, people, screening (code only)."""
-    from app import cases
+def in_la(pid: str) -> bool:
+    """Any LA building in the CoStar kit (all 1,581), not only the district."""
+    try:
+        rec = costar.get(str(pid))
+    except Exception:
+        return False
+    return (rec.get("city") or "").strip().lower() == "los angeles" and bool(rec.get("latitude")) and not rec.get("synthetic")
+
+
+def card(pid: str, checks: list[str] | tuple[str, ...] = (), notes: list[dict] | None = None, live: bool = False) -> dict[str, Any]:
+    """Bob's building card: what each data source says, where they disagree, people, screening (code only). live=True
+    pulls Vexcel from its API when this building has no cached aerial yet (HTTP only; agent tools stay cached)."""
+    from app import cases, layers
 
     pid = str(pid)
     rec = costar.get(pid)
-    mat, city, mmi, aer = fortress._material(rec), fortress._city(rec), fortress._mmi(rec), fortress._aerial(pid)
+    aer, pulled = fortress._aerial(pid), False
+    if aer is None and live:
+        try:
+            aer, pulled = layers.get_aerial(pid, rec), True
+        except Exception:
+            aer = None
+    mat, city, mmi = fortress._material(rec), fortress._city(rec), fortress._mmi(rec)
     feeds = fortress._feeds(pid)
     sources, conflicts = [], []
     gba = rec.get("gba_sqft") or 0
@@ -260,6 +276,8 @@ def card(pid: str, checks: list[str] | tuple[str, ...] = (), notes: list[dict] |
             status = "conflict"
             conflicts.append({"field": "height", "a": {"source": "CoStar record", "value": f"{st} floors"},
                               "b": {"source": "Vexcel aerial", "value": f"{h:.0f} m tall"}})
+        if pulled:
+            lines.append("pulled live from Vexcel just now")
         sources.append({"key": "vexcel", "source": "Vexcel aerial", "status": status, "lines": lines})
     else:
         sources.append({"key": "vexcel", "source": "Vexcel aerial", "status": "missing", "lines": ["no aerial cached for this building"]})
@@ -297,27 +315,31 @@ def card(pid: str, checks: list[str] | tuple[str, ...] = (), notes: list[dict] |
             "unknowns": ["exits and stairs: not in the data", "soil and irregularities: not in the data (left out of the score)"]}
 
 
-@lru_cache(maxsize=1)
-def _triage() -> dict[str, Any]:
+@lru_cache(maxsize=2)
+def _triage(scope: str = "district") -> dict[str, Any]:
     rows = []
-    for b in fortress.district()["buildings"]:
+    blds = fortress.district()["buildings"] if scope == "district" else fortress.city()["buildings"]
+    for b in blds:
         try:
             s = screen(b["pid"])
         except Exception:
             continue
-        rows.append({"pid": b["pid"], "label": b["label"], "people": s["people"]["at_stake"], "p_damage": s["p_damage"],
-                     "at_risk": s["expected_at_risk"], "suggest": s["suggest"], "score": s["score"]})
+        rows.append({"pid": b["pid"], "label": s["label"], "people": s["people"]["at_stake"], "p_damage": s["p_damage"],
+                     "at_risk": s["expected_at_risk"], "suggest": s["suggest"], "score": s["score"],
+                     **({"x": b["x"], "z": b["z"]} if scope == "city" else {})})
     rows.sort(key=lambda r: -r["at_risk"])
     for i, r in enumerate(rows, 1):
         r["rank"] = i
     counts = {t: sum(r["suggest"] == t for r in rows) for t in ("green", "yellow", "red")}
-    return {"buildings": rows, "counts": counts,
+    return {"scope": scope, "buildings": rows, "counts": counts, "people_at_stake": sum(r["people"] for r in rows),
+            "expected_at_risk": round(sum(r["at_risk"] for r in rows)),
             "basis": "expected people at risk = chance of serious damage (screening score) x people inside; records only, "
                      "before today's evidence. After Northridge, about 6% of inspected buildings were posted red and 17% yellow."}
 
 
-def triage() -> dict[str, Any]:
-    return _triage()
+def triage(scope: str = "district") -> dict[str, Any]:
+    """scope "district" (the play area, the agent's tool) or "city" (every LA building in the kit, for the map)."""
+    return _triage("city" if scope == "city" else "district")
 
 
 TAGS = {"green": "INSPECTED: lawful occupancy permitted", "yellow": "RESTRICTED USE: until a detailed evaluation",
@@ -331,7 +353,9 @@ def tag(pid: str, tag_: str, checks: list[str] | tuple[str, ...] = (), notes: li
     s = screen(pid, checks, notes)
     return {"pid": str(pid), "label": s["label"], "tag": t, "placard": TAGS[t], "suggested": s["suggest"],
             "agreed": t == s["suggest"], "people_at_stake": s["people"]["at_stake"], "p_damage": s["p_damage"],
-            "why": f"game tag {t.upper()} ({TAGS[t]}); the code suggested {s['suggest']}: {s['why']}. {DISCLAIMER}."}
+            "simulated": True,
+            "why": f"Simulated post-quake placard (game): {t.upper()}, {TAGS[t]}. The code suggested {s['suggest']}: "
+                   f"{s['why']}. {DISCLAIMER}."}
 
 
 RIGHT_TAG = {"none": "green", "slight": "green", "moderate": "yellow", "extensive": "red", "complete": "red"}

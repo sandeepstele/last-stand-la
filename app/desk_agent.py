@@ -380,3 +380,17 @@ def build(store=None, checkpointer=None, m=None):
 
 
 desk_agent = build()
+
+
+def _warm() -> None:
+    """Precompute the district and citywide screening at startup, so the desk map is instant (code only)."""
+    for scope in ("district", "city"):
+        try:
+            desk.triage(scope)
+        except Exception:  # no kit on this machine (tests, CI): computed on demand instead
+            pass
+
+
+import threading  # noqa: E402
+
+threading.Thread(target=_warm, name="desk-warm", daemon=True).start()
