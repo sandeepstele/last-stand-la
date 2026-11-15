@@ -35,7 +35,10 @@ function verdictLine(a: Answer, right: boolean): string {
   return right ? `Right: the records point to ${what}${pct != null ? ` (${pct}%)` : ""}.` : `The records point to ${what}${pct != null ? ` (${pct}%)` : ""}, not that.`;
 }
 
-export function SuiteSweep({ pid, onScore }: { pid: string; onScore(s: SweepScore): void }) {
+/** "Suite 1100" / "1100" / "STE 1100" → "1100", so tonight's suite is skipped however the record spells it. */
+const suiteKey = (x: unknown) => String(x ?? "").replace(/^\s*(suite|ste\.?|#)\s*/i, "").trim().toLowerCase();
+
+export function SuiteSweep({ pid, skip, onScore }: { pid: string; skip?: string | null; onScore(s: SweepScore): void }) {
   const [data, setData] = useState<Sweep | null>(null);
   const [i, setI] = useState(0);
   const [stamps, setStamps] = useState<Record<string, Answer["group"]>>({});
@@ -44,12 +47,16 @@ export function SuiteSweep({ pid, onScore }: { pid: string; onScore(s: SweepScor
     let alive = true;
     fetch(`/api/game/suites/${encodeURIComponent(pid)}`)
       .then((r) => (r.ok ? r.json() : null))
-      .then((d: Sweep | null) => alive && d?.suites?.length && setData({ ...d, suites: d.suites.filter((s) => !s.tonight) }))
+      .then((d: Sweep | null) => alive && d?.suites?.length && setData({
+        ...d,
+        // tonight's case is worked by HQ and your visit, never stamped from the records alone here
+        suites: d.suites.filter((s) => !s.tonight && !(skip && suiteKey(s.suite) === suiteKey(skip))),
+      }))
       .catch(() => {});
     return () => {
       alive = false;
     };
-  }, [pid]);
+  }, [pid, skip]);
 
   if (!data || !data.suites.length) return null;
   const n = data.suites.length;

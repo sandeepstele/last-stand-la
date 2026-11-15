@@ -17,6 +17,7 @@ export type Banner = { title: string; sub?: string; tone?: "info" | "warn" | "go
 export type FeedView = { caption: string; photo: { src: string; caption: string } | null };
 export type DecisionView = {
   prompt: string; // "HQ proposes: RUN to 755 Spring St."
+  why?: string | null; // code's stay-vs-run comparison and suggestion (the proposal itself has no text)
   proposed: "hold" | "run" | null;
   runLabel: string | null; // null = no fallback yet (R disabled)
   sent: string | null; // "Orders sent: RUN" once decided
@@ -261,6 +262,7 @@ function Decision({ d, busy }: { d: DecisionView; busy: boolean }) {
         </h3>
         {!d.sent && d.proposed && <span className={styles.decSub}>Your call is final.</span>}
       </div>
+      {d.why && !d.sent && <p className={styles.decSub} style={{ margin: "2px 0 6px" }}>{d.why}</p>}
       <div className={styles.choices}>
         {order("hold", "H", "Hold")}
         {order("run", "R", d.runLabel ? `Run to ${d.runLabel}` : "Run (no fallback yet)", !d.runLabel)}

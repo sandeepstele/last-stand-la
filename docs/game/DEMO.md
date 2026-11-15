@@ -12,8 +12,8 @@ Run `?demo=1` on strict replay, reset first. Press [F] to skip walks. **Never** 
 | 0:10 | **Real CoStar data** | The dive into tonight's district; the HQ panel lists case #6 and #7 of CoStar's queue | "Every building and every case is real, from CoStar's kit: 156 open cases in LA where the records disagree." |
 | 0:20 | **Deep agent** | Enter. The agent's own plan; four squads light up; "HQ looked at the aerial" (the real image); "why HQ chose this check" | "The commander is a LangChain deep agent. It plans, sends four sub-agents in parallel, picks its own evidence and tells you why." |
 | 0:40 | **Real CoStar data** | F to 737 Broadway; E: the building's own 3D tour; W to walk | "CoStar says masonry, the city says concrete. Nobody's been inside. Now I am: this is the building's real scan." |
-| 0:55 | **Feedback enforcement** | Press 1, Concrete. "Your report moved the odds: 66% → 72%" | "My report counts as evidence, capped at 0.35: strong, never final. Code enforces that, not the model." |
-| 1:05 | **Feedback enforcement** | Step out; HQ proposes RUN; press H; hold the door; the walls hold, 76 vs 75 | "The agent proposes, and it waits for me. I held, and the walls held because of what I saw. Brick, and they'd have broken in." |
+| 0:55 | **Feedback enforcement** | Press 1, Concrete. "Your report moved the odds" (say the % on screen; it changes with each recording) | "My report counts as evidence, capped at 0.35: strong, never final. Code enforces that, not the model." |
+| 1:05 | **Feedback enforcement** | Step out; HQ proposes HOLD or RUN; press H; hold the door; the walls hold (77 vs 75 in the current recording) | "The agent proposes, and it waits for me. I held, and the walls held because of what I saw. Brick, and they'd have broken in." |
 | 1:25 | **Feedback enforcement** | Dawn: the agent drafts the correction citing my words; File opens the auditor case with my report in it | "And it reaches the real record: a draft correction citing my words. A human approves it." |
 | 1:45 | — | The auditor queue (328 cases, LA and Houston) | "Same agent, all night, every case. Deep agent, real CoStar data, real feedback enforcement." |
 
@@ -40,7 +40,7 @@ Your report from inside changes the real case. That's "Inside and Out". Case #7 
 | Before/after aerials | **11547997** (stale entry) | The agent compared the 2021 and 2026 Vexcel captures: a pitched roof became a new flat-roof building, matching a 2022 demolition permit: *likely replaced (0.98)* |
 | Car counts ("sharp enough to count parking spaces") | **362982** | Cars on the lot fell from 47 to 29 between aerial captures (−38%). The agent counts it only as weak evidence |
 | A ghost tenant + Matterport | **247386, suite 300** | CoStar records a 50-person office; the suite has been listed 15 months; the tour after the listing reads "furnished but unoccupied" |
-| Facade vision | **247337** | The city says concrete, CoStar steel; the agent saw concrete fins, and a second look confirmed it: *likely concrete (0.73)* |
+| Facade vision | **247337** | The city says concrete, CoStar steel; the agent saw concrete fins, and a second look confirmed it: *likely concrete* (read the % off the screen) |
 
 **Words to avoid:**
 - Never call the corner views "live feeds". They are **game camera views** (renders of the scene). The real imagery is the **ground** (the Vexcel mosaic) and the photos **HQ looked at** (marked "HQ evidence · real image").
@@ -48,7 +48,7 @@ Your report from inside changes the real case. That's "Inside and Out". Case #7 
 
 **Acceptance:**
 - `?demo=1` on strict replay, with F at approach and escape.
-- Enter → the auditor case file in ≤ 1:20.
+- Enter → the auditor case file in ≤ 1:20 (re-measure with the dawn critic on; budget 2:00 total).
 - 3 clean runs.
 - The HQ panel shows an active agent task at every beat except the escape.
 - The ≤ 2-minute video follows the same cut.
@@ -60,8 +60,8 @@ Your report from inside changes the real case. That's "Inside and Out". Case #7 
 | 0:00 | The intro: the camera circles real downtown LA | "Every building here is real: CoStar's record, the city's retrofit orders, Vexcel's aerials, Matterport's tours." |
 | 0:15 | Start; walking toward the hero building; the radio comes alive | "My commander is a LangChain deep agent. Four squads read the records in parallel… and they disagree: CoStar says masonry, the city's retrofit list says concrete." |
 | 0:30 | The DRONE feed flips to the real aerial: "HQ looked: concrete frame visible" | "It doesn't guess. It picks the evidence and looks at the aerial itself. Code weighs it: 66% concrete." |
-| 0:45 | [E] at the door: the real interior (its own 3D tour). Press [1] "Concrete" | "So I go in and look. My report is testimony: it moves the odds, capped, never final. 72% now." |
-| 1:05 | Step out: the horde comes down the street from the west. "HQ proposes: RUN to [fallback]." Press [R] | "The agent read the horde, found a fallback away from it, and it waits for me. I make the call." |
+| 0:45 | [E] at the door: the real interior (its own 3D tour). Press [1] "Concrete" | "So I go in and look. My report is testimony: it moves the odds, capped, never final." (read the new % off the screen) |
+| 1:05 | Step out: the horde comes down the street from the west. "HQ proposes HOLD or RUN" (code suggests one; the agent decides). Press [H] or [R] | "The agent read the horde, found a fallback away from it, and it waits for me. I make the call." |
 | 1:20 | Sprint along the route, chased; Space shoves; the doors shut. Aftershock | "The walls roll against the scores, and the aftershock against the 1994 Northridge shaking at this exact block. Seeded, so every number is code." |
 | 1:40 | Dawn: the case file and the draft correction | "And at dawn, the night produced something real: the evidence and a correction to a building record, for a human to approve. Game outcome, not an engineering assessment." |
 
@@ -85,7 +85,9 @@ Your report from inside changes the real case. That's "Inside and Out". Case #7 
    - **Never put `RADAR_REPLAY` in `.env`:** under `langgraph dev`, `.env` overrides the shell, so the server would be stuck in replay.
    - **Verify or re-record:** `scripts/game_nights.py` (see CONTRACT.md).
 2. **Web:** `cd web && npm run build && npm start` (production; port 3000). Open `http://127.0.0.1:3000/play?mode=foot` once to warm it up.
-3. **Between judges:** `uv run python scripts/demo_reset.py`, then press Enter on the dawn screen (or reload).
+3. **Between judges:** `uv run python scripts/demo_reset.py && uv run python scripts/seed_store.py` (the reset clears the notes and restores the night log; the seed puts back the store the auditor bridge reads). Then press Enter on the dawn screen.
+   - **Never reload the page mid-session without running both first.** Only Play again (Enter at dawn) resets by itself; a reload, a crash or a second tab starts a night on the previous night's notes, and strict replay then misses (scout, walls tip, wave result, debrief).
+   - **One browser tab** on the game during judging. Close every other tab on :3000 / :3110.
 4. **Fallback ladder:**
    1. Live mode, if replay misbehaves (`RADAR_REPLAY` unset; timings in CONTRACT.md).
    2. The map mode `/play` (live only).
@@ -97,6 +99,7 @@ Your report from inside changes the real case. That's "Inside and Out". Case #7 
 ## New since 6 pm (show at the table, not in the 2-minute cut)
 - **All of LA:** the intro dive over 1,581 buildings and the 156 open LA cases (86 buildings).
 - **Walk into 16 real buildings:** any lit door, [E]. 750 Broadway is a good one near the fortress.
-- **Inside 737 Broadway:** walk its 10 real scan spots ([A]/[D] or click the floor plan).
+- **Inside 737 Broadway:** walk its 19 real scan spots ([W]/[S], or click the floor plan), with the untextured 3D scan.
+- **Side missions, careful:** don't stamp "Same building?" at 217 8th St on stage (its record says 13 stories in a ~22 m building, which a CoStar judge will catch). Solar never says "go solar" because roof age is taken from building age; don't present "check the roof first" as a finding about the roof.
 - **Walk-by aerials:** the corner view shows the nearest building's real Vexcel image when one is on file (106 buildings), labelled "Real aerial on file".
 - **Honesty:** real images and tours only where they're on file. Otherwise the corner views are game renders. Images feed the screen only; the agent's recorded evidence is unchanged.

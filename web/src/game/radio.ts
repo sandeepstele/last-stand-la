@@ -220,6 +220,18 @@ export function radioLines(messages: readonly unknown[]): RadioLine[] {
       case "record_note":
         lines.push({ id, who: "HQ", text: "tip logged", tone: "hq" });
         break;
+      case "read_file": {
+        // The briefing reads the night log (HQ's memory across nights); its newest lesson is said aloud.
+        const lessons = text(m.content).match(/Lesson:\s*([^\n]+)/g);
+        const last = lessons?.[lessons.length - 1]?.replace(/^Lesson:\s*/, "").trim();
+        if (last) lines.push({ id, who: "Log", text: `last night's lesson: ${firstSentence(last, 160)}`, tone: "hq" });
+        break;
+      }
+      case "log_night": {
+        const r = parse<{ status?: string; lesson_saved?: boolean; nights_kept?: number }>(m);
+        if (r?.status === "saved") lines.push({ id, who: "Log", text: r.lesson_saved ? "night logged, with one lesson for tomorrow" : "night logged", tone: "hq" });
+        break;
+      }
       case "commit_plan": {
         const r = parse<ResolveResult>(m);
         if (r && typeof r.held === "boolean") {

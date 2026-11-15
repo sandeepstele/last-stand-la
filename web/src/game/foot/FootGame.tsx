@@ -27,7 +27,7 @@ import * as THREE from "three";
 import type { Game } from "../useGame";
 import { evidenceUrl } from "../Pano";
 import { SECTOR_NAME, checksFor, kind, latestResult, parse, radioLines, type Msg } from "../radio";
-import { DISCLAIMER, type Building } from "../types";
+import { DISCLAIMER, type Building, type Fallback } from "../types";
 import { boundsOf, buildColliders, createBus, dirOf, makeCollide, reachPoint, DOOR_R, SCOUT_R, SECTOR_DEG, type FootCtx, type Pt, type SupplySpot, type SurvivorSpot, type SurvivorState, type System } from "./engine";
 import { createInput, type Input } from "./input";
 import { closestOnPoly } from "./collide";
@@ -166,6 +166,13 @@ function safely(name: string, s: System): System {
  * In development, window.__foot = { ctx, step } lets test scripts emit bus events (e.g. a wave) by hand.
  */
 /** presenter (?demo=1): [F] fast-forwards the slow parts (walk to the door, the escape run, the door defence) for a 30-40 s pitch. */
+/** The code's stay-vs-run side by side, in plain words: "Stay: walls 77, quake 35 · Run: walls 60 on foot, quake 78. Code favours RUN." */
+function whyOf(f: Fallback | null | undefined): string | null {
+  if (!f?.compare) return null;
+  const parts = f.compare.split("|").map((x) => x.trim()).filter(Boolean).map((x) => x.charAt(0).toUpperCase() + x.slice(1));
+  return `${parts.join(" · ")}.${f.suggest ? ` Code favours ${f.suggest.toUpperCase()}.` : ""}`;
+}
+
 export function FootGame({ game, replay, agentOff = false, presenter = false }: { game: Game; replay: string | null; agentOff?: boolean; presenter?: boolean }) {
   const { district } = game;
   const router = useRouter();
@@ -1237,6 +1244,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
       ? {
           prompt: game.proposal ? `HQ proposes: ${game.proposal.action === "run" ? `run to ${labelOf(game.proposal.to_pid ?? fallbackPid)}` : `hold ${heroLabel}`}.` : game.isLoading ? "HQ is weighing hold or run…" : "HQ didn't call it. Your call.",
           proposed: game.proposal?.action ?? null,
+          why: whyOf(game.fallback),
           runLabel,
           sent: game.decision ? `Orders sent: ${game.decision.action === "run" ? `run to ${labelOf(game.decision.to_pid)}` : game.decision.action === "hold" ? "hold" : "none, holding"}` : null,
           error: game.decideError,
@@ -1319,7 +1327,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
           onChoose={() => {}}
         />
       )}
-      {step === "visit" && visitB && <SuiteSweep pid={visitB.pid} onScore={setSweep} />}
+      {step === "visit" && visitB && <SuiteSweep pid={visitB.pid} skip={case7?.suite != null ? String(case7.suite) : null} onScore={setSweep} />}
       {step === "suite" && office && (
         <InsideView
           faces={officeFaces}
