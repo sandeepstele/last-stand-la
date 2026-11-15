@@ -32,6 +32,9 @@ START = "Start Bob's shift"
 INSPECT = f"Inspect building {HERO}"
 QUAKE = f"Quake at 5:02 pm. Tag building {HERO}"
 END = "End the shift"
+# A reject carries this exact message (the frontend sends the same): without one, the interrupt writes a reply with a
+# fresh random call id, which no recording can match.
+REJECT = "Bob declined to tag this building."
 GRAPH = "desk"
 
 
@@ -57,7 +60,7 @@ async def _run(c, tid: str, label: str, **kw):
 
 def _decision(proposed: dict, want: str) -> dict:
     if want == "reject":
-        return {"type": "reject"}
+        return {"type": "reject", "message": REJECT}
     if want == "approve" or proposed.get("tag") == want:
         return {"type": "approve"}
     return {"type": "edit", "edited_action": {"name": "tag_building", "args": {"pid": HERO, "tag": want}}}
