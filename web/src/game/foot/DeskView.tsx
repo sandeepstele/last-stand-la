@@ -208,7 +208,7 @@ export function DeskView({ messages, threadId, cases, tags = {}, precalls = {}, 
               <div style={{ display: "flex", gap: 6, alignItems: "baseline" }}>
                 <b>#{c.n}</b>
                 <span style={{ flex: 1 }}>{c.label}{c.suite ? `, suite ${c.suite}` : ""}</span>
-                {t && <span style={{ background: TAG_COLOR[t], color: "#111", padding: "0 6px", fontWeight: 700, fontSize: 12 }}>{t.toUpperCase()}</span>}
+                {t && <span title="Simulated: game outcome, not an engineering assessment" style={{ background: TAG_COLOR[t], color: "#111", padding: "0 6px", fontWeight: 700, fontSize: 12 }}>{t.toUpperCase()} · sim</span>}
               </div>
               <div style={{ color: "#94a3b8", fontSize: 13 }}>{CASE_WORDS[c.case] ?? plain(c.case)}{c.stakes ? ` · ${c.stakes}` : ""}</div>
               {c.question && <div style={{ color: "#cbd5e1", fontSize: 13 }}>{c.question}</div>}
@@ -227,7 +227,7 @@ export function DeskView({ messages, threadId, cases, tags = {}, precalls = {}, 
               <div style={{ display: "flex", gap: 6, alignItems: "baseline" }}>
                 <b style={{ flex: 1 }}>{labels.get(c.pid) ?? deskCards[c.pid]?.label ?? c.label ?? `Building ${c.pid}`}</b>
                 {deskCards[c.pid]?.screening?.suggest && !tags[c.pid] && <span style={{ border: `1px solid ${TAG_COLOR[deskCards[c.pid].screening!.suggest as Tag] ?? "#475569"}`, color: TAG_COLOR[deskCards[c.pid].screening!.suggest as Tag] ?? "#cbd5e1", padding: "0 6px", fontSize: 12 }}>screens {deskCards[c.pid].screening!.suggest}</span>}
-                {tags[c.pid] && <span style={{ background: TAG_COLOR[tags[c.pid]], color: "#111", padding: "0 6px", fontWeight: 700, fontSize: 12 }}>{tags[c.pid].toUpperCase()}</span>}
+                {tags[c.pid] && <span title="Simulated: game outcome, not an engineering assessment" style={{ background: TAG_COLOR[tags[c.pid]], color: "#111", padding: "0 6px", fontWeight: 700, fontSize: 12 }}>{tags[c.pid].toUpperCase()} · sim</span>}
                 {c.busy && <span style={{ color: "#38bdf8", fontSize: 12 }}>pulling…</span>}
               </div>
               {verdictLine(c.math) && <div style={{ color: "#f5a524", fontWeight: 600 }}>{verdictLine(c.math)}</div>}
@@ -270,6 +270,7 @@ export function DeskView({ messages, threadId, cases, tags = {}, precalls = {}, 
           <span><i style={{ color: TAG_COLOR.yellow }}>●</i> yellow</span>
           <span><i style={{ color: TAG_COLOR.red }}>●</i> red</span>
           <span><i style={{ color: "#94a3b8" }}>●</i> open case</span>
+          <span style={{ flexBasis: "100%", color: "#64748b" }}>Tags are simulated: game outcome, not an engineering assessment.</span>
         </div>
       </section>
 

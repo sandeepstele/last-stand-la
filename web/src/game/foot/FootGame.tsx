@@ -807,7 +807,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
           nightAsked.current = true;
           fireDebris();
           ctx.bus.emit("fx:crack", { pid: hero.pid });
-          setBanner({ title: "5:02 pm · Earthquake", sub: "A game event: a strong quake hits downtown. Screen the building and post a tag before dark.", tone: "bad" }, 5500);
+          setBanner({ title: "Simulated quake at 5:02 pm", sub: "A game event, not a real quake: a strong shake hits downtown. Screen the building and post a tag before dark.", tone: "bad" }, 5500);
         }
         if (g.tagProposal && !g.tagDecision && !g.tagResult) {
           for (const [code, t] of [["Digit1", "green"], ["Digit2", "yellow"], ["Digit3", "red"]] as const) if (k.has(code)) g.decideTag(t);
@@ -817,7 +817,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
           if (tagSeenAt.current === null) {
             tagSeenAt.current = ctx.time;
             const t = g.tagResult.tag;
-            setBanner({ title: t ? `${t.toUpperCase()} tag posted` : "No tag posted", sub: t === "red" ? `${g.tagResult.label ?? hero.label}: nobody goes in.` : t === "yellow" ? `${g.tagResult.label ?? hero.label}: restricted use.` : t === "green" ? `${g.tagResult.label ?? hero.label}: inspected, open.` : "The building stays open.", tone: t === "red" ? "bad" : "info" }, 4000);
+            setBanner({ title: t ? `${t.toUpperCase()} tag posted (simulated)` : "No tag posted", sub: t === "red" ? `${g.tagResult.label ?? hero.label}: nobody goes in.` : t === "yellow" ? `${g.tagResult.label ?? hero.label}: restricted use.` : t === "green" ? `${g.tagResult.label ?? hero.label}: inspected, open.` : "The building stays open.", tone: t === "red" ? "bad" : "info" }, 4000);
           }
           if (ctx.time - tagSeenAt.current > 5) {
             g.goDawn();
@@ -1383,16 +1383,17 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
   type Screen = { pid?: string; label?: string; score?: number; fema_type?: string; p_damage?: number; suggest?: string; borderline?: boolean; why?: string;
     people?: { day?: number; night?: number; at_stake?: number; low?: number; high?: number } };
   const screen = DESK ? latestResult<Screen>(game.messages, "screen_building") : null;
-  const tagWords: Record<Tag, string> = { green: "GREEN · inspected", yellow: "YELLOW · restricted", red: "RED · unsafe" };
+  const tagWords: Record<Tag, string> = { green: "GREEN · safe to occupy", yellow: "YELLOW · limited entry", red: "RED · unsafe" };
   const deskDecision = DESK && step === "night" ? {
-    prompt: game.tagProposal ? `HQ proposes a ${game.tagProposal.tag.toUpperCase()} tag for ${heroLabel}.` : game.isLoading ? "HQ is screening the building after the quake…" : "Waiting for HQ's screening.",
+    prompt: game.tagProposal ? `HQ proposes a ${game.tagProposal.tag.toUpperCase()} tag for ${heroLabel} (simulated).` : game.isLoading ? "HQ is screening the building after the simulated quake…" : "Waiting for HQ's screening.",
     proposed: null,
     why: screen ? [
       screen.score != null ? `Screening score ${screen.score}${screen.fema_type ? ` (${screen.fema_type})` : ""}` : "",
       screen.p_damage != null ? `chance of damage ${Math.round(screen.p_damage * 100)}%` : "",
       screen.people?.at_stake != null ? `${screen.people.at_stake} people at stake${screen.people.low != null && screen.people.high != null ? ` (inside by day ${screen.people.low}–${screen.people.high}, an estimate)` : ""}` : "",
       screen.borderline ? "borderline: close to a tag threshold" : "",
-    ].filter(Boolean).join(" · ") : null,
+      "Game outcome, not an engineering assessment.",
+    ].filter(Boolean).join(" · ") : "Game outcome, not an engineering assessment.",
     runLabel: null,
     sent: game.tagResult ? (game.tagResult.tag ? `${game.tagResult.tag.toUpperCase()} tag posted` : "No tag: the building stays open") : game.tagDecision ? `Posting ${game.tagDecision === "none" ? "no tag" : `a ${game.tagDecision.toUpperCase()} tag`}…` : null,
     error: game.decideError,
@@ -1441,7 +1442,7 @@ export function FootGame({ game, replay, agentOff = false, presenter = false }: 
       const name = shift?.buildings?.find((b) => b.pid === pid)?.label ?? labelOf(pid);
       return final ? `${name}: you called ${t.toUpperCase()} from outside; the final tag was ${final.toUpperCase()}${final === t ? ". Called it." : "."}` : `${name}: you called ${t.toUpperCase()} from outside.`;
     }),
-    ...(shift?.disclaimer ? [shift.disclaimer] : []),
+    shift?.disclaimer ?? "Tags and aftershock rolls are simulated. Game outcome, not an engineering assessment.",
     ...(sweep.stamped ? [`Suite sweep: ${sweep.right} of ${sweep.stamped} stamps match what the records support.`] : []),
   ].filter(Boolean) : [
     ...(presenter && case7 && case7Weighed ? [`Case #${case7.n}: HQ worked it from the records while you ran.`] : []),

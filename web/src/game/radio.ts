@@ -170,7 +170,7 @@ export function radioLines(messages: readonly unknown[]): RadioLine[] {
           squads.push(squad(sub));
         } else if (c.name === "tag_building") {
           const tag = String(a.tag ?? "").toUpperCase();
-          if (tag) lines.push({ id: cid, who: "HQ", text: `proposing a ${tag} tag. Your call.`, tone: "warn" });
+          if (tag) lines.push({ id: cid, who: "HQ", text: `proposing a ${tag} tag (simulated). Your call.`, tone: "warn" });
         } else if (c.name === "commit_plan") {
           const run = a.action === "run";
           const to = a.to_pid ? labels.get(String(a.to_pid)) ?? "the fallback" : "the fallback";
@@ -240,7 +240,7 @@ export function radioLines(messages: readonly unknown[]): RadioLine[] {
       }
       case "tag_building": {
         const r = parse<{ label?: string; tag?: string | null; people_at_stake?: number }>(m);
-        if (r) lines.push({ id, who: "HQ", text: r.tag ? `${String(r.tag).toUpperCase()} tag posted on ${r.label ?? "the building"}${r.people_at_stake ? ` (${r.people_at_stake} people)` : ""}` : "no tag: the building stays open", tone: r.tag === "red" ? "warn" : "hq" });
+        if (r) lines.push({ id, who: "HQ", text: r.tag ? `${String(r.tag).toUpperCase()} tag (simulated) posted on ${r.label ?? "the building"}${r.people_at_stake ? ` (${r.people_at_stake} people)` : ""}` : "no tag: the building stays open", tone: r.tag === "red" ? "warn" : "hq" });
         break;
       }
       case "shift_report": {
